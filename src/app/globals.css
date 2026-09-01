@@ -1,0 +1,148 @@
+/* ================================================================
+   GLOBAL STYLES — LearnX AI
+   ================================================================
+   Mạch tư duy: toàn bộ màu sắc, khoảng cách, bo góc được khai báo
+   thành CSS variables ở :root MỘT LẦN DUY NHẤT. Mọi component
+   (Panel, StatCard, Sidebar...) chỉ dùng var(--...), KHÔNG hard-code
+   màu riêng — nếu sau này muốn đổi theme (vd sang light mode), chỉ
+   cần sửa khối :root này, không phải rà từng file component.
+   ================================================================ */
+
+:root {
+  --bg: #0a0e16;
+  --panel: rgba(255, 255, 255, 0.045);
+  --panel-strong: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-soft: rgba(255, 255, 255, 0.06);
+  --text: #eef1f7;
+  --text-dim: #9aa4b8;
+  --text-faint: #616e85;
+  --indigo: #7c6cf0;
+  --indigo-soft: rgba(124, 108, 240, 0.16);
+  --cyan: #35d0d8;
+  --cyan-soft: rgba(53, 208, 216, 0.14);
+  --amber: #f0a941;
+  --amber-soft: rgba(240, 169, 65, 0.15);
+  --rose: #ef6a7d;
+  --radius-lg: 16px;
+  --radius-md: 11px;
+  --radius-sm: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: radial-gradient(1200px 700px at 85% -10%, rgba(124, 108, 240, 0.1), transparent 60%),
+    radial-gradient(900px 600px at -10% 90%, rgba(53, 208, 216, 0.07), transparent 55%), var(--bg);
+  color: var(--text);
+  font-family: var(--font-inter), sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-space-grotesk), sans-serif;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+/* --------- Layout shell (Sidebar + nội dung chính) --------- */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+  padding: 30px 42px 60px;
+  max-width: 1180px;
+}
+
+@media (max-width: 880px) {
+  .main-content {
+    padding: 20px;
+  }
+}
+
+/* --------- Panel dùng chung cho mọi khối "card" glass --------- */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 22px 24px;
+  backdrop-filter: blur(6px);
+}
+
+/* --------- Thanh tiến trình / mastery bar dùng nhiều nơi --------- */
+.bar-track {
+  height: 9px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+  flex: 1;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--cyan), var(--indigo));
+}
+
+/* --------- Nút bấm chính, dùng ở mọi CTA --------- */
+.btn-primary {
+  background: linear-gradient(135deg, var(--indigo), var(--cyan));
+  border: none;
+  color: #0a0e16;
+  padding: 11px 22px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: var(--font-inter), sans-serif;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 9px 16px;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 13.5px;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 99px;
+}
+
+/* --------- Trạng thái loading/error dùng chung mọi trang fetch --------- */
+.state-msg {
+  color: var(--text-dim);
+  font-size: 14px;
+  padding: 20px 0;
+}
+
+.state-msg.error {
+  color: var(--rose);
+}

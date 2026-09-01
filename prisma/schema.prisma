@@ -1,0 +1,228 @@
+// ================================================================
+// PRISMA SCHEMA — LearnX AI
+// ================================================================
+// Mạch tư duy tổng thể:
+// Toàn bộ sản phẩm LearnX xoay quanh MỘT khái niệm cốt lõi:
+// "Hồ sơ năng lực" (Skill Profile) của từng học sinh, và MỌI bảng
+// dữ liệu dưới đây tồn tại để phục vụ 1 trong 2 việc:
+//   (1) NUÔI hồ sơ năng lực đó (Attempt, Assessment, Progress...)
+//   (2) DÙNG hồ sơ năng lực đó để cá nhân hoá trải nghiệm học
+//       (Roadmap, Conversation, DocumentChunk cho RAG...)
+// Nếu sau này cần thêm bảng mới, hãy tự hỏi: bảng này nuôi hay dùng
+// hồ sơ năng lực? Nếu không thuộc cả hai, có thể nó không cần thiết
+// cho MVP.
+// ================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // pgvector cần được enable thủ công trong Postgres bằng lệnh:
+  //   CREATE EXTENSION IF NOT EXISTS vector;
+  // Prisma chưa hỗ trợ native "vector" type nên cột embedding bên
+  // dưới (DocumentChunk.embedding) được khai báo dạng Unsupported —
+  // xem ghi chú chi tiết tại model đó.
+}
+
+// ----------------------------------------------------------------
+// USER — điểm trung tâm, mọi bảng khác đều quy chiếu về đây
+// ----------------------------------------------------------------
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  // role phân biệt học sinh / giáo viên / admin để render đúng
+  // dashboard (Student / Teacher / Admin) như đã phác thảo ở phần
+  // kiến trúc tổng thể.
+  role      Role     @default(STUDENT)
+  createdAt DateTime @default(now())
+
+  // Quan hệ 1-nhiều: một user có nhiều bản ghi năng lực, nhiều lần
+  // làm bài, nhiều cuộc hội thoại với AI Tutor, v.v.
+  goals         LearningGoal[]
+  assessments   Assessment[]
+  attempts      Attempt[]
+  progress      LearningProgress[]
+  roadmaps      Roadmap[]
+  conversations Conversation[]
+  documents     Document[]
+  achievements  Achievement[]
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+// ----------------------------------------------------------------
+// LEARNING GOAL — mục tiêu học sinh đặt ra (vd: "Thi chuyên Tin
+// trong 6 tháng"). Đây là input để AI Orchestrator sinh Roadmap.
+// ----------------------------------------------------------------
+model LearningGoal {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  title        String // "Thi chuyên Tin"
+  targetMonths Int // 6
+  createdAt    DateTime @default(now())
+
+  roadmaps Roadmap[]
+}
+
+// ----------------------------------------------------------------
+// ASSESSMENT — một LẦN làm bài kiểm tra năng lực (Diagnostic Test).
+// Tách riêng khỏi Attempt vì Assessment là "phiên kiểm tra thích
+// ứng" (adaptive session gồm nhiều câu), còn Attempt (bên dưới) là
+// đơn vị nhỏ nhất: MỘT lần trả lời MỘT câu hỏi bất kỳ (có thể nằm
+// trong Assessment, hoặc trong Quiz luyện tập thường ngày).
+// ----------------------------------------------------------------
+model Assessment {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  status      String    @default("in_progress") // in_progress | completed
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  attempts Attempt[]
+}
+
+// ----------------------------------------------------------------
+// ATTEMPT — bản ghi chi tiết mỗi câu học sinh trả lời.
+// Đây là "nguyên liệu thô" để tính ra LearningProgress.mastery.
+// Lưu riêng từng attempt (thay vì chỉ lưu điểm tổng) để sau này có
+// thể phân tích lỗi sai theo thời gian ("Analytics" ở mục Progress).
+// ----------------------------------------------------------------
+model Attempt {
+  id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  assessmentId String? // null nếu đây là attempt trong quiz luyện tập thường
+  assessment   Assessment? @relation(fields: [assessmentId], references: [id])
+
+  subject    String // "Toán", "Tin học"
+  topic      String // "Dynamic Programming"
+  difficulty String // "easy" | "medium" | "hard" — dùng để adaptive branching
+  question   String
+  isCorrect  Boolean
+  createdAt  DateTime    @default(now())
+}
+
+// ----------------------------------------------------------------
+// LEARNING PROGRESS — "hồ sơ năng lực" đã được TỔNG HỢP theo
+// (userId, subject, topic). Đây chính là bảng mà AI Orchestrator
+// đọc để quyết định "bài tiếp theo học sinh nên học gì?".
+//
+// mastery là số 0..1, được cập nhật dần mỗi khi có Attempt mới,
+// KHÔNG tính lại từ đầu mỗi lần — xem logic ở
+// services/assessment.service.ts (hàm updateMastery).
+// ----------------------------------------------------------------
+model LearningProgress {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  subject   String
+  topic     String
+  mastery   Float    @default(0) // 0.0 - 1.0
+  attempts  Int      @default(0)
+  correct   Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  // Một user chỉ có 1 dòng progress cho mỗi (subject, topic) —
+  // ràng buộc unique này QUAN TRỌNG vì service sẽ dùng upsert
+  // (tìm-thấy-thì-update, không-thì-tạo-mới) dựa trên khoá này.
+  @@unique([userId, subject, topic])
+}
+
+// ----------------------------------------------------------------
+// ROADMAP — lộ trình học được AI sinh ra từ LearningGoal +
+// LearningProgress hiện tại. Lưu dạng JSON (months: [...]) thay vì
+// tách thành nhiều bảng con vì cấu trúc lộ trình có thể thay đổi
+// linh hoạt theo từng học sinh — ép vào schema cứng sẽ khó mở rộng.
+// ----------------------------------------------------------------
+model Roadmap {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  learningGoalId String
+  learningGoal   LearningGoal @relation(fields: [learningGoalId], references: [id])
+
+  // Ví dụ cấu trúc JSON được lưu (xem thêm types/index.ts -> RoadmapPlan):
+  // [{ month: 1, topics: [{ name, status }] }, ...]
+  months    Json
+  createdAt DateTime @default(now())
+  // Roadmap có thể được AI tái sinh (regenerate) nhiều lần khi học
+  // sinh tiến bộ nhanh/chậm hơn dự kiến — mỗi lần tạo 1 bản ghi mới
+  // thay vì overwrite, để giữ lịch sử "AI đã điều chỉnh lộ trình
+  // bao nhiêu lần" — dữ liệu hay để demo trước ban giám khảo.
+}
+
+// ----------------------------------------------------------------
+// CONVERSATION — lịch sử chat với AI Tutor. Lưu messages dạng JSON
+// (mảng {role, content}) để gửi thẳng lại cho Gemini làm context
+// mà không cần join bảng phức tạp.
+// ----------------------------------------------------------------
+model Conversation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  topic     String? // chủ đề đang học, để AI biết ngữ cảnh
+  messages  Json // [{ role: "user"|"assistant", content: string, hintLevel?: number }]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ----------------------------------------------------------------
+// DOCUMENT + DOCUMENT CHUNK — phục vụ tính năng "AI biến tài liệu
+// thành khoá học" (upload PDF/Word/ảnh -> flashcard/quiz/mindmap).
+// Tách Document (metadata file) và DocumentChunk (từng đoạn nhỏ đã
+// embedding) vì RAG cần tìm kiếm ở cấp độ CHUNK, không phải cả file.
+// ----------------------------------------------------------------
+model Document {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  fileName   String
+  fileType   String // "pdf" | "docx" | "pptx" | "image"
+  status     String   @default("processing") // processing | ready | failed
+  summary    String? // tóm tắt do AI sinh, hiển thị ngay trong Library
+  uploadedAt DateTime @default(now())
+
+  chunks DocumentChunk[]
+}
+
+model DocumentChunk {
+  id         String @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id])
+  content    String // đoạn text đã tách nhỏ (chunk) từ tài liệu gốc
+  chunkIndex Int // thứ tự chunk trong tài liệu, để ghép lại khi cần
+
+  // embedding: vector số thực dùng cho similarity search (RAG).
+  // Prisma chưa có kiểu "vector" gốc nên khai báo Unsupported —
+  // nghĩa là Prisma Client sẽ KHÔNG generate field này trong
+  // TypeScript type, ta phải thao tác bằng raw SQL
+  // (xem lib/embeddings/vector.ts -> searchSimilarChunks, dùng
+  // $queryRaw với toán tử "<->" của pgvector).
+  embedding Unsupported("vector(768)")?
+
+  @@index([documentId])
+}
+
+// ----------------------------------------------------------------
+// ACHIEVEMENT — gamification tối giản (huy hiệu), tránh làm quá
+// tay thành "game" như lưu ý trong bản kế hoạch gốc.
+// ----------------------------------------------------------------
+model Achievement {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id])
+  code     String // "FIRST_100_PROBLEMS" | "STREAK_7_DAYS" | ...
+  earnedAt DateTime @default(now())
+
+  @@unique([userId, code])
+}

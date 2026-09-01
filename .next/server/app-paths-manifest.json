@@ -1,0 +1,12 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/progress/route": "app/api/progress/route.js",
+  "/api/roadmap/route": "app/api/roadmap/route.js",
+  "/api/analytics/route": "app/api/analytics/route.js",
+  "/(app)/dashboard/page": "app/(app)/dashboard/page.js",
+  "/(app)/diagnostic/page": "app/(app)/diagnostic/page.js",
+  "/(app)/roadmap/page": "app/(app)/roadmap/page.js",
+  "/(app)/library/page": "app/(app)/library/page.js",
+  "/(app)/tutor/page": "app/(app)/tutor/page.js",
+  "/(app)/progress/page": "app/(app)/progress/page.js"
+}
