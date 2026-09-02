@@ -1,12 +1,19 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/api/progress/route": "app/api/progress/route.js",
+  "/login/page": "app/login/page.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/api/calendar/today/route": "app/api/calendar/today/route.js",
+  "/api/calendar/month/route": "app/api/calendar/month/route.js",
+  "/icon/[[...__metadata_id__]]/route": "app/icon/[[...__metadata_id__]]/route.js",
+  "/api/calendar/week/route": "app/api/calendar/week/route.js",
   "/api/roadmap/route": "app/api/roadmap/route.js",
+  "/api/progress/route": "app/api/progress/route.js",
   "/api/analytics/route": "app/api/analytics/route.js",
-  "/(app)/dashboard/page": "app/(app)/dashboard/page.js",
-  "/(app)/diagnostic/page": "app/(app)/diagnostic/page.js",
+  "/api/documents/route": "app/api/documents/route.js",
   "/(app)/roadmap/page": "app/(app)/roadmap/page.js",
+  "/(app)/calendar/page": "app/(app)/calendar/page.js",
   "/(app)/library/page": "app/(app)/library/page.js",
+  "/(app)/diagnostic/page": "app/(app)/diagnostic/page.js",
   "/(app)/tutor/page": "app/(app)/tutor/page.js",
+  "/(app)/dashboard/page": "app/(app)/dashboard/page.js",
   "/(app)/progress/page": "app/(app)/progress/page.js"
 }

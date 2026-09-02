@@ -36,11 +36,11 @@ model User {
   email     String    @unique
   // emailVerified + image là 2 field BẮT BUỘC theo chuẩn adapter của
   // Auth.js (NextAuth) khi dùng PrismaAdapter — thiếu 1 trong 2 field
-  // này, đăng nhập Google/Facebook qua adapter sẽ lỗi lúc link account.
+  // này, đăng nhập Google qua adapter sẽ lỗi lúc link account.
   emailVerified DateTime?
   image     String?
   // passwordHash CHỈ tồn tại với user đăng ký bằng email+password.
-  // User đăng nhập qua Google/Facebook sẽ có passwordHash = null —
+  // User đăng nhập qua Google sẽ có passwordHash = null —
   // đây là lý do field này optional, KHÔNG bắt buộc.
   passwordHash String?
   // role phân biệt học sinh / giáo viên / admin để render đúng
@@ -52,7 +52,7 @@ model User {
   // 2 quan hệ bắt buộc của Auth.js PrismaAdapter (OAuth account link +
   // session lưu DB cho các luồng cần — session thực tế của app dùng
   // JWT strategy, xem auth.ts, nhưng Account vẫn cần để adapter lưu
-  // access token Google/Facebook).
+  // access token Google).
   accounts Account[]
   sessions Session[]
 
@@ -79,8 +79,8 @@ enum Role {
 // ACCOUNT / SESSION / VERIFICATION TOKEN — 3 bảng chuẩn của Auth.js
 // PrismaAdapter, KHÔNG tự đặt tên khác vì adapter query cứng theo
 // đúng tên bảng/field này. Account lưu 1 dòng cho MỖI provider OAuth
-// user đã liên kết (Google, Facebook) — 1 User có thể có nhiều Account
-// nếu đăng nhập bằng cả Google lẫn Facebook cùng 1 email.
+// user đã liên kết (Google) — 1 User có thể có nhiều Account
+// nếu đăng nhập bằng Google ở nhiều thiết bị/thời điểm khác nhau.
 // ----------------------------------------------------------------
 model Account {
   id                String  @id @default(cuid())

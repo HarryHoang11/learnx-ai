@@ -2,7 +2,7 @@
 // <Topbar /> — thanh trên cùng của mọi trang trong (app)
 // ================================================================
 // Mạch tư duy: dùng useSession() để lấy tên/avatar THẬT của user đã
-// đăng nhập (Google/Facebook trả về `image`, đăng ký email/password
+// đăng nhập (Google trả về `image`, đăng ký email/password
 // thì `image` sẽ là null — component tự fallback về chữ cái đầu tên
 // khi không có ảnh). Nút đăng xuất gọi signOut() của next-auth, tự
 // xoá session cookie và điều hướng về /login.
@@ -24,7 +24,7 @@ export default function Topbar() {
 
       {image ? (
         // eslint-disable-next-line @next/next/no-img-element -- avatar
-        // từ Google/Facebook là URL bên ngoài, dùng <img> thường để
+        // từ Google là URL bên ngoài, dùng <img> thường để
         // tránh phải khai báo domain trong next.config.js images.domains
         <img
           src={image}

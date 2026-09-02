@@ -2,26 +2,25 @@
 // AUTH.JS (NextAuth v5) — CẤU HÌNH TRUNG TÂM
 // ================================================================
 // Mạch tư duy: đây là điểm DUY NHẤT khai báo các phương thức đăng
-// nhập (Google, Facebook, Credentials) và cách session được tạo.
-// Mọi nơi khác trong app (route handler, middleware, server component)
-// đều import `auth`/`signIn`/`signOut` từ ĐÚNG file này, không tự
-// tạo NextAuth() instance thứ hai — nếu có 2 instance, cookie/secret
-// có thể lệch nhau và session sẽ không nhất quán.
+// nhập (Google, Credentials) và cách session được tạo. Mọi nơi khác
+// trong app (route handler, middleware, server component) đều import
+// `auth`/`signIn`/`signOut` từ ĐÚNG file này, không tự tạo NextAuth()
+// instance thứ hai — nếu có 2 instance, cookie/secret có thể lệch
+// nhau và session sẽ không nhất quán.
 //
 // Vì sao session strategy = "jwt" (không phải "database"):
 // Auth.js CHỈ hỗ trợ Credentials provider (email+password) khi dùng
 // JWT session — session kiểu "database" (lưu Session record, đọc lại
 // mỗi request) không tương thích với Credentials provider theo thiết
-// kế của chính Auth.js. Vì app cần cả 3 phương thức (Google, Facebook,
+// kế của chính Auth.js. Vì app cần cả 2 phương thức (Google,
 // Credentials) cùng lúc, bắt buộc phải chọn "jwt" cho TẤT CẢ, kể cả
-// Google/Facebook — PrismaAdapter vẫn được dùng để lưu User/Account
-// vào Postgres (KHÔNG lưu Session record khi dùng jwt strategy, đó là
+// Google — PrismaAdapter vẫn được dùng để lưu User/Account vào
+// Postgres (KHÔNG lưu Session record khi dùng jwt strategy, đó là
 // hành vi đúng của Auth.js, không phải thiếu sót).
 // ================================================================
 
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
-import Facebook from "next-auth/providers/facebook";
 import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
@@ -38,10 +37,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     }),
-    Facebook({
-      clientId: process.env.FACEBOOK_CLIENT_ID,
-      clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
-    }),
     Credentials({
       name: "credentials",
       credentials: {
@@ -57,9 +52,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!email || !password) return null;
 
         const user = await prisma.user.findUnique({ where: { email } });
-        // User đăng ký qua Google/Facebook có passwordHash = null —
-        // không cho đăng nhập bằng password trong trường hợp đó, để
-        // tránh nhầm lẫn "quên mật khẩu" cho tài khoản chưa từng đặt.
+        // User đăng ký qua Google có passwordHash = null — không cho
+        // đăng nhập bằng password trong trường hợp đó, để tránh nhầm
+        // lẫn "quên mật khẩu" cho tài khoản chưa từng đặt.
         if (!user || !user.passwordHash) return null;
 
         const isValid = await bcrypt.compare(password, user.passwordHash);
