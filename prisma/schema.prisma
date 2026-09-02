@@ -31,14 +31,30 @@ datasource db {
 // USER — điểm trung tâm, mọi bảng khác đều quy chiếu về đây
 // ----------------------------------------------------------------
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
+  id        String    @id @default(cuid())
+  name      String?
+  email     String    @unique
+  // emailVerified + image là 2 field BẮT BUỘC theo chuẩn adapter của
+  // Auth.js (NextAuth) khi dùng PrismaAdapter — thiếu 1 trong 2 field
+  // này, đăng nhập Google/Facebook qua adapter sẽ lỗi lúc link account.
+  emailVerified DateTime?
+  image     String?
+  // passwordHash CHỈ tồn tại với user đăng ký bằng email+password.
+  // User đăng nhập qua Google/Facebook sẽ có passwordHash = null —
+  // đây là lý do field này optional, KHÔNG bắt buộc.
+  passwordHash String?
   // role phân biệt học sinh / giáo viên / admin để render đúng
   // dashboard (Student / Teacher / Admin) như đã phác thảo ở phần
   // kiến trúc tổng thể.
   role      Role     @default(STUDENT)
   createdAt DateTime @default(now())
+
+  // 2 quan hệ bắt buộc của Auth.js PrismaAdapter (OAuth account link +
+  // session lưu DB cho các luồng cần — session thực tế của app dùng
+  // JWT strategy, xem auth.ts, nhưng Account vẫn cần để adapter lưu
+  // access token Google/Facebook).
+  accounts Account[]
+  sessions Session[]
 
   // Quan hệ 1-nhiều: một user có nhiều bản ghi năng lực, nhiều lần
   // làm bài, nhiều cuộc hội thoại với AI Tutor, v.v.
@@ -50,12 +66,55 @@ model User {
   conversations Conversation[]
   documents     Document[]
   achievements  Achievement[]
+  studySessions StudySession[]
 }
 
 enum Role {
   STUDENT
   TEACHER
   ADMIN
+}
+
+// ----------------------------------------------------------------
+// ACCOUNT / SESSION / VERIFICATION TOKEN — 3 bảng chuẩn của Auth.js
+// PrismaAdapter, KHÔNG tự đặt tên khác vì adapter query cứng theo
+// đúng tên bảng/field này. Account lưu 1 dòng cho MỖI provider OAuth
+// user đã liên kết (Google, Facebook) — 1 User có thể có nhiều Account
+// nếu đăng nhập bằng cả Google lẫn Facebook cùng 1 email.
+// ----------------------------------------------------------------
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 // ----------------------------------------------------------------
@@ -211,6 +270,42 @@ model DocumentChunk {
   embedding Unsupported("vector(768)")?
 
   @@index([documentId])
+}
+
+// ----------------------------------------------------------------
+// STUDY SESSION — 1 buổi học cụ thể trong lịch (calendar), khác hẳn
+// LearningProgress (số liệu TỔNG HỢP theo topic). StudySession trả
+// lời câu hỏi "hôm nay/tuần này/tháng này học sinh có lịch gì", còn
+// LearningProgress trả lời "học sinh giỏi/yếu topic nào". 2 bảng độc
+// lập, không phụ thuộc nhau — 1 StudySession có thể liên quan nhiều
+// topic khác nhau và không bắt buộc phải khớp 1-1 với LearningProgress.
+// ----------------------------------------------------------------
+model StudySession {
+  id        String             @id @default(cuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String // "Toán — Hàm số"
+  subject   String
+  topic     String?
+  startTime DateTime
+  endTime   DateTime
+  status    StudySessionStatus @default(PENDING)
+  // progress 0-100: dùng khi 1 buổi học được đánh dấu "đang làm dở"
+  // (IN_PROGRESS) — vd học sinh mới làm 40% bài tập trong buổi đó.
+  progress  Int                @default(0)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  // Index theo (userId, startTime) vì MỌI query calendar (today/week/
+  // month) đều lọc theo đúng 2 điều kiện này — không index sẽ full
+  // table scan khi dữ liệu lớn.
+  @@index([userId, startTime])
+}
+
+enum StudySessionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
 }
 
 // ----------------------------------------------------------------

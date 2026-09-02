@@ -9,13 +9,14 @@
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionOrDemoUser } from "@/lib/auth/session";
+import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { sendTutorMessage } from "@/services/tutor.service";
 import type { ApiResponse } from "@/types";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getSessionOrDemoUser(req);
+    const userId = await getCurrentUserId();
+    if (!userId) return unauthorizedResponse();
     const body = await req.json();
 
     // Validate tối thiểu — MVP chưa dùng zod để giữ dependency gọn,
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
     const topic = (body.topic as string) ?? "Chưa xác định";
 
     const result = await sendTutorMessage({
-      userId: session.userId,
+      userId,
       topic,
       userMessage: body.message,
       hintLevel,

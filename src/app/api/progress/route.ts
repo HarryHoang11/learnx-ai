@@ -9,7 +9,7 @@
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionOrDemoUser } from "@/lib/auth/session";
+import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { getSkillProfile } from "@/services/assessment.service";
 import type { ApiResponse, SkillMasteryPoint } from "@/types";
@@ -21,24 +21,36 @@ interface ProgressResponse {
   streakDays: number;
 }
 
+// Shape THẬT của 1 row trả về từ prisma.attempt.findMany({ select: {...} })
+// bên dưới — khai báo tường minh (thay vì để TS tự suy luận từ Prisma
+// Client) vì Prisma Client trong sandbox phát triển hiện tại chưa được
+// `generate` lại theo schema mới nhất, nên kiểu trả về có thể không
+// chính xác. Khai báo tay đảm bảo an toàn kiểu độc lập với trạng thái
+// generate của Prisma Client.
+interface AttemptStatRow {
+  isCorrect: boolean;
+  createdAt: Date;
+}
+
 export async function GET(req: NextRequest) {
   try {
-    const session = getSessionOrDemoUser(req);
+    const userId = await getCurrentUserId();
+    if (!userId) return unauthorizedResponse();
 
     const [skillMap, attempts] = await Promise.all([
-      getSkillProfile(session.userId),
+      getSkillProfile(userId),
       prisma.attempt.findMany({
-        where: { userId: session.userId },
+        where: { userId },
         select: { isCorrect: true, createdAt: true },
         orderBy: { createdAt: "desc" },
-      }),
+      }) as Promise<AttemptStatRow[]>,
     ]);
 
     const totalAttempts = attempts.length;
-    const correctCount = attempts.filter((a) => a.isCorrect).length;
+    const correctCount = attempts.filter((a: AttemptStatRow) => a.isCorrect).length;
     const accuracyPercent = totalAttempts === 0 ? 0 : Math.round((correctCount / totalAttempts) * 100);
 
-    const streakDays = computeStreakDays(attempts.map((a) => a.createdAt));
+    const streakDays = computeStreakDays(attempts.map((a: AttemptStatRow) => a.createdAt));
 
     return NextResponse.json<ApiResponse<ProgressResponse>>({
       success: true,

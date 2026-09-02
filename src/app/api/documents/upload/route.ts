@@ -15,14 +15,15 @@
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionOrDemoUser } from "@/lib/auth/session";
+import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { processDocument } from "@/services/document.service";
 import type { ApiResponse } from "@/types";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getSessionOrDemoUser(req);
+    const userId = await getCurrentUserId();
+    if (!userId) return unauthorizedResponse();
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
 
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     const document = await prisma.document.create({
       data: {
-        userId: session.userId,
+        userId,
         fileName: file.name,
         fileType,
         status: "processing",

@@ -11,14 +11,15 @@
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionOrDemoUser } from "@/lib/auth/session";
+import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { getSkillProfile } from "@/services/assessment.service";
 import type { ApiResponse, SkillMasteryPoint } from "@/types";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getSessionOrDemoUser(req);
-    const profile = await getSkillProfile(session.userId);
+    const userId = await getCurrentUserId();
+    if (!userId) return unauthorizedResponse();
+    const profile = await getSkillProfile(userId);
 
     const weakTopics = profile.filter((p) => p.isWeak).map((p) => p.topic);
 

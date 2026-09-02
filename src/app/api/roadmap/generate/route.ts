@@ -11,52 +11,71 @@
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionOrDemoUser } from "@/lib/auth/session";
+import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { generateRoadmap } from "@/services/roadmap.service";
 import type { ApiResponse, RoadmapPlan } from "@/types";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getSessionOrDemoUser(req);
+    const userId = await getCurrentUserId();
+    if (!userId) return unauthorizedResponse();
     const body = await req.json();
 
     let goalId = body.goalId as string | undefined;
-    let goalTitle = body.goalTitle as string | undefined;
-    let targetMonths = body.targetMonths as number | undefined;
+    const bodyGoalTitle = body.goalTitle as string | undefined;
+    const bodyTargetMonths = body.targetMonths as number | undefined;
+
+    // Dùng 2 biến "final..." được gán ĐÚNG 1 LẦN (thay vì mutate lại
+    // goalTitle/targetMonths gốc qua nhiều nhánh if/else) — vừa tránh
+    // TypeScript không narrow được kiểu string|undefined -> string
+    // qua các nhánh phức tạp, vừa rõ ràng hơn khi đọc: "final" luôn
+    // là giá trị CHẮC CHẮN dùng để gọi generateRoadmap().
+    let finalGoalTitle: string;
+    let finalTargetMonths: number;
+    let finalGoalId: string;
 
     // Trường hợp 1: chưa có goal -> tạo mới. Bắt buộc phải có
     // goalTitle + targetMonths trong body ở trường hợp này.
     if (!goalId) {
-      if (!goalTitle || !targetMonths) {
+      if (!bodyGoalTitle || !bodyTargetMonths) {
         return NextResponse.json<ApiResponse<never>>(
           { success: false, error: "Cần goalTitle và targetMonths để tạo mục tiêu mới." },
           { status: 400 }
         );
       }
       const goal = await prisma.learningGoal.create({
-        data: { userId: session.userId, title: goalTitle, targetMonths },
+        data: { userId, title: bodyGoalTitle, targetMonths: bodyTargetMonths },
       });
       goalId = goal.id;
+      finalGoalId = goal.id;
+      finalGoalTitle = bodyGoalTitle;
+      finalTargetMonths = bodyTargetMonths;
     } else {
       // Trường hợp 2: tái sinh từ goal đã có -> đọc lại title/targetMonths
       // từ DB thay vì tin vào body (tránh học sinh gửi sai lệch dữ liệu).
-      const goal = await prisma.learningGoal.findUnique({ where: { id: goalId } });
+      // QUAN TRỌNG: where PHẢI gồm cả userId, không chỉ id — nếu chỉ
+      // lọc theo id, user A gửi goalId của user B vẫn đọc được lộ
+      // trình của B (lỗ hổng data isolation). findFirst + where userId
+      // đảm bảo goal KHÔNG thuộc user hiện tại sẽ coi như "không tìm
+      // thấy", giống hệt cách calendar.service.ts đã làm.
+      const goal = await prisma.learningGoal.findFirst({ where: { id: goalId, userId } });
       if (!goal) {
         return NextResponse.json<ApiResponse<never>>(
           { success: false, error: "Không tìm thấy mục tiêu học tập này." },
           { status: 404 }
         );
       }
-      goalTitle = goal.title;
-      targetMonths = goal.targetMonths;
+      finalGoalId = goal.id;
+      finalGoalTitle = goal.title;
+      finalTargetMonths = goal.targetMonths;
     }
 
     const plan = await generateRoadmap({
-      userId: session.userId,
-      learningGoalId: goalId,
-      goalTitle,
-      targetMonths,
+      userId,
+      learningGoalId: finalGoalId,
+      goalTitle: finalGoalTitle,
+      targetMonths: finalTargetMonths,
     });
 
     return NextResponse.json<ApiResponse<RoadmapPlan[]>>({ success: true, data: plan });

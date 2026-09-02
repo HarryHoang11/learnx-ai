@@ -9,7 +9,7 @@
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionOrDemoUser } from "@/lib/auth/session";
+import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { sendTutorMessage } from "@/services/tutor.service";
 import type { ApiResponse } from "@/types";
 
@@ -21,7 +21,8 @@ const HINT_LABELS: Record<number, string> = {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getSessionOrDemoUser(req);
+    const userId = await getCurrentUserId();
+    if (!userId) return unauthorizedResponse();
     const body = await req.json();
     const hintLevel = Number(body.hintLevel) as 1 | 2 | 3;
 
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
     // tutor.service.ts vẫn lưu lại đúng ngữ cảnh "học sinh đã yêu cầu
     // mức gợi ý nào" trong lịch sử hội thoại.
     const result = await sendTutorMessage({
-      userId: session.userId,
+      userId,
       topic,
       userMessage: `(Học sinh bấm nút: ${HINT_LABELS[hintLevel]})`,
       hintLevel,

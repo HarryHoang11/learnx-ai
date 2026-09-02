@@ -15,6 +15,7 @@ import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Trang chủ", icon: "⌂" },
+  { href: "/calendar", label: "Lịch học", icon: "🗓" },
   { href: "/diagnostic", label: "Kiểm tra năng lực", icon: "◈" },
   { href: "/tutor", label: "AI Gia sư", icon: "✺" },
   { href: "/roadmap", label: "Lộ trình học", icon: "⟿" },

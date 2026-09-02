@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -12,15 +12,20 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@auth/prisma-adapter": "^2.7.4",
     "@google/generative-ai": "^0.21.0",
     "@prisma/client": "^5.20.0",
-    "next": "14.2.5",
+    "bcryptjs": "^2.4.3",
+    "next": "14.2.35",
+    "next-auth": "5.0.0-beta.25",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
     "prisma": "^5.20.0",
     "typescript": "^5.5.0"
   }

@@ -9,14 +9,15 @@
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionOrDemoUser } from "@/lib/auth/session";
+import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { getLatestRoadmap } from "@/services/roadmap.service";
 import type { ApiResponse, RoadmapPlan } from "@/types";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getSessionOrDemoUser(req);
-    const plan = await getLatestRoadmap(session.userId);
+    const userId = await getCurrentUserId();
+    if (!userId) return unauthorizedResponse();
+    const plan = await getLatestRoadmap(userId);
 
     if (!plan) {
       return NextResponse.json<ApiResponse<never>>(

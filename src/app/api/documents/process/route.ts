@@ -12,12 +12,16 @@
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { answerFromDocument, processDocument } from "@/services/document.service";
 import type { ApiResponse } from "@/types";
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getCurrentUserId();
+    if (!userId) return unauthorizedResponse();
+
     const body = await req.json();
     const { documentId, action } = body as { documentId: string; action: "retry" | "ask"; question?: string };
 
@@ -28,7 +32,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const document = await prisma.document.findUnique({ where: { id: documentId } });
+    // where PHẢI gồm cả userId — nếu chỉ lọc theo id, user A gửi
+    // documentId của user B vẫn đọc/hỏi được nội dung tài liệu của B.
+    const document = await prisma.document.findFirst({ where: { id: documentId, userId } });
     if (!document) {
       return NextResponse.json<ApiResponse<never>>(
         { success: false, error: "Không tìm thấy tài liệu." },

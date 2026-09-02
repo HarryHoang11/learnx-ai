@@ -47,6 +47,14 @@ export interface ChatMessage {
   hintLevel?: 0 | 1 | 2 | 3; // 0 = chưa gợi ý, 1=🟢 2=🟡 3=🔴 (xem lib/ai/prompts.ts)
 }
 
+// Trạng thái 1 buổi học trong lịch — định nghĩa lại ở đây (thay vì
+// import StudySessionStatus từ "@prisma/client") vì đây là type dùng
+// ở CẢ backend lẫn frontend (frontend không có quyền truy cập
+// @prisma/client). Giá trị PHẢI khớp CHÍNH XÁC với enum StudySessionStatus
+// trong prisma/schema.prisma — nếu đổi 1 bên mà quên đổi bên kia,
+// TypeScript sẽ báo lỗi type mismatch ngay khi build.
+export type StudySessionStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED";
+
 // Response chuẩn cho MỌI API route — giúp frontend xử lý lỗi đồng nhất
 // thay vì mỗi route trả lỗi một kiểu khác nhau.
 export type ApiResponse<T> =

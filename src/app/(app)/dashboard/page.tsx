@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import Panel from "@/components/ui/Panel";
 import StatCard from "@/components/ui/StatCard";
 import StateMessage from "@/components/ui/StateMessage";
+import TodaySchedule from "@/components/calendar/TodaySchedule";
 import type { ApiResponse, SkillMasteryPoint } from "@/types";
 
 interface ProgressData {
@@ -112,6 +113,10 @@ export default function HomePage() {
             <StatCard value={progress.totalAttempts} label="Bài đã làm" />
             <StatCard value={`${progress.accuracyPercent}%`} label="Độ chính xác" />
             <StatCard value={progress.skillMap.length} label="Chủ đề đã theo dõi" />
+          </div>
+
+          <div style={{ marginBottom: 28 }}>
+            <TodaySchedule />
           </div>
 
           {weakest ? (

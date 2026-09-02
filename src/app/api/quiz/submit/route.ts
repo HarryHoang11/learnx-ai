@@ -7,13 +7,14 @@
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionOrDemoUser } from "@/lib/auth/session";
+import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { submitQuizAnswer } from "@/services/quiz.service";
 import type { ApiResponse, GeneratedQuestion } from "@/types";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getSessionOrDemoUser(req);
+    const userId = await getCurrentUserId();
+    if (!userId) return unauthorizedResponse();
     const body = await req.json();
     const question = body.question as GeneratedQuestion;
     const selectedIndex = Number(body.selectedIndex);
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await submitQuizAnswer({ userId: session.userId, question, selectedIndex });
+    const result = await submitQuizAnswer({ userId, question, selectedIndex });
 
     return NextResponse.json<ApiResponse<typeof result>>({ success: true, data: result });
   } catch (err) {

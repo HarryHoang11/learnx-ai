@@ -12,13 +12,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { generateText } from "@/lib/ai/gemini";
-import { getSessionOrDemoUser } from "@/lib/auth/session";
+import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import type { ApiResponse } from "@/types";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getSessionOrDemoUser(req);
+    const userId = await getCurrentUserId();
+    if (!userId) return unauthorizedResponse();
 
     // Lấy các Attempt trong 7 ngày gần nhất để AI so sánh xu hướng —
     // KHÔNG lấy toàn bộ lịch sử vì sẽ làm prompt quá dài và nhận xét
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     const recentAttempts = await prisma.attempt.findMany({
-      where: { userId: session.userId, createdAt: { gte: sevenDaysAgo } },
+      where: { userId, createdAt: { gte: sevenDaysAgo } },
       select: { subject: true, topic: true, isCorrect: true, createdAt: true },
     });
 

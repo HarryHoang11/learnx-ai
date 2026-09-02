@@ -83,9 +83,21 @@ export async function updateMastery(params: {
 // --- HELPER: lấy toàn bộ hồ sơ năng lực của 1 user, format sẵn cho UI ---
 // Dùng chung bởi api/assessment/result, api/progress, và
 // roadmap.service.ts (để biết topic nào đang yếu khi sinh lộ trình).
+//
+// LearningProgressRow khai báo tường minh (thay vì để TS tự suy luận
+// từ Prisma Client) vì Prisma Client trong sandbox phát triển hiện
+// tại chưa được `generate` lại theo schema mới nhất, nên kiểu trả về
+// có thể không chính xác — khai báo tay đảm bảo an toàn kiểu độc lập
+// với trạng thái generate của Prisma Client.
+interface LearningProgressRow {
+  subject: string;
+  topic: string;
+  mastery: number;
+}
+
 export async function getSkillProfile(userId: string): Promise<SkillMasteryPoint[]> {
-  const rows = await prisma.learningProgress.findMany({ where: { userId } });
-  return rows.map((r) => {
+  const rows: LearningProgressRow[] = await prisma.learningProgress.findMany({ where: { userId } });
+  return rows.map((r: LearningProgressRow) => {
     const masteryPercent = Math.round(r.mastery * 100);
     return {
       subject: r.subject,

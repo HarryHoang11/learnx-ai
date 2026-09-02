@@ -12,7 +12,7 @@
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionOrDemoUser } from "@/lib/auth/session";
+import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { pickNextDifficulty, updateMastery } from "@/services/assessment.service";
 import { generateQuizQuestion } from "@/services/quiz.service";
@@ -24,7 +24,8 @@ const MAX_QUESTIONS_PER_ASSESSMENT = 16;
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getSessionOrDemoUser(req);
+    const userId = await getCurrentUserId();
+    if (!userId) return unauthorizedResponse();
     const body = await req.json();
 
     const { assessmentId, question, selectedIndex } = body as {
@@ -40,13 +41,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Xác minh assessmentId THẬT SỰ thuộc user hiện tại trước khi ghi
+    // Attempt hay cập nhật trạng thái — nếu không, user A gửi
+    // assessmentId của user B có thể chèn dữ liệu/đóng phiên kiểm tra
+    // của B (lỗ hổng data isolation).
+    const assessment = await prisma.assessment.findFirst({ where: { id: assessmentId, userId } });
+    if (!assessment) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "Không tìm thấy phiên kiểm tra này." },
+        { status: 404 }
+      );
+    }
+
     const isCorrect = selectedIndex === question.correctIndex;
 
     // Lưu Attempt GẮN VỚI assessmentId (khác quiz luyện tập thường,
     // xem quiz.service.ts submitQuizAnswer dùng assessmentId: null)
     await prisma.attempt.create({
       data: {
-        userId: session.userId,
+        userId,
         assessmentId,
         subject: question.subject,
         topic: question.topic,
@@ -57,7 +70,7 @@ export async function POST(req: NextRequest) {
     });
 
     await updateMastery({
-      userId: session.userId,
+      userId,
       subject: question.subject,
       topic: question.topic,
       isCorrect,

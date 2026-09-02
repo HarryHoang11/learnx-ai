@@ -9,19 +9,20 @@
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionOrDemoUser } from "@/lib/auth/session";
+import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { generateQuizQuestion } from "@/services/quiz.service";
 import type { ApiResponse, GeneratedQuestion } from "@/types";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getSessionOrDemoUser(req);
+    const userId = await getCurrentUserId();
+    if (!userId) return unauthorizedResponse();
     const body = await req.json();
     const subject = (body.subject as string) ?? "Toán";
 
     const assessment = await prisma.assessment.create({
-      data: { userId: session.userId, status: "in_progress" },
+      data: { userId, status: "in_progress" },
     });
 
     // Câu đầu tiên LUÔN ở độ khó "easy" và chủ đề tổng quát nhất của
