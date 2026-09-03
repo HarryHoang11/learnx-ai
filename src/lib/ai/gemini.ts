@@ -25,7 +25,7 @@ if (!apiKey) {
   );
 }
 
-const client = new GoogleGenerativeAI(apiKey);
+export const client = new GoogleGenerativeAI(apiKey);
 
 // ----------------------------------------------------------------
 // TÊN MODEL — đọc từ .env (GEMINI_MODEL), có fallback mặc định.
@@ -66,7 +66,7 @@ export class AIOverloadedError extends Error {
   }
 }
 
-function isRetryableStatus(err: unknown): boolean {
+export function isRetryableStatus(err: unknown): boolean {
   const status = (err as { status?: number })?.status;
   if (status === 503 || status === 429) return true;
   const message = err instanceof Error ? err.message : String(err);
@@ -82,7 +82,7 @@ function sleep(ms: number) {
 // timeout riêng (mặc định 10s ở nhiều cấu hình hosting) — retry quá
 // nhiều sẽ khiến request bị timeout ở tầng trên với lỗi còn khó hiểu
 // hơn cả 503 gốc.
-async function callWithRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+export async function callWithRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
   let lastErr: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {

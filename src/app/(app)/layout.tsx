@@ -10,17 +10,8 @@
 // ================================================================
 
 import type { ReactNode } from "react";
-import Sidebar from "@/components/layout/Sidebar";
-import Topbar from "@/components/layout/Topbar";
+import AppShell from "@/components/layout/AppShell";
 
 export default function AppGroupLayout({ children }: { children: ReactNode }) {
-  return (
-    <div className="app-shell">
-      <Sidebar />
-      <main className="main-content">
-        <Topbar />
-        {children}
-      </main>
-    </div>
-  );
+  return <AppShell>{children}</AppShell>;
 }

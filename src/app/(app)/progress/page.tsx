@@ -59,14 +59,14 @@ export default function ProgressPage() {
     <section>
       <h2 style={{ fontSize: 20, marginBottom: 18 }}>Tiến độ học tập</h2>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+      <div className="grid-stats">
         <StatCard value={`🔥 ${progress.streakDays}`} label="Ngày liên tục" />
         <StatCard value={progress.totalAttempts} label="Bài đã làm" />
         <StatCard value={`${progress.accuracyPercent}%`} label="Độ chính xác" />
         <StatCard value={progress.skillMap.length} label="Chủ đề đã theo dõi" />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 20, marginTop: 20 }}>
+      <div className="grid-progress" style={{ marginTop: 20 }}>
         <Panel>
           <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 10 }}>Bản đồ năng lực</div>
           {progress.skillMap.length === 0 ? (

@@ -137,7 +137,7 @@ function TutorPageInner() {
     <section>
       <h2 style={{ fontSize: 20, marginBottom: 16 }}>AI Gia sư</h2>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 20 }}>
+      <div className="grid-tutor">
         <Panel style={{ height: 560, display: "flex", flexDirection: "column" }}>
           <div
             ref={logRef}

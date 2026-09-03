@@ -101,14 +101,7 @@ export default function HomePage() {
 
       {progress && (
         <>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: 14,
-              margin: "22px 0 28px",
-            }}
-          >
+          <div className="grid-stats" style={{ margin: "22px 0 28px" }}>
             <StatCard value={`🔥 ${progress.streakDays}`} label="Ngày học liên tục" />
             <StatCard value={progress.totalAttempts} label="Bài đã làm" />
             <StatCard value={`${progress.accuracyPercent}%`} label="Độ chính xác" />

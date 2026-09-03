@@ -1,7 +1,8 @@
 {
-  "/login/page": "app/login/page.js",
-  "/(app)/roadmap/page": "app/(app)/roadmap/page.js",
+  "/(app)/calendar/page": "app/(app)/calendar/page.js",
+  "/(app)/dashboard/page": "app/(app)/dashboard/page.js",
+  "/api/progress/route": "app/api/progress/route.js",
   "/(app)/library/page": "app/(app)/library/page.js",
-  "/(app)/tutor/page": "app/(app)/tutor/page.js",
-  "/(app)/dashboard/page": "app/(app)/dashboard/page.js"
+  "/api/calendar/today/route": "app/api/calendar/today/route.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js"
 }

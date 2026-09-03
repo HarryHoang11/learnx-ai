@@ -36,21 +36,6 @@
       "static/chunks/main-app.js",
       "static/chunks/app/(app)/diagnostic/page.js"
     ],
-    "/(app)/tutor/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(app)/tutor/page.js"
-    ],
-    "/(app)/roadmap/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(app)/roadmap/page.js"
-    ],
-    "/(app)/progress/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(app)/progress/page.js"
-    ],
     "/(app)/library/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",

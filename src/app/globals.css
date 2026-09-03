@@ -146,3 +146,335 @@ h3 {
 .state-msg.error {
   color: var(--rose);
 }
+
+/* ================================================================
+   RESPONSIVE APP SHELL — Sidebar thành drawer trên mobile
+   ================================================================ */
+.sidebar {
+  width: 230px;
+  flex-shrink: 0;
+  padding: 28px 16px;
+  border-right: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  background: var(--bg);
+}
+
+.menu-btn {
+  display: none;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  font-size: 17px;
+  cursor: pointer;
+}
+
+.sidebar-overlay {
+  display: none;
+}
+
+@media (max-width: 880px) {
+  .menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Trên mobile, Sidebar biến thành drawer trượt từ trái, nằm ĐÈ lên
+     nội dung (position: fixed) thay vì chiếm chỗ cố định trong luồng
+     flex như trên desktop — nếu không, Sidebar 230px sẽ ép nội dung
+     chính co lại rất hẹp trên màn hình nhỏ (đây chính là lỗi
+     responsive gốc của app trước khi sửa). */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .sidebar--open {
+    transform: translateX(0);
+  }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 40;
+  }
+}
+
+/* ================================================================
+   GRID UTILITIES — thay cho gridTemplateColumns hard-code inline,
+   để có thể @media override (inline style KHÔNG thể dùng media query).
+   ================================================================ */
+.grid-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.grid-progress {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 20px;
+}
+
+.grid-tutor {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 20px;
+}
+
+.grid-form-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 880px) {
+  .grid-progress,
+  .grid-tutor {
+    grid-template-columns: 1fr;
+  }
+  .grid-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .grid-stats,
+  .grid-form-2col {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Bảng lịch tuần (140px + 7 cột ngày) KHÔNG nên ép về 1 cột — sẽ mất
+   hết ý nghĩa dạng lưới thời khoá biểu. Thay vào đó, cho cuộn ngang
+   trên màn hình hẹp, giữ nguyên cấu trúc bảng. */
+@media (max-width: 880px) {
+  .scroll-x-mobile {
+    overflow-x: auto;
+  }
+}
+
+/* ================================================================
+   MODAL — dùng chung cho EditProfileModal (và mọi modal sau này)
+   ================================================================ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+}
+
+.modal-card {
+  background: #10141f;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 26px;
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* ================================================================
+   FORM ELEMENTS — input/textarea dùng chung (modal, form lịch học...)
+   ================================================================ */
+.form-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin: 14px 0 6px;
+}
+
+.form-label-counter {
+  color: var(--text-faint);
+}
+
+.form-input,
+.form-textarea {
+  width: 100%;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-family: var(--font-inter), sans-serif;
+}
+
+.form-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 70px;
+}
+
+/* ================================================================
+   PROFILE PAGE — cover + avatar chồng lên nhau, nút camera, overlay
+   loading lúc upload
+   ================================================================ */
+.profile-page {
+  max-width: 760px;
+}
+
+.profile-cover {
+  position: relative;
+  height: 220px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--indigo-soft), var(--cyan-soft)), var(--panel-strong);
+  background-size: cover;
+  background-position: center;
+  border: 1px solid var(--border-soft);
+}
+
+.profile-avatar-wrap {
+  position: absolute;
+  left: 24px;
+  bottom: -44px;
+}
+
+.profile-avatar {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  border: 4px solid var(--bg);
+  background: linear-gradient(135deg, var(--cyan), var(--indigo));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar-initials {
+  font-size: 32px;
+  font-weight: 700;
+  color: #0a0e16;
+}
+
+.photo-edit-btn {
+  position: absolute;
+  border: 2px solid var(--bg);
+  background: var(--panel-strong);
+  color: var(--text);
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.photo-edit-btn:hover {
+  background: var(--indigo-soft);
+}
+
+.photo-edit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.photo-edit-btn--cover {
+  right: 16px;
+  bottom: 16px;
+}
+
+.photo-edit-btn--avatar {
+  right: -2px;
+  bottom: -2px;
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
+}
+
+.photo-upload-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+}
+
+.photo-upload-overlay--round {
+  border-radius: 50%;
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.profile-info-panel {
+  margin-top: 56px;
+}
+
+.profile-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 520px) {
+  .profile-cover {
+    height: 160px;
+  }
+  .profile-avatar {
+    width: 84px;
+    height: 84px;
+  }
+  .profile-avatar-wrap {
+    left: 16px;
+    bottom: -34px;
+  }
+  .profile-info-panel {
+    margin-top: 46px;
+  }
+  .profile-info-header {
+    flex-direction: column;
+  }
+  .modal-card {
+    padding: 20px;
+  }
+}

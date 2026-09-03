@@ -190,7 +190,8 @@ function MonthGridView({ sessions }: { sessions: StudySessionDto[] }) {
 
   return (
     <Panel>
-      <div style={{ display: "grid", gridTemplateColumns: `140px repeat(7, 1fr)`, gap: 8, fontSize: 13 }}>
+      <div className="scroll-x-mobile">
+      <div style={{ display: "grid", gridTemplateColumns: `140px repeat(7, 1fr)`, gap: 8, fontSize: 13, minWidth: 640 }}>
         <div />
         {WEEKDAY_LABELS.map((d) => (
           <div key={d} style={{ textAlign: "center", color: "var(--text-dim)" }}>
@@ -213,6 +214,7 @@ function MonthGridView({ sessions }: { sessions: StudySessionDto[] }) {
             ))}
           </Fragment>
         ))}
+      </div>
       </div>
     </Panel>
   );
@@ -265,7 +267,7 @@ function CreateSessionForm({ onCreated }: { onCreated: () => void }) {
 
   return (
     <Panel style={{ marginBottom: 4 }}>
-      <form onSubmit={handleSubmit} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      <form onSubmit={handleSubmit} className="grid-form-2col">
         <input placeholder="Môn học (vd: Toán)" required value={subject} onChange={(e) => setSubject(e.target.value)} style={inputStyle} />
         <input placeholder="Chủ đề (vd: Hàm số)" required value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} />
         <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} style={inputStyle} />
