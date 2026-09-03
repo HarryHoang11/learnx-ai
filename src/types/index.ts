@@ -66,3 +66,16 @@ export type ApiResponse<T> =
   // Khai báo optional ở đây để tránh lỗi "excess property" của
   // TypeScript khi các route gán thêm field này vào object literal.
   | { success: false; error: string; debug?: string };
+
+// Hồ sơ trang cá nhân — map từ User (Prisma) nhưng CHỈ expose field an
+// toàn hiển thị công khai trên trang cá nhân (không lộ passwordHash,
+// role nội bộ dùng riêng, v.v).
+export interface UserProfile {
+  id: string;
+  name: string | null;
+  nickname: string | null;
+  email: string;
+  bio: string | null;
+  image: string | null;
+  coverImage: string | null;
+}

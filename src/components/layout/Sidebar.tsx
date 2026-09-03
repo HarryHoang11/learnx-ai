@@ -21,23 +21,22 @@ const NAV_ITEMS = [
   { href: "/roadmap", label: "Lộ trình học", icon: "⟿" },
   { href: "/progress", label: "Tiến độ", icon: "◐" },
   { href: "/library", label: "Thư viện", icon: "▤" },
+  { href: "/profile", label: "Trang cá nhân", icon: "◎" },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  // Mobile: sidebar là drawer overlay, cần biết đang mở/đóng và cách
+  // đóng lại (bấm 1 mục nav xong nên tự đóng, không bắt user tự bấm
+  // nút đóng lần nữa — UX chuẩn cho drawer nav trên mobile).
+  open?: boolean;
+  onNavigate?: () => void;
+}
+
+export default function Sidebar({ open = false, onNavigate }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside
-      style={{
-        width: 230,
-        flexShrink: 0,
-        padding: "28px 16px",
-        borderRight: "1px solid var(--border-soft)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 26,
-      }}
-    >
+    <aside className={`sidebar ${open ? "sidebar--open" : ""}`}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 8px" }}>
         <div
           style={{
@@ -68,6 +67,7 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               style={{
                 display: "flex",
                 alignItems: "center",

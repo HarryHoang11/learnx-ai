@@ -30,7 +30,54 @@ datasource db {
 // ----------------------------------------------------------------
 // USER — điểm trung tâm, mọi bảng khác đều quy chiếu về đây
 // ----------------------------------------------------------------
-model User {
+model User {model User {
+  id        String    @id @default(cuid())
+  name      String?
+  email     String    @unique
+  // emailVerified + image là 2 field BẮT BUỘC theo chuẩn adapter của
+  // Auth.js (NextAuth) khi dùng PrismaAdapter — thiếu 1 trong 2 field
+  // này, đăng nhập Google qua adapter sẽ lỗi lúc link account.
+  emailVerified DateTime?
+  image     String?
+  // coverImage: ảnh bìa trang cá nhân — optional, tách riêng khỏi
+  // `image` (ảnh đại diện) vì 2 mục đích hiển thị khác nhau.
+  coverImage String?
+  // nickname: biệt danh hiển thị cạnh tên thật trên trang cá nhân
+  // (vd "Nguyễn Văn A (Alex)") — optional vì không phải ai cũng đặt.
+  nickname  String?
+  // bio: tiểu sử ngắn, giới hạn 150 ký tự (kiểm tra ở tầng API khi
+  // PATCH, không enforce cứng ở DB để tránh lỗi khó hiểu nếu sau này
+  // đổi giới hạn).
+  bio       String?
+  // passwordHash CHỈ tồn tại với user đăng ký bằng email+password.
+  // User đăng nhập qua Google sẽ có passwordHash = null —
+  // đây là lý do field này optional, KHÔNG bắt buộc.
+  passwordHash String?
+  // role phân biệt học sinh / giáo viên / admin để render đúng
+  // dashboard (Student / Teacher / Admin) như đã phác thảo ở phần
+  // kiến trúc tổng thể.
+  role      Role     @default(STUDENT)
+  createdAt DateTime @default(now())
+
+  // 2 quan hệ bắt buộc của Auth.js PrismaAdapter (OAuth account link +
+  // session lưu DB cho các luồng cần — session thực tế của app dùng
+  // JWT strategy, xem auth.ts, nhưng Account vẫn cần để adapter lưu
+  // access token Google).
+  accounts Account[]
+  sessions Session[]
+
+  // Quan hệ 1-nhiều: một user có nhiều bản ghi năng lực, nhiều lần
+  // làm bài, nhiều cuộc hội thoại với AI Tutor, v.v.
+  goals         LearningGoal[]
+  assessments   Assessment[]
+  attempts      Attempt[]
+  progress      LearningProgress[]
+  roadmaps      Roadmap[]
+  conversations Conversation[]
+  documents     Document[]
+  achievements  Achievement[]
+  studySessions StudySession[]
+}
   id        String    @id @default(cuid())
   name      String?
   email     String    @unique

@@ -12,15 +12,32 @@
 
 import { useSession, signOut } from "next-auth/react";
 
-export default function Topbar() {
+interface TopbarProps {
+  onMenuClick?: () => void;
+}
+
+export default function Topbar({ onMenuClick }: TopbarProps) {
   const { data: session } = useSession();
   const name = session?.user?.name ?? session?.user?.email ?? "Học sinh";
   const image = session?.user?.image;
   const initials = name.slice(0, 2).toUpperCase();
 
   return (
-    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 14, marginBottom: 30 }}>
-      <span style={{ fontSize: 13, color: "var(--text-dim)" }}>{name}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, marginBottom: 30 }}>
+      {/* Nút hamburger CHỈ hiển thị trên mobile (ẩn bằng CSS ở
+          globals.css qua class "menu-btn") — trên desktop Sidebar luôn
+          hiện sẵn nên không cần nút này. */}
+      <button
+        type="button"
+        className="menu-btn"
+        onClick={onMenuClick}
+        aria-label="Mở menu điều hướng"
+      >
+        ☰
+      </button>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginLeft: "auto" }}>
+        <span style={{ fontSize: 13, color: "var(--text-dim)" }}>{name}</span>
 
       {image ? (
         // eslint-disable-next-line @next/next/no-img-element -- avatar
@@ -57,6 +74,7 @@ export default function Topbar() {
       >
         Đăng xuất
       </button>
+      </div>
     </div>
   );
 }

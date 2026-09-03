@@ -1,13 +1,11 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
+  "/page": "app/page.js",
   "/login/page": "app/login/page.js",
-  "/(app)/roadmap/page": "app/(app)/roadmap/page.js",
-  "/(app)/tutor/page": "app/(app)/tutor/page.js",
-  "/(app)/diagnostic/page": "app/(app)/diagnostic/page.js",
-  "/api/calendar/today/route": "app/api/calendar/today/route.js",
-  "/(app)/calendar/page": "app/(app)/calendar/page.js",
-  "/api/calendar/route": "app/api/calendar/route.js",
-  "/api/calendar/[id]/route": "app/api/calendar/[id]/route.js",
   "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
-  "/api/roadmap/route": "app/api/roadmap/route.js"
+  "/api/progress/route": "app/api/progress/route.js",
+  "/(app)/dashboard/page": "app/(app)/dashboard/page.js",
+  "/api/calendar/today/route": "app/api/calendar/today/route.js",
+  "/(app)/profile/page": "app/(app)/profile/page.js",
+  "/api/profile/route": "app/api/profile/route.js",
+  "/(app)/calendar/page": "app/(app)/calendar/page.js"
 }
