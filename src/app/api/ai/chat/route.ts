@@ -43,7 +43,13 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[api/ai/chat] Lỗi:", err);
     return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: "Có lỗi khi gọi AI Tutor, thử lại sau." },
+      {
+        success: false,
+        error: "Có lỗi khi gọi AI Tutor, thử lại sau.",
+        ...(process.env.NODE_ENV === "development" && {
+          debug: err instanceof Error ? err.message : String(err),
+        }),
+      },
       { status: 500 }
     );
   }

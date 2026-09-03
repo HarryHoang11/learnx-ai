@@ -59,4 +59,10 @@ export type StudySessionStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED";
 // thay vì mỗi route trả lỗi một kiểu khác nhau.
 export type ApiResponse<T> =
   | { success: true; data: T }
-  | { success: false; error: string };
+  // debug là optional, CHỈ được điền khi NODE_ENV === "development" (xem
+  // các route trong api/roadmap/generate, api/assessment/start,
+  // api/ai/chat) — dùng để lộ message lỗi thật ra Network tab lúc dev,
+  // giúp debug nhanh hơn thay vì chỉ thấy "500 Internal Server Error".
+  // Khai báo optional ở đây để tránh lỗi "excess property" của
+  // TypeScript khi các route gán thêm field này vào object literal.
+  | { success: false; error: string; debug?: string };

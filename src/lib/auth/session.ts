@@ -16,14 +16,34 @@
 
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/db/prisma";
 import type { ApiResponse } from "@/types";
 
 // Trả về userId nếu đã đăng nhập, null nếu chưa — KHÔNG throw, để
 // route tự quyết định trả 401 theo đúng format ApiResponse của mình
 // (xem unauthorizedResponse() bên dưới, dùng chung cho đồng nhất).
+//
+// QUAN TRỌNG: session dùng chiến lược "jwt" (xem auth.ts) — nghĩa là
+// Auth.js KHÔNG query lại DB mỗi request, chỉ giải mã cookie đã ký và
+// tin luôn userId bên trong. Nếu DB từng bị reset/đổi connection
+// string, hoặc cookie cũ còn sót lại từ hệ thống auth trước đây, JWT
+// vẫn "hợp lệ" về mặt chữ ký nhưng userId bên trong KHÔNG còn tồn tại
+// trong bảng User -> mọi insert dùng userId đó làm khoá ngoại sẽ nổ
+// P2003 (Foreign key constraint violated). Vì vậy cần xác minh lại
+// user thực sự tồn tại trước khi trả userId ra cho route dùng để ghi
+// dữ liệu — tốn thêm 1 query nhẹ, nhưng biến lỗi Prisma khó hiểu
+// thành 401 rõ ràng, xử lý được ở phía client (tự động signOut()).
 export async function getCurrentUserId(): Promise<string | null> {
   const session = await auth();
-  return session?.user?.id ?? null;
+  const userId = session?.user?.id ?? null;
+  if (!userId) return null;
+
+  const exists = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+
+  return exists ? userId : null;
 }
 
 // Response 401 CHUẨN HÓA — mọi route đều dùng đúng 1 hàm này thay vì
