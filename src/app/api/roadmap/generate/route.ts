@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { generateRoadmap } from "@/services/roadmap.service";
+import { AIOverloadedError } from "@/lib/ai/gemini";
 import type { ApiResponse, RoadmapPlan } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -81,8 +82,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json<ApiResponse<RoadmapPlan[]>>({ success: true, data: plan });
   } catch (err) {
     console.error("[api/roadmap/generate] Lỗi:", err);
+
+    // Google Gemini đang quá tải (503/429) — lỗi tạm thời, không phải
+    // bug của app. Trả 503 để frontend biết đây là "thử lại sau", có
+    // thể hiển thị khác với lỗi 500 thật (vd nút "Thử lại" thay vì
+    // form báo lỗi).
+    if (err instanceof AIOverloadedError) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: err.message },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: "Không thể tạo lộ trình, thử lại sau." },
+      {
+        success: false,
+        error: "Không thể tạo lộ trình, thử lại sau.",
+        // Chỉ trả chi tiết lỗi thật khi đang dev, KHÔNG bao giờ để lộ ở
+        // production — giúp thấy nguyên nhân thật trong Network tab
+        // thay vì chỉ "500 Internal Server Error" chung chung.
+        ...(process.env.NODE_ENV === "development" && {
+          debug: err instanceof Error ? err.message : String(err),
+        }),
+      },
       { status: 500 }
     );
   }

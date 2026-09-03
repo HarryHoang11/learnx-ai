@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { generateQuizQuestion } from "@/services/quiz.service";
+import { AIOverloadedError } from "@/lib/ai/gemini";
 import type { ApiResponse, GeneratedQuestion } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -36,8 +37,22 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[api/assessment/start] Lỗi:", err);
+
+    if (err instanceof AIOverloadedError) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: err.message },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: "Không thể bắt đầu bài kiểm tra, thử lại sau." },
+      {
+        success: false,
+        error: "Không thể bắt đầu bài kiểm tra, thử lại sau.",
+        ...(process.env.NODE_ENV === "development" && {
+          debug: err instanceof Error ? err.message : String(err),
+        }),
+      },
       { status: 500 }
     );
   }

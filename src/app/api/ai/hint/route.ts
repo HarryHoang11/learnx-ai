@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { sendTutorMessage } from "@/services/tutor.service";
+import { AIOverloadedError } from "@/lib/ai/gemini";
 import type { ApiResponse } from "@/types";
 
 const HINT_LABELS: Record<number, string> = {
@@ -48,8 +49,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json<ApiResponse<typeof result>>({ success: true, data: result });
   } catch (err) {
     console.error("[api/ai/hint] Lỗi:", err);
+
+    if (err instanceof AIOverloadedError) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: err.message },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: "Có lỗi khi lấy gợi ý, thử lại sau." },
+      {
+        success: false,
+        error: "Có lỗi khi lấy gợi ý, thử lại sau.",
+        ...(process.env.NODE_ENV === "development" && {
+          debug: err instanceof Error ? err.message : String(err),
+        }),
+      },
       { status: 500 }
     );
   }

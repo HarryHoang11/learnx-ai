@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { sendTutorMessage } from "@/services/tutor.service";
+import { AIOverloadedError } from "@/lib/ai/gemini";
 import type { ApiResponse } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -42,6 +43,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json<ApiResponse<typeof result>>({ success: true, data: result });
   } catch (err) {
     console.error("[api/ai/chat] Lỗi:", err);
+
+    if (err instanceof AIOverloadedError) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: err.message },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json<ApiResponse<never>>(
       {
         success: false,

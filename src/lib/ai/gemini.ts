@@ -49,7 +49,53 @@ const client = new GoogleGenerativeAI(apiKey);
 // cần tuyệt đối ổn định cho production (không muốn hành vi AI đổi bất
 // ngờ), hãy pin cứng bằng cách đặt biến GEMINI_MODEL trong .env thành
 // 1 tên model stable cụ thể, ví dụ: GEMINI_MODEL=gemini-3.5-flash
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash"; 
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-flash-latest";
+
+// ----------------------------------------------------------------
+// LỖI "AI ĐANG QUÁ TẢI" — phân biệt với lỗi thật (config sai, bug...)
+// ----------------------------------------------------------------
+// Google thỉnh thoảng trả 503 "currently experiencing high demand" hoặc
+// 429 "rate limit" — đây là lỗi TẠM THỜI, phía Google quá tải, KHÔNG
+// phải do code sai. Tách riêng 1 class lỗi để route phía trên trả đúng
+// status 503 (Service Unavailable) thay vì 500, giúp frontend biết đây
+// là lỗi "thử lại sau" chứ không phải bug cần báo cáo.
+export class AIOverloadedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AIOverloadedError";
+  }
+}
+
+function isRetryableStatus(err: unknown): boolean {
+  const status = (err as { status?: number })?.status;
+  if (status === 503 || status === 429) return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes("503") || message.includes("429") || message.toLowerCase().includes("high demand");
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Retry với backoff tăng dần + jitter nhẹ — tối đa 3 lần gọi (1 lần gốc
+// + 2 lần retry). KHÔNG retry vô hạn vì route handler của Next.js có
+// timeout riêng (mặc định 10s ở nhiều cấu hình hosting) — retry quá
+// nhiều sẽ khiến request bị timeout ở tầng trên với lỗi còn khó hiểu
+// hơn cả 503 gốc.
+async function callWithRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryableStatus(err) || attempt === maxAttempts) break;
+      const backoffMs = 500 * 2 ** (attempt - 1) + Math.random() * 200;
+      await sleep(backoffMs);
+    }
+  }
+  throw lastErr;
+}
 
 interface GenerateOptions {
   systemPrompt: string;
@@ -69,14 +115,12 @@ export async function generateText(opts: GenerateOptions): Promise<string> {
 
   let result;
   try {
-    result = await model.generateContent(opts.userPrompt);
+    result = await callWithRetry(() => model.generateContent(opts.userPrompt));
   } catch (err) {
-    // Bắt riêng lỗi 404 "model not found" từ Google — đây là lỗi RẤT
-    // hay gặp lại trong tương lai vì Google liên tục gỡ model cũ khỏi
-    // API (xem giải thích ở MODEL_NAME phía trên). Ném lại với message
-    // rõ ràng, trỏ thẳng tới chỗ cần sửa (.env GEMINI_MODEL), thay vì
-    // để lỗi SDK gốc khó hiểu rơi xuống catch chung ở route.
     const message = err instanceof Error ? err.message : String(err);
+
+    // Lỗi 404 "model not found" — model bị Google gỡ khỏi API (xem
+    // giải thích ở MODEL_NAME phía trên).
     if (message.includes("404") || message.toLowerCase().includes("not found")) {
       throw new Error(
         `Model "${MODEL_NAME}" không còn khả dụng ở Gemini API (có thể đã bị Google ` +
@@ -85,6 +129,16 @@ export async function generateText(opts: GenerateOptions): Promise<string> {
           `GEMINI_MODEL trong .env. Lỗi gốc: ${message}`
       );
     }
+
+    // Lỗi 503/429 — đã retry hết số lần cho phép mà vẫn quá tải. Ném
+    // dạng lỗi riêng (AIOverloadedError) để route phía trên bắt được
+    // và trả status 503 thay vì 500 chung chung.
+    if (isRetryableStatus(err)) {
+      throw new AIOverloadedError(
+        "Hệ thống AI (Gemini) đang quá tải, vui lòng thử lại sau ít phút."
+      );
+    }
+
     throw err;
   }
 
