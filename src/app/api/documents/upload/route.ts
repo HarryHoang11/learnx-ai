@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { processDocument } from "@/services/document.service";
+import { extractText, UnsupportedFileTypeError } from "@/lib/documents/extractText";
 import type { ApiResponse } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -37,22 +38,27 @@ export async function POST(req: NextRequest) {
     const fileType = inferFileType(file.name);
 
     // ------------------------------------------------------------
-    // GIỚI HẠN QUAN TRỌNG (MVP): chỉ thật sự trích xuất được nội dung
-    // từ file TEXT THUẦN (.txt, .md). PDF/DOCX/PPTX là định dạng NHỊ
-    // PHÂN (binary) — gọi file.text() trên chúng đọc sai byte thành ký
-    // tự rác (kể cả byte 0x00 null mà Postgres tuyệt đối không cho
-    // phép trong cột text), gây crash ở bước lưu DocumentChunk. Parse
-    // PDF/DOCX thật cần thư viện riêng (pdf-parse, mammoth...) — CHƯA
-    // được cài trong project này, nên chặn sớm ở đây với thông báo rõ
-    // ràng, thay vì để tài liệu "tưởng như thành công" rồi âm thầm lỗi
-    // ở bước xử lý nền (như log bạn đang thấy).
-    // TODO (nâng cấp sau): cài `pdf-parse` cho PDF, `mammoth` cho DOCX,
-    // trích xuất text thật rồi bỏ giới hạn này.
-    if (fileType !== "unknown" && fileType !== "image" && !file.name.match(/\.(txt|md)$/i)) {
+    // Trích xuất text THẬT ngay tại đây (trước khi tạo Document) —
+    // để nếu file không đọc được (định dạng chưa hỗ trợ, hoặc file
+    // PDF/DOCX bị hỏng/mã hoá), người dùng nhận lỗi rõ ràng NGAY LẬP
+    // TỨC thay vì thấy "upload thành công" rồi vài giây sau tài liệu
+    // âm thầm chuyển sang "failed" (như hành vi cũ).
+    // ------------------------------------------------------------
+    let extractedText: string;
+    try {
+      extractedText = await extractText(file, fileType);
+    } catch (err) {
+      if (err instanceof UnsupportedFileTypeError) {
+        return NextResponse.json<ApiResponse<never>>({ success: false, error: err.message }, { status: 400 });
+      }
+      console.error("[api/documents/upload] Lỗi trích xuất nội dung:", err);
       return NextResponse.json<ApiResponse<never>>(
         {
           success: false,
-          error: `Hiện chỉ hỗ trợ tóm tắt file .txt hoặc .md. Định dạng "${fileType}" chưa được hỗ trợ trích xuất nội dung.`,
+          error: "Không thể đọc nội dung file này — file có thể bị hỏng hoặc mã hoá.",
+          ...(process.env.NODE_ENV === "development" && {
+            debug: err instanceof Error ? err.message : String(err),
+          }),
         },
         { status: 400 }
       );
@@ -72,8 +78,7 @@ export async function POST(req: NextRequest) {
     // MVP demo gọi thẳng cho đơn giản, không await để trả response ngay
     // (frontend sẽ tự poll status qua GET /api/documents hoặc websocket
     // nếu cần "real-time" — ngoài phạm vi MVP).
-    const fileText = await file.text(); // MVP: giả định file là text-extractable
-    processDocument(document.id, fileText).catch((err) =>
+    processDocument(document.id, extractedText).catch((err) =>
       console.error(`[documents/upload] Xử lý document ${document.id} thất bại:`, err)
     );
 
@@ -92,6 +97,8 @@ export async function POST(req: NextRequest) {
 
 function inferFileType(fileName: string): string {
   const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "txt") return "txt";
+  if (ext === "md") return "md";
   if (ext === "pdf") return "pdf";
   if (ext === "docx" || ext === "doc") return "docx";
   if (ext === "pptx" || ext === "ppt") return "pptx";

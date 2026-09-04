@@ -1,3 +1,10 @@
 {
-  "/(app)/profile/page": "app/(app)/profile/page.js"
+  "/login/page": "app/login/page.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/(app)/dashboard/page": "app/(app)/dashboard/page.js",
+  "/(app)/profile/page": "app/(app)/profile/page.js",
+  "/(app)/library/page": "app/(app)/library/page.js",
+  "/(app)/tutor/page": "app/(app)/tutor/page.js",
+  "/api/documents/route": "app/api/documents/route.js",
+  "/api/profile/route": "app/api/profile/route.js"
 }

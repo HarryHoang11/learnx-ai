@@ -18,14 +18,18 @@
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.114.0",
     "bcryptjs": "^2.4.3",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.12.2",
     "next": "14.2.35",
     "next-auth": "5.0.0-beta.25",
+    "pdf-parse": "^1.1.1",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.14.0",
+    "@types/pdf-parse": "^1.1.5",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "prisma": "^5.20.0",

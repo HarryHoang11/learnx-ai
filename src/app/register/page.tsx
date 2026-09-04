@@ -17,6 +17,7 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import AuthCard from "@/components/auth/AuthCard";
 import OAuthButtons from "@/components/auth/OAuthButtons";
+import PasswordInput from "@/components/auth/PasswordInput";
 import type { ApiResponse } from "@/types";
 
 export default function RegisterPage() {
@@ -24,13 +25,22 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+
+    // Validate KHỚP mật khẩu ở CLIENT trước, không cần gọi API mới biết
+    // sai — phản hồi tức thì, đỡ tốn 1 round-trip network vô ích.
+    if (password !== confirmPassword) {
+      setError("Mật khẩu xác nhận không khớp.");
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const res = await fetch("/api/auth/register", {
@@ -87,14 +97,21 @@ export default function RegisterPage() {
           onChange={(e) => setEmail(e.target.value)}
           style={inputStyle}
         />
-        <input
-          type="password"
+        <PasswordInput
           placeholder="Mật khẩu (tối thiểu 8 ký tự)"
           required
           minLength={8}
+          autoComplete="new-password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={inputStyle}
+          onChange={setPassword}
+        />
+        <PasswordInput
+          placeholder="Xác nhận mật khẩu"
+          required
+          minLength={8}
+          autoComplete="new-password"
+          value={confirmPassword}
+          onChange={setConfirmPassword}
         />
         {error && <p style={{ color: "var(--rose)", fontSize: 13 }}>{error}</p>}
         <button type="submit" className="btn-primary" disabled={loading} style={{ marginTop: 6 }}>
