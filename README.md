@@ -36,23 +36,24 @@ src/
 ├── middleware.ts               Bảo vệ trang riêng tư, redirect /login nếu chưa đăng nhập
 │
 ├── app/
-│   ├── layout.tsx              Root layout: font, SessionProvider, suppressHydrationWarning
+│   ├── layout.tsx              Root layout: font, SessionProvider, suppressHydrationWarning (cả <html> lẫn <body>)
 │   ├── page.tsx                 Redirect "/" -> "/dashboard"
-│   ├── globals.css              Theme dark + glassmorphism dùng chung toàn app
-│   ├── icon.tsx                  Favicon sinh động (Next.js file convention, thay favicon.ico)
+│   ├── globals.css              Theme dark + glassmorphism + responsive (drawer mobile, grid utilities, modal, form, profile)
+│   ├── icon.png                  Favicon TĨNH (không dùng next/og ImageResponse — xem mục 9 lý do)
 │   │
-│   ├── login/page.tsx            Đăng nhập: Google hoặc Email + Password
-│   ├── register/page.tsx         Đăng ký: Google hoặc Email + Password
+│   ├── login/page.tsx            Đăng nhập: Google (có icon 4 màu) hoặc Email + Password (PasswordInput có toggle hiện/ẩn)
+│   ├── register/page.tsx         Đăng ký: Google hoặc Email + Password + Xác nhận mật khẩu (validate khớp ở client)
 │   │
-│   ├── (app)/                   Route group dùng chung Sidebar + Topbar
-│   │   ├── layout.tsx
+│   ├── (app)/                   Route group dùng chung AppShell (Sidebar + Topbar + drawer mobile)
+│   │   ├── layout.tsx            Chỉ bọc <AppShell> — KHÔNG tự giữ state, xem components/layout/AppShell.tsx
 │   │   ├── dashboard/page.tsx    Trang chủ: stats, lịch hôm nay, đề xuất ôn tập
-│   │   ├── calendar/page.tsx     Lịch học: tab Hôm nay/Tuần/Tháng + tạo buổi học
+│   │   ├── calendar/page.tsx     Lịch học: tab Hôm nay/Tuần/Tháng + tạo buổi học (bảng tuần cuộn ngang trên mobile)
 │   │   ├── diagnostic/page.tsx   Kiểm tra năng lực (adaptive)
 │   │   ├── tutor/page.tsx        AI Gia sư (Socratic hint 3 cấp độ)
 │   │   ├── roadmap/page.tsx      Lộ trình học theo mục tiêu
 │   │   ├── progress/page.tsx     Bản đồ năng lực + nhận xét AI
-│   │   └── library/page.tsx      Upload & quản lý tài liệu (RAG)
+│   │   ├── library/page.tsx      Upload & quản lý tài liệu (RAG)
+│   │   └── profile/page.tsx      Trang cá nhân: cover + avatar + tiểu sử + chỉnh sửa
 │   │
 │   └── api/
 │       ├── auth/
@@ -72,12 +73,18 @@ src/
 │       ├── calendar/
 │       │   ├── route.ts (POST), [id]/route.ts (PATCH/DELETE)
 │       │   └── today/route.ts, week/route.ts, month/route.ts (GET)
+│       ├── profile/
+│       │   ├── route.ts (GET/PATCH — tên, biệt danh, tiểu sử)
+│       │   └── photo/route.ts (POST — upload avatar hoặc cover, field "type")
 │       ├── progress/route.ts     Số liệu dashboard (đọc DB, không gọi AI)
 │       └── analytics/route.ts    Nhận xét bằng lời do AI sinh (7 ngày gần nhất)
 │
 ├── components/
-│   ├── auth/AuthCard.tsx, OAuthButtons.tsx
-│   ├── layout/Sidebar.tsx, Topbar.tsx
+│   ├── auth/AuthCard.tsx, OAuthButtons.tsx (icon Google 4 màu), PasswordInput.tsx (toggle hiện/ẩn, dùng chung Login/Register)
+│   ├── layout/AppShell.tsx        Client component giữ state drawer mobile, bọc Sidebar+Topbar+children
+│   ├── layout/Sidebar.tsx, Topbar.tsx    Sidebar nhận prop open/onNavigate (drawer), Topbar nhận onMenuClick (nút ☰ mobile)
+│   ├── profile/ProfileHeader.tsx  Cover + avatar, mỗi ảnh có nút camera riêng, preview tức thời qua URL.createObjectURL
+│   ├── profile/EditProfileModal.tsx  Modal sửa tên/biệt danh/tiểu sử (150 ký tự), Lưu/Hủy
 │   ├── providers/SessionProviderWrapper.tsx
 │   ├── calendar/TodaySchedule.tsx
 │   ├── tutor/ChatBubble.tsx
@@ -85,25 +92,31 @@ src/
 │
 ├── lib/
 │   ├── db/prisma.ts             Prisma Client singleton
-│   ├── ai/gemini.ts              Wrapper gọi Gemini (model, generateText, generateJSON)
-│   ├── ai/prompts.ts              Toàn bộ system prompt (Socratic Tutor, sinh câu hỏi, roadmap...)
-│   ├── auth/session.ts            getCurrentUserId() + unauthorizedResponse() — đọc session NextAuth thật
-│   └── embeddings/vector.ts        Embedding + similarity search (pgvector) cho RAG
+│   ├── ai/gemini.ts              Wrapper gọi Gemini: generateText, generateJSON, retry tự động (503/429), AIOverloadedError, export client + callWithRetry để dùng lại ở embeddings/vector.ts
+│   ├── ai/prompts.ts              Toàn bộ system prompt (Socratic Tutor, sinh câu hỏi, roadmap, tóm tắt tài liệu)
+│   ├── auth/session.ts            getCurrentUserId() (có xác minh user còn tồn tại trong DB, tránh P2003) + unauthorizedResponse()
+│   ├── documents/extractText.ts   Trích xuất text THẬT từ .txt/.md/.pdf (pdf-parse)/.docx (mammoth)/.pptx (jszip + regex <a:t>)
+│   ├── storage/localUpload.ts     Lưu avatar/cover vào public/uploads/{avatars,covers}/ (chưa có cloud storage, xem mục 9)
+│   └── embeddings/vector.ts        Embedding (gemini-embedding-001, truncate+normalize còn 768 chiều) + similarity search (pgvector) cho RAG
 │
 ├── services/
 │   ├── assessment.service.ts      Adaptive branching + cập nhật mastery + getSkillProfile
 │   ├── calendar.service.ts         Tính khoảng today/week/month + CRUD StudySession (kiểm tra ownership)
-│   ├── document.service.ts         Pipeline RAG: chunk, embedding, tóm tắt, trả lời dựa trên tài liệu
+│   ├── document.service.ts         Pipeline RAG: chunk (đã lọc null byte/control char), embedding, tóm tắt, trả lời dựa trên tài liệu
 │   ├── quiz.service.ts              Sinh câu hỏi luyện tập + chấm điểm
 │   ├── roadmap.service.ts           Sinh lộ trình học từ mục tiêu + hồ sơ năng lực
 │   └── tutor.service.ts             Chat AI Tutor + lưu/đọc lịch sử hội thoại
 │
 └── types/
-    ├── index.ts                   Type dùng chung (ApiResponse, SkillMasteryPoint, RoadmapPlan...)
+    ├── index.ts                   Type dùng chung (ApiResponse có thêm debug?, SkillMasteryPoint, RoadmapPlan, UserProfile...)
     └── next-auth.d.ts              Module augmentation: session.user.id
 ```
 
 **Không có** `src/app/schedule/`, không có `services/schedule.service.ts`, không có route group `(auth)` — trang đăng nhập/đăng ký nằm trực tiếp tại `src/app/login` và `src/app/register`, ngoài route group `(app)`.
+
+### Responsive (mobile)
+
+Toàn bộ shell (`AppShell.tsx`) chuyển Sidebar thành drawer trượt trên mobile (`<880px`) thay vì chiếm chỗ cố định 230px làm bóp méo nội dung. Các grid layout nhiều cột hard-code trước đây (`dashboard`, `progress`, `tutor`, `calendar`) đã chuyển từ inline style sang class CSS (`.grid-stats`, `.grid-progress`, `.grid-tutor`, `.grid-form-2col` trong `globals.css`) để `@media` có thể ghi đè — inline style JS không thể dùng media query. Bảng lịch tuần giữ nguyên cấu trúc lưới (không ép về 1 cột, sẽ mất ý nghĩa thời khoá biểu), thay vào đó cho cuộn ngang qua `.scroll-x-mobile`.
 
 ---
 
@@ -112,7 +125,7 @@ src/
 Dùng **NextAuth v5 (Auth.js)**, cấu hình tập trung tại `src/auth.ts`:
 
 - **Google OAuth** — provider `Google`.
-- **Email + Password** — provider `Credentials`, mật khẩu hash bằng `bcryptjs` (cost factor 12), lưu ở `User.passwordHash`. Đăng ký qua `POST /api/auth/register`, sau đó tự `signIn("credentials", ...)`.
+- **Email + Password** — provider `Credentials`, mật khẩu hash bằng `bcryptjs` (cost factor 12), lưu ở `User.passwordHash`. Đăng ký qua `POST /api/auth/register`, sau đó tự `signIn("credentials", ...)`. Form đăng ký có trường **Xác nhận mật khẩu**, validate khớp ở client trước khi gọi API. Cả 2 ô mật khẩu (Login lẫn Register) dùng chung component `components/auth/PasswordInput.tsx` có nút mắt hiện/ẩn.
 - Session dùng chiến lược **JWT** (không phải database session) — đây là yêu cầu bắt buộc của Auth.js khi có Credentials provider cùng lúc với OAuth provider.
 - `PrismaAdapter` vẫn được dùng để lưu `User`/`Account` vào Postgres khi đăng nhập Google.
 - `src/middleware.ts` chặn mọi trang trong `(app)` nếu chưa đăng nhập (redirect `/login`), nhưng **không** chặn `/api/**` — API tự trả JSON `401` qua `unauthorizedResponse()` (`lib/auth/session.ts`), vì `fetch()` ở client cần nhận JSON chứ không phải một redirect HTML.
@@ -126,7 +139,7 @@ Dùng **NextAuth v5 (Auth.js)**, cấu hình tập trung tại `src/auth.ts`:
 
 Model chia làm 2 nhóm:
 
-**Chuẩn Auth.js** (bắt buộc đúng tên/field theo PrismaAdapter): `User`, `Account`, `Session`, `VerificationToken`.
+**Chuẩn Auth.js** (bắt buộc đúng tên/field theo PrismaAdapter): `User`, `Account`, `Session`, `VerificationToken`. `User` có thêm 3 field phục vụ Trang cá nhân: `nickname` (biệt danh), `bio` (tiểu sử, giới hạn 150 ký tự — validate ở tầng API, không ép cứng ở DB), `coverImage` (ảnh bìa, tách riêng khỏi `image` vốn là avatar theo chuẩn Auth.js).
 
 **Nghiệp vụ LearnX**:
 | Model | Vai trò |
@@ -161,10 +174,21 @@ Model chia làm 2 nhóm:
 
 ## 6. AI (Gemini)
 
-- `lib/ai/gemini.ts` — wrapper duy nhất gọi Gemini (`generateText`, `generateJSON`). Model hiện **hard-code** là `gemini-1.5-flash` (hằng số `MODEL_NAME`) — chưa đọc từ biến môi trường, nên đổi model phải sửa trực tiếp file này.
+- `lib/ai/gemini.ts` — wrapper duy nhất gọi Gemini (`generateText`, `generateJSON`). Model đọc từ **biến môi trường** `GEMINI_MODEL`, mặc định `gemini-flash-latest` (alias Google tự trỏ tới bản Flash GA mới nhất) — đổi model chỉ cần sửa `.env`, không cần sửa code hay build lại. Lý do quan trọng: Google liên tục gỡ các model cũ khỏi API theo từng đợt vài tháng (`gemini-1.5-flash` đã bị gỡ hoàn toàn, gây lỗi `404 model not found` nếu hard-code tên model cụ thể).
+  - Tự động **retry** tối đa 3 lần (backoff tăng dần + jitter) khi Google trả `503`/`429` (quá tải tạm thời).
+  - Nếu vẫn lỗi sau khi retry hết, ném `AIOverloadedError` (export riêng) — các route AI (`roadmap/generate`, `assessment/start`, `ai/chat`, `ai/hint`) bắt riêng lỗi này để trả **HTTP 503** kèm message tiếng Việt, thay vì `500` chung chung.
+  - Export thêm `client` (instance `GoogleGenerativeAI`) và `callWithRetry` để `lib/embeddings/vector.ts` dùng lại, tránh lặp code.
 - `lib/ai/prompts.ts` — toàn bộ system prompt: Socratic Tutor (3 cấp độ gợi ý), sinh câu hỏi trắc nghiệm, sinh roadmap, tóm tắt tài liệu.
-- `lib/embeddings/vector.ts` — embedding (`text-embedding-004`, model KHÁC với model sinh text) + similarity search bằng pgvector, dùng raw SQL vì Prisma không có kiểu vector gốc.
-- `GEMINI_API_KEY` đọc trực tiếp từ `process.env`.
+- `lib/embeddings/vector.ts` — embedding dùng **`gemini-embedding-001`** (đọc từ `GEMINI_EMBEDDING_MODEL` trong `.env`), thay cho `text-embedding-004` đã bị Google **shutdown hoàn toàn ngày 14/1/2026**. `gemini-embedding-001` trả vector 3072 chiều mặc định, nhưng cột DB cố định `vector(768)` (khớp model cũ) — code **cắt vector về 768 chiều đầu rồi chuẩn hoá lại (L2-normalize)**, đây là cách dùng chính thức Google khuyến nghị cho model hỗ trợ Matryoshka Representation Learning (MRL), không phải hack. Dùng đúng `taskType` (`RETRIEVAL_DOCUMENT` khi lưu chunk, `RETRIEVAL_QUERY` khi tìm kiếm) để cải thiện độ chính xác similarity search.
+- `lib/documents/extractText.ts` — trích xuất text THẬT theo từng định dạng (thay vì gọi `file.text()` cho mọi loại file như bản đầu, vốn gây lỗi `invalid byte sequence` / null byte khi upload PDF/DOCX vì đây là định dạng nhị phân):
+  - `.txt`/`.md`: đọc trực tiếp.
+  - `.pdf`: `pdf-parse` (bản `1.1.1`, API đơn giản `pdfParse(buffer) -> {text}`; **không dùng v2.x**, API đã đổi khác hẳn).
+  - `.docx`: `mammoth` (`extractRawText({buffer})`).
+  - `.pptx`: tự giải nén bằng `jszip` (PPTX vốn là file `.zip` chứa XML) rồi lấy text bằng regex khớp thẻ `<a:t>` trong từng `ppt/slides/slideN.xml`, sắp đúng thứ tự slide theo số N.
+  - Ảnh (`.png`/`.jpg`/`.webp`): **chưa hỗ trợ** (cần OCR, ngoài phạm vi hiện tại) — ném `UnsupportedFileTypeError`, route trả `400` rõ ràng.
+  - File PDF/DOCX bị mã hoá (đặt mật khẩu) hoặc hỏng: thư viện parse sẽ throw, route bắt lỗi và trả `400` "Không thể đọc nội dung file này" — đây là giới hạn kỹ thuật bình thường, không phải bug.
+- `lib/storage/localUpload.ts` — lưu avatar/cover vào `public/uploads/{avatars,covers}/` (xem mục 9, chưa phải giải pháp production).
+- `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_EMBEDDING_MODEL` đọc trực tiếp từ `process.env`.
 
 ---
 
@@ -191,6 +215,8 @@ Model chia làm 2 nhóm:
 | PATCH \| DELETE | `/api/calendar/[id]` | Sửa / xoá buổi học (kiểm tra ownership) |
 | GET | `/api/progress` | Số liệu dashboard tiến độ (đọc DB, không gọi AI) |
 | GET | `/api/analytics` | Nhận xét bằng lời do AI sinh, dựa trên 7 ngày gần nhất |
+| GET \| PATCH | `/api/profile` | Lấy / cập nhật tên, biệt danh, tiểu sử (KHÔNG gồm ảnh) |
+| POST | `/api/profile/photo` | Upload avatar hoặc cover (multipart/form-data, field `type`: `"avatar"` \| `"cover"`) |
 
 Toàn bộ route (trừ `/api/auth/**`) đều dùng chung format phản hồi `ApiResponse<T>` (`{ success: true, data }` hoặc `{ success: false, error }`) và đều gọi `getCurrentUserId()` + trả `401` nếu chưa đăng nhập.
 
@@ -202,7 +228,7 @@ Các file sau **cố ý không có trong bản chia sẻ** để tránh lộ kho
 
 | File/thư mục | Vì sao bị lược bỏ | Cần làm gì |
 |---|---|---|
-| `package.json`, `package-lock.json` | Chứa danh sách dependency, không nhạy cảm nhưng bị xoá cùng đợt dọn | Tự tạo lại theo dependency đã dùng: `next@14.2.35`, `react`, `react-dom`, `@prisma/client`, `prisma`, `next-auth@5.0.0-beta.25`, `@auth/prisma-adapter`, `bcryptjs`, `@google/generative-ai`, cùng các `@types/*` và `typescript` tương ứng |
+| `package.json`, `package-lock.json` | Chứa danh sách dependency, không nhạy cảm nhưng bị xoá cùng đợt dọn | Tự tạo lại theo dependency đã dùng: `next@14.2.35`, `react`, `react-dom`, `@prisma/client`, `prisma`, `next-auth@5.0.0-beta.25`, `@auth/prisma-adapter`, `bcryptjs`, `@google/generative-ai`, `pdf-parse@1.1.1`, `mammoth`, `jszip`, cùng các `@types/*` (bao gồm `@types/pdf-parse`) và `typescript` tương ứng |
 | `.env`, `.env.example` | Chứa/gợi ý khoá bí mật thật (`DATABASE_URL`, `AUTH_SECRET`, `GEMINI_API_KEY`, OAuth secret) | Tự tạo `.env` với các biến liệt kê ở mục dưới |
 | `.gitignore` | Không nhạy cảm nhưng bị xoá cùng đợt dọn | Tự tạo lại, tối thiểu cần bỏ qua `node_modules`, `.next`, `.env*` |
 | `node_modules/` | Cài lại được từ `package.json`, không nên commit | `npm install` |
@@ -220,6 +246,9 @@ GOOGLE_CLIENT_ID=""
 GOOGLE_CLIENT_SECRET=""
 
 GEMINI_API_KEY=""
+# Tuỳ chọn — để trống sẽ dùng mặc định trong lib/ai/gemini.ts
+GEMINI_MODEL="gemini-flash-latest"
+GEMINI_EMBEDDING_MODEL="gemini-embedding-001"
 
 STORAGE_BUCKET_URL=""
 STORAGE_BUCKET_KEY=""
@@ -244,9 +273,12 @@ npm run dev
 ## 9. Điểm kỹ thuật còn mở (chưa hoàn thiện, không phải bug che giấu)
 
 - **Timezone lịch học** theo giờ server, chưa theo múi giờ từng học sinh (xem mục 5 và TODO trong `calendar.service.ts`).
-- **Model Gemini hard-code** `gemini-1.5-flash` trong `lib/ai/gemini.ts`, chưa đọc từ biến môi trường — muốn đổi model phải sửa code.
 - **Logic Analytics nằm trực tiếp trong `api/analytics/route.ts`**, chưa tách ra `services/analytics.service.ts` như các tính năng khác (vi phạm nhẹ nguyên tắc "route mỏng, service dày" đã nêu ở mục 1) — nên tách khi tính năng này phức tạp thêm.
 - **`POST /api/documents/process` với `action: "retry"`** hiện trả `501 Not Implemented` — vì DB mới lưu chunk đã xử lý, chưa lưu lại `rawText` gốc của tài liệu để xử lý lại từ đầu.
 - **Upload tài liệu xử lý đồng bộ, không qua queue** (`services/document.service.ts` chạy fire-and-forget ngay trong request) — nên chuyển sang queue thật (BullMQ/Redis) khi tài liệu lớn hoặc traffic cao.
 - **Roadmap chưa tự động cập nhật trạng thái `done`** khi học sinh hoàn thành 1 topic — cần nối `LearningProgress` với `Roadmap.months` (xem TODO trong `roadmap.service.ts`).
-- **`STORAGE_BUCKET_URL`/`STORAGE_BUCKET_KEY`** được khai báo dự phòng nhưng chưa có code nào đọc — file gốc học sinh upload chưa được lưu bền vững ngoài chunk đã xử lý.
+- **Ảnh (`.png`/`.jpg`/`.webp`) upload vào Library chưa tóm tắt được** — cần OCR (Google Vision, Tesseract...), hiện `lib/documents/extractText.ts` trả `400 UnsupportedFileTypeError` cho ảnh.
+- **Trích xuất PPTX bằng regex** (`<a:t>` trong XML), không parse cấu trúc XML đầy đủ — đủ dùng cho mục đích tóm tắt nhưng không giữ layout/bảng biểu phức tạp; nếu slide dùng SmartArt hay text box lồng nhau bất thường có thể bỏ sót 1 phần nội dung.
+- **`STORAGE_BUCKET_URL`/`STORAGE_BUCKET_KEY`** được khai báo dự phòng nhưng chưa có code nào đọc cho **tài liệu Library** — file gốc học sinh upload (Document) chưa được lưu bền vững ngoài chunk đã xử lý.
+- **Avatar/cover (Trang cá nhân) lưu vào `public/uploads/` trên đĩa cục bộ** (`lib/storage/localUpload.ts`), KHÔNG persistent khi deploy serverless/nhiều instance — cần thay bằng S3/Supabase Storage thật khi lên production (signature hàm giữ nguyên, chỉ cần đổi phần thân hàm).
+- **`icon.png` là favicon TĨNH**, không còn dùng `next/og` `ImageResponse` — lý do: bug đã biết của Next.js 14.2.x + `@vercel/og` trên Windows (`ERR_INVALID_URL` khi tự tải font mặc định), né hoàn toàn bằng cách dùng file ảnh tĩnh thay vì sinh động bằng code.
