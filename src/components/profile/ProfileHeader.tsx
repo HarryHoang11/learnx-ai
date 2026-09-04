@@ -133,20 +133,27 @@ export default function ProfileHeader({ profile, onPhotoUpdated }: ProfileHeader
 
         <div className="profile-avatar-wrap">
           <div className="profile-avatar">
-            {displayAvatar ? (
-              // eslint-disable-next-line @next/next/no-img-element -- ảnh
-              // local (blob:) hoặc path /uploads/... đều không phải domain
-              // ngoài cần khai báo trong next.config.js images.domains.
-              <img src={displayAvatar} alt={profile.name ?? "Avatar"} />
-            ) : (
-              <span className="profile-avatar-initials">{initials}</span>
-            )}
+            {/* profile-avatar-inner: lớp RIÊNG chịu trách nhiệm bo tròn
+                + cắt ảnh (overflow:hidden). Nút camera bên dưới nằm
+                NGOÀI lớp này (là con trực tiếp của .profile-avatar,
+                không có overflow:hidden) nên không bị cắt mất — đây là
+                lý do trước đây nút đổi avatar gần như không bấm được. */}
+            <div className="profile-avatar-inner">
+              {displayAvatar ? (
+                // eslint-disable-next-line @next/next/no-img-element -- ảnh
+                // local (blob:) hoặc path /uploads/... đều không phải domain
+                // ngoài cần khai báo trong next.config.js images.domains.
+                <img src={displayAvatar} alt={profile.name ?? "Avatar"} />
+              ) : (
+                <span className="profile-avatar-initials">{initials}</span>
+              )}
 
-            {uploadingAvatar && (
-              <div className="photo-upload-overlay photo-upload-overlay--round">
-                <span className="spinner" />
-              </div>
-            )}
+              {uploadingAvatar && (
+                <div className="photo-upload-overlay photo-upload-overlay--round">
+                  <span className="spinner" />
+                </div>
+              )}
+            </div>
 
             <button
               type="button"

@@ -36,6 +36,28 @@ export async function POST(req: NextRequest) {
 
     const fileType = inferFileType(file.name);
 
+    // ------------------------------------------------------------
+    // GIỚI HẠN QUAN TRỌNG (MVP): chỉ thật sự trích xuất được nội dung
+    // từ file TEXT THUẦN (.txt, .md). PDF/DOCX/PPTX là định dạng NHỊ
+    // PHÂN (binary) — gọi file.text() trên chúng đọc sai byte thành ký
+    // tự rác (kể cả byte 0x00 null mà Postgres tuyệt đối không cho
+    // phép trong cột text), gây crash ở bước lưu DocumentChunk. Parse
+    // PDF/DOCX thật cần thư viện riêng (pdf-parse, mammoth...) — CHƯA
+    // được cài trong project này, nên chặn sớm ở đây với thông báo rõ
+    // ràng, thay vì để tài liệu "tưởng như thành công" rồi âm thầm lỗi
+    // ở bước xử lý nền (như log bạn đang thấy).
+    // TODO (nâng cấp sau): cài `pdf-parse` cho PDF, `mammoth` cho DOCX,
+    // trích xuất text thật rồi bỏ giới hạn này.
+    if (fileType !== "unknown" && fileType !== "image" && !file.name.match(/\.(txt|md)$/i)) {
+      return NextResponse.json<ApiResponse<never>>(
+        {
+          success: false,
+          error: `Hiện chỉ hỗ trợ tóm tắt file .txt hoặc .md. Định dạng "${fileType}" chưa được hỗ trợ trích xuất nội dung.`,
+        },
+        { status: 400 }
+      );
+    }
+
     const document = await prisma.document.create({
       data: {
         userId,
