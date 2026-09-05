@@ -12,7 +12,7 @@
 // demo trước ban giám khảo (mục 16 "AI Learning Path không cố định").
 // ================================================================
 
-import { generateJSON } from "@/lib/ai/gemini";
+import { generateJSON } from "@/lib/ai/router";
 import { buildRoadmapPrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/db/prisma";
 import { getSkillProfile } from "@/services/assessment.service";

@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { sendTutorMessage } from "@/services/tutor.service";
-import { AIOverloadedError } from "@/lib/ai/gemini";
+import { AIOverloadedError } from "@/lib/ai/router";
 import type { ApiResponse } from "@/types";
 
 const HINT_LABELS: Record<number, string> = {

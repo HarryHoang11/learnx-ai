@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { generateRoadmap } from "@/services/roadmap.service";
-import { AIOverloadedError } from "@/lib/ai/gemini";
+import { AIOverloadedError } from "@/lib/ai/router";
 import type { ApiResponse, RoadmapPlan } from "@/types";
 
 export async function POST(req: NextRequest) {

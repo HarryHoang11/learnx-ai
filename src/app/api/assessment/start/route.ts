@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { generateQuizQuestion } from "@/services/quiz.service";
-import { AIOverloadedError } from "@/lib/ai/gemini";
+import { AIOverloadedError } from "@/lib/ai/router";
 import type { ApiResponse, GeneratedQuestion } from "@/types";
 
 export async function POST(req: NextRequest) {

@@ -7,7 +7,7 @@
 // KHÔNG lặp lại ở đây, để tránh 2 nơi cùng quyết định "AI nên nói gì").
 // ================================================================
 
-import { generateText } from "@/lib/ai/gemini";
+import { generateText } from "@/lib/ai/router";
 import { buildTutorSystemPrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/db/prisma";
 import type { ChatMessage } from "@/types";

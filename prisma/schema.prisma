@@ -41,7 +41,26 @@ model User {
   image     String?
   // coverImage: ảnh bìa trang cá nhân — optional, tách riêng khỏi
   // `image` (ảnh đại diện) vì 2 mục đích hiển thị khác nhau.
+  //
+  // QUAN TRỌNG: `image`/`coverImage` giờ đây lưu URL của route serve
+  // ảnh (vd "/api/profile/photo/avatar?v=169..."), KHÔNG còn là path
+  // file trên local disk. Bytes ảnh THẬT nằm ở avatarData/coverData
+  // bên dưới, ngay trong Postgres — KHÔNG còn ghi ra public/uploads.
+  //
+  // Lý do bắt buộc giữ `image`/`coverImage` là String ngắn (không
+  // nhét thẳng base64 vào đây): session dùng chiến lược "jwt" (xem
+  // auth.ts) — NextAuth copy user.image vào token.picture rồi ký vào
+  // COOKIE lúc đăng nhập. Nếu `image` chứa base64 vài MB, cookie sẽ
+  // vượt giới hạn ~4KB của trình duyệt/HTTP header và làm HỎNG đăng
+  // nhập. Vì vậy bytes ảnh phải tách riêng, `image` chỉ giữ URL nhỏ.
   coverImage String?
+  // Bytes ảnh THẬT, lưu trực tiếp trong Postgres (Bytes = kiểu BYTEA)
+  // — đây là nơi duy nhất chứa dữ liệu ảnh, thay thế hoàn toàn cho
+  // việc ghi file ra public/uploads/... như trước.
+  avatarData     Bytes?
+  avatarMimeType String?
+  coverData      Bytes?
+  coverMimeType  String?
   // nickname: biệt danh hiển thị cạnh tên thật trên trang cá nhân
   // (vd "Nguyễn Văn A (Alex)") — optional vì không phải ai cũng đặt.
   nickname  String?

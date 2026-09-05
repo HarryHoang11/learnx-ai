@@ -10,7 +10,7 @@
 // đề", chỉ khác nguồn ngữ cảnh (từ chunk tài liệu thay vì tên topic).
 // ================================================================
 
-import { generateText } from "@/lib/ai/gemini";
+import { generateText } from "@/lib/ai/router";
 import { buildDocumentSummaryPrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/db/prisma";
 import { saveChunkWithEmbedding, splitIntoChunks } from "@/lib/embeddings/vector";

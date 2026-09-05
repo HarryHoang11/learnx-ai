@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { saveUploadedImage, InvalidImageError } from "@/lib/storage/localUpload";
+import { prepareUploadedImage, InvalidImageError } from "@/lib/storage/dbUpload";
 import type { ApiResponse } from "@/types";
 
 type PhotoType = "avatar" | "cover";
@@ -37,11 +37,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const publicPath = await saveUploadedImage(file, type === "avatar" ? "avatars" : "covers");
+    const { data, mimeType } = await prepareUploadedImage(file);
+
+    // "v" là cache-buster (timestamp) — vì URL serve ảnh giờ CỐ ĐỊNH
+    // theo userId (/api/profile/photo/avatar, không đổi tên file ngẫu
+    // nhiên như path local cũ), nếu không có query param đổi mỗi lần
+    // upload thì trình duyệt/CDN có thể cache ảnh cũ và không thấy
+    // ảnh mới sau khi đổi avatar.
+    const servedUrl = `/api/profile/photo/${type}?v=${Date.now()}`;
 
     const user = await prisma.user.update({
       where: { id: userId },
-      data: type === "avatar" ? { image: publicPath } : { coverImage: publicPath },
+      data:
+        type === "avatar"
+          ? { image: servedUrl, avatarData: data, avatarMimeType: mimeType }
+          : { coverImage: servedUrl, coverData: data, coverMimeType: mimeType },
       select: { image: true, coverImage: true },
     });
 

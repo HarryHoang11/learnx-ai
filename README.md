@@ -172,14 +172,20 @@ Model chia làm 2 nhóm:
 
 ---
 
-## 6. AI (Gemini)
+## 6. AI (AI Provider Router: Gemini → Groq → OpenRouter)
 
-- `lib/ai/gemini.ts` — wrapper duy nhất gọi Gemini (`generateText`, `generateJSON`). Model đọc từ **biến môi trường** `GEMINI_MODEL`, mặc định `gemini-flash-latest` (alias Google tự trỏ tới bản Flash GA mới nhất) — đổi model chỉ cần sửa `.env`, không cần sửa code hay build lại. Lý do quan trọng: Google liên tục gỡ các model cũ khỏi API theo từng đợt vài tháng (`gemini-1.5-flash` đã bị gỡ hoàn toàn, gây lỗi `404 model not found` nếu hard-code tên model cụ thể).
-  - Tự động **retry** tối đa 3 lần (backoff tăng dần + jitter) khi Google trả `503`/`429` (quá tải tạm thời).
-  - Nếu vẫn lỗi sau khi retry hết, ném `AIOverloadedError` (export riêng) — các route AI (`roadmap/generate`, `assessment/start`, `ai/chat`, `ai/hint`) bắt riêng lỗi này để trả **HTTP 503** kèm message tiếng Việt, thay vì `500` chung chung.
-  - Export thêm `client` (instance `GoogleGenerativeAI`) và `callWithRetry` để `lib/embeddings/vector.ts` dùng lại, tránh lặp code.
+- `lib/ai/router.ts` — **AI Provider Router**, điểm gọi AI DUY NHẤT mà toàn bộ service/route dùng (`generateText`, `generateJSON`, `AIOverloadedError` — giữ NGUYÊN chữ ký so với bản chỉ-dùng-Gemini trước đây). Thứ tự provider: **Gemini (chính) → Groq (fallback 1) → OpenRouter (fallback cuối)**.
+  - Mỗi provider tối đa **1 retry** (transient error: timeout/429/5xx/network) trước khi router chuyển sang provider tiếp theo. Lỗi do API key sai (`401/403`) chuyển provider ngay không retry. Lỗi do request sai (`400`, input không hợp lệ) ném thẳng ra, **không fallback** (provider khác cũng sẽ fail giống hệt).
+  - Provider thiếu API key bị **skip tự động** (không crash app) — kiểm tra qua `isConfigured()` của từng provider.
+  - Timeout riêng từng provider: Gemini 12s, Groq 8s, OpenRouter 12s (`lib/ai/providers/timeout.ts`) — không để request treo vô hạn.
+  - Nếu cả 3 provider đều fail, ném `AIOverloadedError` — các route AI (`roadmap/generate`, `assessment/start`, `ai/chat`, `ai/hint`, `analytics`) bắt riêng lỗi này để trả **HTTP 503** kèm message tiếng Việt.
+  - Response mỗi provider được normalize về chung 1 format `AIResponse { content, provider, model, usage? }` (`lib/ai/types.ts`) — service phía trên không biết/không cần biết đang chạy provider nào.
+  - Log dạng `[AI] Trying provider: gemini`, `[AI] gemini thất bại...`, `[AI] Bỏ qua provider "groq": thiếu API key.` — KHÔNG log API key/token.
+- `lib/ai/providers/gemini.provider.ts`, `groq.provider.ts`, `openrouter.provider.ts` — implementation riêng từng provider theo interface `AIProvider` (`lib/ai/types.ts`). Groq/OpenRouter dùng thẳng `fetch` tới API tương thích OpenAI (`lib/ai/providers/openaiCompatible.ts`), **không thêm SDK mới**.
+- `lib/ai/gemini.ts` — chỉ còn giữ SDK client Gemini thô (`client`, `MODEL_NAME`, `callWithRetry`) dùng bởi `GeminiProvider` **và** `lib/embeddings/vector.ts`. Model đọc từ `GEMINI_MODEL` trong `.env`, mặc định `gemini-flash-latest`.
 - `lib/ai/prompts.ts` — toàn bộ system prompt: Socratic Tutor (3 cấp độ gợi ý), sinh câu hỏi trắc nghiệm, sinh roadmap, tóm tắt tài liệu.
 - `lib/embeddings/vector.ts` — embedding dùng **`gemini-embedding-001`** (đọc từ `GEMINI_EMBEDDING_MODEL` trong `.env`), thay cho `text-embedding-004` đã bị Google **shutdown hoàn toàn ngày 14/1/2026**. `gemini-embedding-001` trả vector 3072 chiều mặc định, nhưng cột DB cố định `vector(768)` (khớp model cũ) — code **cắt vector về 768 chiều đầu rồi chuẩn hoá lại (L2-normalize)**, đây là cách dùng chính thức Google khuyến nghị cho model hỗ trợ Matryoshka Representation Learning (MRL), không phải hack. Dùng đúng `taskType` (`RETRIEVAL_DOCUMENT` khi lưu chunk, `RETRIEVAL_QUERY` khi tìm kiếm) để cải thiện độ chính xác similarity search.
+  - **CHỦ Ý KHÔNG đi qua AI Router**: chỉ Gemini có model embedding cho ra đúng không gian vector khớp cột `vector(768)` hiện tại — trộn embedding từ Groq/OpenRouter (nếu có) vào cùng cột sẽ làm sai lệch ngầm kết quả RAG, khó phát hiện hơn nhiều so với Gemini tạm thời không gọi được.
 - `lib/documents/extractText.ts` — trích xuất text THẬT theo từng định dạng (thay vì gọi `file.text()` cho mọi loại file như bản đầu, vốn gây lỗi `invalid byte sequence` / null byte khi upload PDF/DOCX vì đây là định dạng nhị phân):
   - `.txt`/`.md`: đọc trực tiếp.
   - `.pdf`: `pdf-parse` (bản `1.1.1`, API đơn giản `pdfParse(buffer) -> {text}`; **không dùng v2.x**, API đã đổi khác hẳn).
@@ -187,8 +193,8 @@ Model chia làm 2 nhóm:
   - `.pptx`: tự giải nén bằng `jszip` (PPTX vốn là file `.zip` chứa XML) rồi lấy text bằng regex khớp thẻ `<a:t>` trong từng `ppt/slides/slideN.xml`, sắp đúng thứ tự slide theo số N.
   - Ảnh (`.png`/`.jpg`/`.webp`): **chưa hỗ trợ** (cần OCR, ngoài phạm vi hiện tại) — ném `UnsupportedFileTypeError`, route trả `400` rõ ràng.
   - File PDF/DOCX bị mã hoá (đặt mật khẩu) hoặc hỏng: thư viện parse sẽ throw, route bắt lỗi và trả `400` "Không thể đọc nội dung file này" — đây là giới hạn kỹ thuật bình thường, không phải bug.
-- `lib/storage/localUpload.ts` — lưu avatar/cover vào `public/uploads/{avatars,covers}/` (xem mục 9, chưa phải giải pháp production).
-- `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_EMBEDDING_MODEL` đọc trực tiếp từ `process.env`.
+- `lib/storage/dbUpload.ts` — validate + đọc avatar/cover thành `Buffer`, lưu thẳng vào cột `Bytes` (`avatarData`/`coverData`) trong Postgres qua `api/profile/photo/route.ts`; ảnh được serve lại qua `GET /api/profile/photo/[type]`, KHÔNG còn ghi ra `public/uploads/` như bản trước.
+- `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_EMBEDDING_MODEL`, `GROQ_API_KEY`, `GROQ_MODEL`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `APP_URL` (optional, dùng cho header `HTTP-Referer` khi gọi OpenRouter) đọc trực tiếp từ `process.env`.
 
 ---
 

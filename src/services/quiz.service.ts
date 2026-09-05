@@ -8,7 +8,7 @@
 // Quiz không có assessmentId (xem field optional trong schema).
 // ================================================================
 
-import { generateJSON } from "@/lib/ai/gemini";
+import { generateJSON } from "@/lib/ai/router";
 import { buildQuestionGenPrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/db/prisma";
 import { updateMastery } from "@/services/assessment.service";
