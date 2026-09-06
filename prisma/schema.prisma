@@ -278,7 +278,20 @@ model Document {
   fileType   String // "pdf" | "docx" | "pptx" | "image"
   status     String   @default("processing") // processing | ready | failed
   summary    String? // tóm tắt do AI sinh, hiển thị ngay trong Library
+  // Lý do lỗi thật (status="failed") — CHỈ dùng nội bộ (dev console/log,
+  // debug) và cho API detail, KHÔNG hiển thị trực tiếp raw ra UI người
+  // dùng cuối (UI luôn hiện thông điệp thân thiện cố định, xem
+  // library/page.tsx) — tránh lộ chi tiết kỹ thuật/nội bộ cho học sinh.
+  errorMessage String?
+  // Bytes file GỐC user đã upload — lưu lại để hỗ trợ "Tải tài liệu
+  // gốc" và để RETRY (thử lại) đọc lại đúng file cũ mà không bắt user
+  // upload lại. Cùng pattern với User.avatarData/avatarMimeType (lưu
+  // thẳng trong Postgres qua Bytes, không thêm hệ thống storage mới
+  // như S3 — phù hợp quy mô MVP hiện tại của LearnX).
+  fileData   Bytes?
+  mimeType   String? // MIME type THẬT của file gốc, dùng khi serve download
   uploadedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   chunks DocumentChunk[]
 }

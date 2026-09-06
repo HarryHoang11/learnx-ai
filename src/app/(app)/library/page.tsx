@@ -8,39 +8,50 @@
 // trạng thái tự chuyển sang "ready" mà không cần bấm refresh tay —
 // vì processDocument() ở backend chạy NỀN (fire-and-forget), không
 // trả kết quả ngay trong response upload.
+//
+// NÂNG CẤP (redesign Thư viện tài liệu):
+//   - Card tách rõ 3 trạng thái, có nút "Xem tóm tắt" mở modal đọc đầy
+//     đủ (MarkdownLite render đẹp) + nút tải xuống (.md, Blob tạo ở
+//     client, KHÔNG gọi AI lại) — xem DocumentCard/DocumentDetailModal.
+//   - Trạng thái "failed" có nút "Thử lại" gọi POST .../retry (đọc lại
+//     file gốc đã lưu, KHÔNG bắt upload lại).
+//   - setDocs(json.data) LUÔN thay thế toàn bộ mảng (không append) —
+//     đây vốn đã là cách chống duplicate ở tầng FRONTEND, giữ nguyên.
+//     Duplicate do double-submit được chặn thêm ở BACKEND (xem
+//     api/documents/upload/route.ts).
 // ================================================================
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
+import DocumentCard from "@/components/documents/DocumentCard";
+import DocumentDetailModal, { type LibraryDocument } from "@/components/documents/DocumentDetailModal";
 import type { ApiResponse } from "@/types";
 
-interface DocumentSummary {
-  id: string;
-  fileName: string;
-  fileType: string;
-  status: string;
-  summary: string | null;
-  uploadedAt: string;
-}
-
 export default function LibraryPage() {
-  const [docs, setDocs] = useState<DocumentSummary[]>([]);
+  const [docs, setDocs] = useState<LibraryDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [openDocId, setOpenDocId] = useState<string | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function loadDocs() {
     try {
       const res = await fetch("/api/documents");
-      const json: ApiResponse<DocumentSummary[]> = await res.json();
+      const json: ApiResponse<LibraryDocument[]> = await res.json();
       if (json.success) {
+        // Thay thế TOÀN BỘ mảng bằng dữ liệu mới nhất từ server — đây
+        // chính là điểm mấu chốt chống duplicate ở tầng frontend: danh
+        // sách LUÔN phản ánh đúng những gì DB có, không bao giờ APPEND
+        // thêm vào mảng cũ (vốn là nguyên nhân phổ biến gây duplicate
+        // ở nhiều app khác, nhưng code này chưa từng mắc lỗi đó).
         setDocs(json.data);
-        // Nếu còn tài liệu "processing", tiếp tục poll; nếu hết thì dừng
         const stillProcessing = json.data.some((d) => d.status === "processing");
         if (!stillProcessing && pollRef.current) {
           clearInterval(pollRef.current);
@@ -56,6 +67,12 @@ export default function LibraryPage() {
     }
   }
 
+  function ensurePolling() {
+    if (!pollRef.current) {
+      pollRef.current = setInterval(loadDocs, 3000);
+    }
+  }
+
   useEffect(() => {
     loadDocs();
     return () => {
@@ -63,12 +80,12 @@ export default function LibraryPage() {
     };
   }, []);
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploading(true);
-    setError(null);
+    setUploadError(null);
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -78,17 +95,33 @@ export default function LibraryPage() {
       if (!json.success) throw new Error(json.error);
 
       await loadDocs();
-      // Bắt đầu poll mỗi 3s để cập nhật trạng thái "processing" -> "ready"
-      if (!pollRef.current) {
-        pollRef.current = setInterval(loadDocs, 3000);
-      }
+      ensurePolling();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể upload tài liệu.");
+      setUploadError(err instanceof Error ? err.message : "Không thể upload tài liệu.");
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
+
+  async function handleRetry(docId: string) {
+    setRetryingId(docId);
+    setUploadError(null);
+    try {
+      const res = await fetch(`/api/documents/${docId}/retry`, { method: "POST" });
+      const json: ApiResponse<{ documentId: string }> = await res.json();
+      if (!json.success) throw new Error(json.error);
+
+      await loadDocs();
+      ensurePolling();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Không thể thử lại, vui lòng thử lại sau.");
+    } finally {
+      setRetryingId(null);
+    }
+  }
+
+  const openDoc = docs.find((d) => d.id === openDocId) ?? null;
 
   return (
     <section>
@@ -103,7 +136,7 @@ export default function LibraryPage() {
           textAlign: "center",
           color: "var(--text-dim)",
           fontSize: 13.5,
-          marginBottom: 22,
+          marginBottom: 12,
           cursor: uploading ? "not-allowed" : "pointer",
         }}
       >
@@ -117,55 +150,34 @@ export default function LibraryPage() {
         />
       </label>
 
+      {uploadError && (
+        <div style={{ marginBottom: 14 }}>
+          <StateMessage kind="error" text={uploadError} />
+        </div>
+      )}
+
       {loading && <StateMessage kind="loading" text="Đang tải danh sách tài liệu..." />}
       {error && <StateMessage kind="error" text={error} />}
 
-      {!loading && (
+      {!loading && !error && (
         <Panel>
           {docs.length === 0 ? (
             <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>Chưa có tài liệu nào — hãy upload ở trên.</p>
           ) : (
             docs.map((d) => (
-              <div
+              <DocumentCard
                 key={d.id}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "14px 4px",
-                  borderBottom: "1px solid var(--border-soft)",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 500 }}>{d.fileName}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>
-                    {statusLabel(d.status)}
-                    {d.summary ? ` · ${d.summary.slice(0, 60)}${d.summary.length > 60 ? "..." : ""}` : ""}
-                  </div>
-                </div>
-                <span
-                  style={{
-                    fontSize: 11.5,
-                    color: "var(--text-dim)",
-                    background: "var(--panel-strong)",
-                    padding: "4px 9px",
-                    borderRadius: 7,
-                  }}
-                >
-                  {d.fileType.toUpperCase()}
-                </span>
-              </div>
+                doc={d}
+                onOpenSummary={() => setOpenDocId(d.id)}
+                onRetry={() => handleRetry(d.id)}
+                retrying={retryingId === d.id}
+              />
             ))
           )}
         </Panel>
       )}
+
+      {openDoc && <DocumentDetailModal doc={openDoc} onClose={() => setOpenDocId(null)} />}
     </section>
   );
-}
-
-function statusLabel(status: string): string {
-  if (status === "processing") return "⏳ Đang xử lý...";
-  if (status === "ready") return "✓ Đã xử lý";
-  if (status === "failed") return "✗ Xử lý lỗi";
-  return status;
 }

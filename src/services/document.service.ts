@@ -21,6 +21,14 @@ import { saveChunkWithEmbedding, splitIntoChunks } from "@/lib/embeddings/vector
 //   -> cập nhật status "ready".
 export async function processDocument(documentId: string, rawText: string): Promise<void> {
   try {
+    // Xoá chunk CŨ trước khi xử lý lại — bắt buộc phải có bước này vì
+    // giờ đây processDocument có thể được gọi LẦN 2 (RETRY sau khi
+    // failed lần đầu). Nếu lần trước đã lỡ lưu được vài chunk rồi mới
+    // fail giữa chừng (vd lỗi mạng lúc embedding chunk thứ 5/10), không
+    // xoá sẽ để lại chunk cũ lẫn với chunk mới -> DUPLICATE, làm lệch
+    // kết quả similarity search (RAG trả lời dựa trên chunk bị đếm 2 lần).
+    await prisma.documentChunk.deleteMany({ where: { documentId } });
+
     // Lọc bỏ null byte (\u0000) và các ký tự điều khiển không hợp lệ
     // khác — PHÒNG VỆ THÊM dù đã chặn định dạng ở route upload (mục
     // đích: nếu sau này có nguồn text khác lỡ lọt qua, hoặc file .txt
@@ -43,16 +51,21 @@ export async function processDocument(documentId: string, rawText: string): Prom
     const prompt = buildDocumentSummaryPrompt(cleanText);
     const summary = await generateText({ systemPrompt: prompt.system, userPrompt: prompt.user });
 
+    // errorMessage: null — dọn sạch lỗi lần trước nếu đây là 1 lần
+    // RETRY thành công, tránh hiển thị nhầm lỗi cũ đã không còn đúng.
     await prisma.document.update({
       where: { id: documentId },
-      data: { status: "ready", summary },
+      data: { status: "ready", summary, errorMessage: null },
     });
   } catch (err) {
     // Không throw lại — đây là job chạy nền (fire-and-forget từ route
     // upload), throw ở đây sẽ chỉ log ra console mà không ai catch được.
     // Thay vào đó, đánh dấu rõ "failed" để UI biết tài liệu lỗi và học
-    // sinh có thể thử upload lại.
-    await prisma.document.update({ where: { id: documentId }, data: { status: "failed" } });
+    // sinh có thể thử upload lại. Lưu errorMessage THẬT (không hiển thị
+    // trực tiếp cho user, chỉ phục vụ debug/log và API detail) — trước
+    // đây chỉ set "failed" mà không rõ lý do, rất khó chẩn đoán.
+    const message = err instanceof Error ? err.message : String(err);
+    await prisma.document.update({ where: { id: documentId }, data: { status: "failed", errorMessage: message } });
     throw err;
   }
 }

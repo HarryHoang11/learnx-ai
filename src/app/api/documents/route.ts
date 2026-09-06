@@ -19,22 +19,30 @@ interface DocumentSummary {
   fileType: string;
   status: string;
   summary: string | null;
+  errorMessage: string | null;
+  hasOriginalFile: boolean;
   uploadedAt: string;
+  updatedAt: string;
 }
 
-// Shape THẬT của 1 row trả về từ prisma.document.findMany() bên dưới
-// — khai báo tường minh ở đây (thay vì để TS tự suy luận từ Prisma
-// Client) vì Prisma Client trong sandbox phát triển hiện tại chưa
-// được `generate` lại theo schema mới nhất, nên kiểu trả về có thể
-// không chính xác. Khai báo type tay đảm bảo compile-time an toàn
-// độc lập với trạng thái generate của Prisma Client.
+// Shape THẬT của 1 row trả về từ query raw bên dưới. Dùng $queryRaw
+// (thay vì prisma.document.findMany với select fileData: true) để
+// kiểm tra "fileData IS NOT NULL" NGAY Ở TẦNG DATABASE — nếu select
+// nguyên cột fileData rồi check ở JS, Postgres/Prisma vẫn phải tải
+// TOÀN BỘ bytes file (có thể vài MB mỗi file) về Node chỉ để lấy 1
+// boolean, làm chậm hẳn danh sách khi có nhiều tài liệu lớn. Cùng
+// triết lý với lib/embeddings/vector.ts (đã dùng raw SQL cho việc
+// Prisma Client không tối ưu/không hỗ trợ trực tiếp).
 interface DocumentRow {
   id: string;
   fileName: string;
   fileType: string;
   status: string;
   summary: string | null;
+  errorMessage: string | null;
+  hasOriginalFile: boolean;
   uploadedAt: Date;
+  updatedAt: Date;
 }
 
 export async function GET(req: NextRequest) {
@@ -42,18 +50,26 @@ export async function GET(req: NextRequest) {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
 
-    const docs: DocumentRow[] = await prisma.document.findMany({
-      where: { userId },
-      orderBy: { uploadedAt: "desc" },
-    });
+    const docs = await prisma.$queryRaw<DocumentRow[]>`
+      SELECT
+        "id", "fileName", "fileType", "status", "summary", "errorMessage",
+        ("fileData" IS NOT NULL) AS "hasOriginalFile",
+        "uploadedAt", "updatedAt"
+      FROM "Document"
+      WHERE "userId" = ${userId}
+      ORDER BY "uploadedAt" DESC
+    `;
 
-    const data: DocumentSummary[] = docs.map((d: DocumentRow) => ({
+    const data: DocumentSummary[] = docs.map((d) => ({
       id: d.id,
       fileName: d.fileName,
       fileType: d.fileType,
       status: d.status,
       summary: d.summary,
+      errorMessage: d.status === "failed" ? d.errorMessage : null,
+      hasOriginalFile: d.hasOriginalFile,
       uploadedAt: d.uploadedAt.toISOString(),
+      updatedAt: d.updatedAt.toISOString(),
     }));
 
     return NextResponse.json<ApiResponse<DocumentSummary[]>>({ success: true, data });

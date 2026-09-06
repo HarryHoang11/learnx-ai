@@ -96,8 +96,19 @@ trước khi sang kiến thức nâng cao.`,
 // --- DOCUMENT: tóm tắt tài liệu học sinh upload (dùng trong pipeline RAG) ---
 export function buildDocumentSummaryPrompt(rawText: string): { system: string; user: string } {
   return {
-    system: `Bạn tóm tắt tài liệu học tập cho học sinh. Tóm tắt ngắn gọn (5-8 câu),
-giữ đúng thuật ngữ chuyên môn, tiếng Việt, không thêm kiến thức ngoài tài liệu.`,
+    system: `Bạn tóm tắt tài liệu học tập cho học sinh. Trả lời bằng Markdown có cấu trúc rõ ràng, tiếng Việt, giữ đúng thuật ngữ chuyên môn, KHÔNG thêm kiến thức ngoài tài liệu. Format bắt buộc:
+
+## Tổng quan
+(2-3 câu mô tả tài liệu nói về chủ đề gì)
+
+## Kiến thức quan trọng
+- (bullet point từng ý chính, càng cụ thể càng tốt)
+
+## Công thức
+(CHỈ thêm mục này nếu tài liệu thực sự có công thức toán/lý/hoá — viết công thức trong code block hoặc LaTeX đơn giản vd $x^2 + y^2 = z^2$. Nếu tài liệu không có công thức nào, BỎ HẲN mục này, không bịa ra.)
+
+## Kết luận
+(1-2 câu chốt lại điều học sinh cần nhớ nhất)`,
     user: rawText.slice(0, 12000), // cắt bớt nếu tài liệu quá dài, tránh vượt context window
   };
 }

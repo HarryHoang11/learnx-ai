@@ -18,8 +18,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { processDocument } from "@/services/document.service";
-import { extractText, UnsupportedFileTypeError } from "@/lib/documents/extractText";
+import { extractTextFromBuffer, UnsupportedFileTypeError } from "@/lib/documents/extractText";
 import type { ApiResponse } from "@/types";
+
+// Khoảng thời gian coi là "double-submit" (double-click, form gửi 2
+// lần do mạng chậm rồi user bấm lại...) — CÙNG userId + CÙNG fileName
+// + CÙNG kích thước file, tạo trong khoảng này -> coi là 1 request bị
+// lặp, trả về document đã tạo trước đó thay vì tạo record mới. Ngoài
+// khoảng này, user upload lại đúng file đó vẫn tạo record MỚI bình
+// thường (đây là hành vi hợp lệ, không phải bug — theo đúng yêu cầu
+// "không tự ý coi mọi lần trùng tên là duplicate").
+const DUPLICATE_SUBMIT_WINDOW_MS = 15_000;
 
 export async function POST(req: NextRequest) {
   try {
@@ -37,6 +46,37 @@ export async function POST(req: NextRequest) {
 
     const fileType = inferFileType(file.name);
 
+    // Đọc bytes MỘT LẦN DUY NHẤT — dùng chung cho việc trích xuất text
+    // (bên dưới) VÀ lưu lại nguyên vẹn làm "fileData" (phục vụ tải file
+    // gốc + retry sau này). Trước đây extractText() tự đọc
+    // file.arrayBuffer() bên trong, tách riêng nghĩa là phải đọc 2 lần
+    // — không sai về mặt kỹ thuật (File có thể đọc lại nhiều lần) nhưng
+    // thừa 1 lượt I/O không cần thiết.
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    // ------------------------------------------------------------
+    // GUARD chống duplicate do double-submit — kiểm tra TRƯỚC khi tốn
+    // công trích xuất text. Chỉ khớp khi file THẬT SỰ giống hệt (tên +
+    // kích thước byte), tránh nhầm 2 file khác nhau vô tình trùng tên.
+    // ------------------------------------------------------------
+    const recentDuplicate = await prisma.$queryRaw<{ id: string; fileLength: number | null }[]>`
+      SELECT "id", octet_length("fileData") AS "fileLength"
+      FROM "Document"
+      WHERE "userId" = ${userId}
+        AND "fileName" = ${file.name}
+        AND "uploadedAt" >= ${new Date(Date.now() - DUPLICATE_SUBMIT_WINDOW_MS)}
+      ORDER BY "uploadedAt" DESC
+      LIMIT 1
+    `;
+    const dup = recentDuplicate[0];
+    if (dup && dup.fileLength === buffer.length) {
+      console.log(`[api/documents/upload] Phát hiện double-submit (cùng file trong ${DUPLICATE_SUBMIT_WINDOW_MS}ms) — trả về document đã tạo, không tạo record mới.`);
+      return NextResponse.json<ApiResponse<{ documentId: string }>>({
+        success: true,
+        data: { documentId: dup.id },
+      });
+    }
+
     // ------------------------------------------------------------
     // Trích xuất text THẬT ngay tại đây (trước khi tạo Document) —
     // để nếu file không đọc được (định dạng chưa hỗ trợ, hoặc file
@@ -46,7 +86,7 @@ export async function POST(req: NextRequest) {
     // ------------------------------------------------------------
     let extractedText: string;
     try {
-      extractedText = await extractText(file, fileType);
+      extractedText = await extractTextFromBuffer(buffer, fileType);
     } catch (err) {
       if (err instanceof UnsupportedFileTypeError) {
         return NextResponse.json<ApiResponse<never>>({ success: false, error: err.message }, { status: 400 });
@@ -70,6 +110,8 @@ export async function POST(req: NextRequest) {
         fileName: file.name,
         fileType,
         status: "processing",
+        fileData: buffer,
+        mimeType: file.type || guessMimeType(fileType),
       },
     });
 
@@ -104,4 +146,24 @@ function inferFileType(fileName: string): string {
   if (ext === "pptx" || ext === "ppt") return "pptx";
   if (["png", "jpg", "jpeg", "webp"].includes(ext)) return "image";
   return "unknown";
+}
+
+// Fallback khi trình duyệt/client không set `file.type` (vài trường
+// hợp upload qua công cụ khác ngoài <input type="file"> chuẩn) — đảm
+// bảo route download sau này luôn có Content-Type hợp lý thay vì rỗng.
+function guessMimeType(fileType: string): string {
+  switch (fileType) {
+    case "pdf":
+      return "application/pdf";
+    case "docx":
+      return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    case "pptx":
+      return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    case "txt":
+      return "text/plain";
+    case "md":
+      return "text/markdown";
+    default:
+      return "application/octet-stream";
+  }
 }
