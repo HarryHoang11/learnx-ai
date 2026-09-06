@@ -43,11 +43,19 @@ export interface AIProvider {
 //   - "auth": API key có nhưng bị provider từ chối (401/403) -> KHÔNG
 //     retry provider này (retry với cùng key sai chỉ tốn thời gian),
 //     fallback thẳng sang provider tiếp theo.
+//   - "no_retry": lỗi do CẤU HÌNH riêng của provider này (404 model
+//     không tồn tại/không truy cập được, unsupported_model...) -> retry
+//     với CÙNG model/provider chắc chắn lại fail y hệt (model vẫn
+//     không tồn tại), nhưng KHÁC "fatal": lỗi này không liên quan gì
+//     tới input/prompt của app, nên provider khác (model khác) hoàn
+//     toàn có cơ hội xử lý được -> KHÔNG retry, CÓ fallback (xử lý
+//     giống hệt "auth" ở router, tách kind riêng chỉ để log/debug rõ
+//     nguyên nhân hơn là "bị từ chối API key").
 //   - "fatal": lỗi do request của app (400 malformed input, validation,
 //     business logic...) -> KHÔNG retry, KHÔNG fallback — provider
 //     khác nhận cùng input sai sẽ fail giống hệt, fallback chỉ che
 //     giấu bug thật, nên phải ném lỗi ra ngay.
-export type ProviderErrorKind = "transient" | "auth" | "fatal";
+export type ProviderErrorKind = "transient" | "auth" | "no_retry" | "fatal";
 
 export class ProviderError extends Error {
   kind: ProviderErrorKind;

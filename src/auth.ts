@@ -68,8 +68,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // Nhét userId THẬT (từ DB) vào JWT ngay lúc đăng nhập, vì mặc định
     // Auth.js chỉ nhét "sub" (subject) — cần rõ ràng field "userId" để
     // dùng nhất quán ở callback session bên dưới và trong toàn bộ app.
-    async jwt({ token, user }) {
+    //
+    // VÌ SAO CẦN "trigger"/"session" ở đây (phần mới thêm): với JWT
+    // strategy, sau lần đăng nhập đầu tiên, `token.picture`/`token.name`
+    // KHÔNG tự đồng bộ lại với DB nữa — chúng bị "đóng băng" trong JWT
+    // cho tới khi user đăng xuất/đăng nhập lại. Đây là nguyên nhân THẬT
+    // của bug "đổi avatar ở Profile nhưng Topbar/floating button không
+    // đổi theo": phía client gọi useSession().update(...) sẽ trigger
+    // callback này với `trigger === "update"` và `session` chứa dữ liệu
+    // mới truyền vào — ta merge nó vào token ở đây thì MỌI nơi đọc
+    // session (Topbar, FloatingAIButton...) sẽ thấy avatar mới ngay,
+    // không cần logout/login lại, không cần F5.
+    async jwt({ token, user, trigger, session }) {
       if (user?.id) token.userId = user.id;
+      if (trigger === "update" && session?.user?.image !== undefined) {
+        token.picture = session.user.image;
+      }
       return token;
     },
     // Đưa userId từ token vào session.user.id — đây là field mà MỌI

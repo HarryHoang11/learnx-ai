@@ -11,6 +11,7 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
+import Avatar from "@/components/ui/Avatar";
 
 interface TopbarProps {
   onMenuClick?: () => void;
@@ -20,7 +21,6 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   const { data: session } = useSession();
   const name = session?.user?.name ?? session?.user?.email ?? "Học sinh";
   const image = session?.user?.image;
-  const initials = name.slice(0, 2).toUpperCase();
 
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, marginBottom: 30 }}>
@@ -39,33 +39,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginLeft: "auto" }}>
         <span style={{ fontSize: 13, color: "var(--text-dim)" }}>{name}</span>
 
-      {image ? (
-        // eslint-disable-next-line @next/next/no-img-element -- avatar
-        // từ Google là URL bên ngoài, dùng <img> thường để
-        // tránh phải khai báo domain trong next.config.js images.domains
-        <img
-          src={image}
-          alt={name}
-          style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover" }}
-        />
-      ) : (
-        <div
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: "50%",
-            background: "linear-gradient(135deg, var(--cyan), var(--indigo))",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 13,
-            fontWeight: 700,
-            color: "#0a0e16",
-          }}
-        >
-          {initials}
-        </div>
-      )}
+      <Avatar src={image} name={name} size={34} />
 
       <button
         onClick={() => signOut({ callbackUrl: "/login" })}

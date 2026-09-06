@@ -8,14 +8,17 @@
 
 import { AIProvider, AIResponse, GenerateOptions } from "../types";
 import { callOpenAICompatibleChat } from "./openaiCompatible";
+import { DEFAULT_GROQ_CHAT_MODEL } from "./groqModels";
 
 const TIMEOUT_MS = 8_000;
 const BASE_URL = "https://api.groq.com/openai/v1";
-// Model mặc định: Llama 3.3 70B bản "versatile" trên Groq — cân bằng
-// tốt giữa chất lượng và tốc độ cho use case tutor/quiz/roadmap hiện
-// tại của LearnX. Đọc từ .env để đổi không cần build lại (đồng bộ
+// Model mặc định: lấy từ registry tập trung (groqModels.ts) — HIỆN TẠI
+// là "openai/gpt-oss-120b" (Groq đã gỡ toàn bộ dòng Llama 3.x, xem
+// https://console.groq.com/docs/models mục "Deprecated Models"), cân
+// bằng tốt giữa chất lượng và tốc độ cho use case tutor/quiz/roadmap
+// hiện tại của LearnX. Đọc từ .env để đổi không cần build lại (đồng bộ
 // cách làm với GEMINI_MODEL).
-const DEFAULT_MODEL = "llama-3.3-70b-versatile";
+const DEFAULT_MODEL = DEFAULT_GROQ_CHAT_MODEL;
 
 export const groqProvider: AIProvider = {
   name: "groq",

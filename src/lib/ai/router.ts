@@ -86,6 +86,14 @@ export function createAIRouter(providers: AIProvider[]) {
             break; // không retry cùng provider, fallback ngay
           }
 
+          if (providerErr.kind === "no_retry") {
+            // Lỗi cấu hình riêng của provider này (vd 404 model không
+            // tồn tại) — retry lại CÙNG model chắc chắn fail y hệt lần
+            // nữa, nên bỏ qua retry và fallback ngay, KHÔNG chờ thêm.
+            log(`${provider.name} lỗi cấu hình (không thể retry), chuyển sang provider tiếp theo: ${providerErr.message}`);
+            break;
+          }
+
           // kind === "transient"
           log(`${provider.name} thất bại (lần ${attempt}/${MAX_ATTEMPTS_PER_PROVIDER}): ${providerErr.message}`);
           if (attempt < MAX_ATTEMPTS_PER_PROVIDER) {

@@ -35,7 +35,7 @@ export const openrouterProvider: AIProvider = {
         timeoutMs: TIMEOUT_MS,
         extraHeaders: {
           "HTTP-Referer": process.env.APP_URL || "https://learnx.app",
-          "X-Title": "LearnX AI",
+          "X-Title": process.env.APP_NAME || "LearnX AI",
         },
       },
       opts

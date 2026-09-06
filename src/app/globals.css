@@ -490,3 +490,9 @@ h3 {
     padding: 20px;
   }
 }
+
+/* --------- Floating AI button (góc phải dưới, mọi trang trong (app)) --------- */
+.floating-ai-button:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}

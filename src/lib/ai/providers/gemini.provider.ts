@@ -21,14 +21,14 @@ function classifyError(err: unknown): ProviderError {
   if (err instanceof ProviderError) return err; // đã được classify (vd timeout)
 
   // Model bị Google gỡ khỏi API — đây là lỗi CẤU HÌNH (sai tên model
-  // trong .env), không phải Gemini tạm thời quá tải, và provider khác
-  // (Groq/OpenRouter) dùng model khác nên fallback vẫn hợp lý ở đây
-  // -> coi là "transient" để router thử Groq tiếp, nhưng giữ nguyên
-  // message rõ ràng để log ra dễ debug.
+  // trong .env), không phải Gemini tạm thời quá tải. Retry lại CÙNG
+  // model chắc chắn fail y hệt nên dùng "no_retry" (không retry, vẫn
+  // fallback ngay sang Groq/OpenRouter vì chúng dùng model khác nên
+  // không bị ảnh hưởng bởi lỗi cấu hình riêng của Gemini).
   if (status === 404 || message.toLowerCase().includes("not found")) {
     return new ProviderError(
       `Gemini: model "${MODEL_NAME}" không khả dụng (có thể đã bị Google gỡ, kiểm tra GEMINI_MODEL trong .env). Chi tiết: ${message}`,
-      "transient",
+      "no_retry",
       404
     );
   }

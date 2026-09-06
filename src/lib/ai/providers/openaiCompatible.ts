@@ -23,7 +23,12 @@ interface OpenAICompatibleConfig {
   extraHeaders?: Record<string, string>;
 }
 
-function classifyHttpError(providerName: string, status: number, bodyText: string): ProviderError {
+// export để __tests__/openaiCompatible.test.ts test trực tiếp tầng
+// phân loại lỗi HTTP — đây là nơi bug 404 thực sự nằm trước đây (rơi
+// vào nhánh default), test ở router.test.ts (dùng ProviderError giả)
+// không thể bắt được loại bug này vì nó test tầng điều phối, không
+// test tầng parse status code thật.
+export function classifyHttpError(providerName: string, status: number, bodyText: string): ProviderError {
   if (status === 401 || status === 403) {
     return new ProviderError(`${providerName} từ chối API key (${status}): ${bodyText}`, "auth", status);
   }
@@ -35,6 +40,14 @@ function classifyHttpError(providerName: string, status: number, bodyText: strin
   }
   if (status === 400 || status === 422) {
     return new ProviderError(`${providerName} từ chối request (${status} - input không hợp lệ): ${bodyText}`, "fatal", status);
+  }
+  if (status === 404) {
+    // Model không tồn tại/không truy cập được (vd đổi tên, bị deprecate)
+    // — đây là lỗi CẤU HÌNH model của provider này, không phải lỗi tạm
+    // thời. Retry với cùng model chắc chắn lại 404 y hệt, nên KHÔNG
+    // retry — chuyển thẳng sang provider tiếp theo (kind "no_retry",
+    // khác "fatal" vì lỗi không liên quan input của app).
+    return new ProviderError(`${providerName} không tìm thấy model (404 - có thể model đã bị gỡ/đổi tên): ${bodyText}`, "no_retry", status);
   }
   return new ProviderError(`${providerName} lỗi HTTP ${status}: ${bodyText}`, "transient", status);
 }

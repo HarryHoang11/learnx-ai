@@ -11,10 +11,10 @@
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
-    "/(app)/tutor/page": [
+    "/(app)/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/(app)/tutor/page.js"
+      "static/chunks/app/(app)/dashboard/page.js"
     ],
     "/(app)/layout": [
       "static/chunks/webpack.js",
@@ -26,15 +26,30 @@
       "static/chunks/main-app.js",
       "static/chunks/app/(app)/profile/page.js"
     ],
-    "/(app)/library/page": [
+    "/(app)/calendar/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/(app)/library/page.js"
+      "static/chunks/app/(app)/calendar/page.js"
+    ],
+    "/(app)/diagnostic/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(app)/diagnostic/page.js"
+    ],
+    "/(app)/tutor/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(app)/tutor/page.js"
     ],
     "/(app)/progress/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/(app)/progress/page.js"
+    ],
+    "/(app)/library/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(app)/library/page.js"
     ],
     "/(app)/roadmap/page": [
       "static/chunks/webpack.js",

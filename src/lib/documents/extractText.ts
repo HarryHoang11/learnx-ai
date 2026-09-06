@@ -22,6 +22,7 @@
 
 import mammoth from "mammoth";
 import JSZip from "jszip";
+import pdfParse from "pdf-parse";
 
 export class UnsupportedFileTypeError extends Error {
   constructor(message: string) {
@@ -33,7 +34,7 @@ export class UnsupportedFileTypeError extends Error {
 async function extractPdfText(buffer: Buffer): Promise<string> {
   // pdf-parse export theo kiểu CommonJS (module.exports = function),
   // import động để tránh vấn đề interop giữa CJS/ESM khi build.
-  const pdfParse = (await import("pdf-parse")).default;
+  const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default;
   const data = await pdfParse(buffer);
   return data.text;
 }

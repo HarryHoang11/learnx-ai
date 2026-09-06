@@ -15,6 +15,7 @@
 import { useState, type ReactNode } from "react";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import FloatingAIButton from "@/components/tutor/FloatingAIButton";
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -32,6 +33,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <Topbar onMenuClick={() => setMobileNavOpen((v) => !v)} />
         {children}
       </main>
+
+      {/* position: fixed nên đặt ở tầng AppShell (áp dụng mọi trang
+          trong route group (app)) thay vì lặp lại trong từng page. */}
+      <FloatingAIButton />
     </div>
   );
 }

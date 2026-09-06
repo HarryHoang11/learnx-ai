@@ -156,4 +156,20 @@ describe("AI Router — fallback & retry", () => {
     expect(result.provider).toBe("groq");
     expect(gemini.generate).toHaveBeenCalledTimes(1); // không retry
   });
+
+  it("Case 4: Groq 404 model_not_found -> KHÔNG retry -> fallback OpenRouter", async () => {
+    const gemini = mockProvider("gemini", {
+      behavior: [new ProviderError("gemini overloaded", "transient", 503), new ProviderError("gemini overloaded", "transient", 503)],
+    });
+    const groq = mockProvider("groq", {
+      behavior: [new ProviderError("model does not exist", "no_retry", 404)],
+    });
+    const openrouter = mockProvider("openrouter", { behavior: [fakeResponse("openrouter")] });
+
+    const router = createAIRouter([gemini, groq, openrouter]);
+    const result = await router.generate(baseOpts);
+
+    expect(result.provider).toBe("openrouter");
+    expect(groq.generate).toHaveBeenCalledTimes(1); // KHÔNG retry dù 404
+  });
 });
