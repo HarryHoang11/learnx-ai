@@ -647,6 +647,47 @@ h3 {
   overflow-y: auto;
 }
 
+/* Biến thể rộng hơn cho modal đọc nội dung dài (vd tóm tắt tài liệu)
+   — tách riêng khỏi .modal-card để KHÔNG ảnh hưởng EditProfileModal
+   (form ngắn, hợp lý ở 440px) và các modal hiện có khác. */
+.modal-card-wide {
+  background: #10141f;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 720px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* phần scroll nằm ở .modal-body-scroll bên trong */
+}
+
+.modal-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-soft);
+  flex-shrink: 0;
+}
+
+.modal-body-scroll {
+  padding: 22px 24px;
+  overflow-y: auto;
+  flex: 1 1;
+  min-height: 0; /* bắt buộc để flex item cho phép scroll con, không tự giãn full content */
+}
+
+.modal-footer-row {
+  display: flex;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-soft);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
 /* ================================================================
    FORM ELEMENTS — input/textarea dùng chung (modal, form lịch học...)
    ================================================================ */
@@ -811,6 +852,20 @@ h3 {
   }
 }
 
+/* Biến thể nhỏ của .spinner — dùng inline cạnh text trạng thái (vd
+   "Đang phân tích tài liệu..." trong DocumentCard), tái dùng chung
+   @keyframes spin ở trên thay vì định nghĩa animation riêng. */
+.spinner-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(6, 214, 255, 0.25);
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
 .profile-info-panel {
   margin-top: 56px;
 }
@@ -843,6 +898,12 @@ h3 {
   }
   .modal-card {
     padding: 20px;
+  }
+  .modal-card-wide {
+    max-height: 94vh;
+  }
+  .modal-body-scroll {
+    padding: 16px !important;
   }
 }
 

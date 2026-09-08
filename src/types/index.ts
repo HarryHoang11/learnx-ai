@@ -55,6 +55,28 @@ export interface ChatMessage {
 // TypeScript sẽ báo lỗi type mismatch ngay khi build.
 export type StudySessionStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED";
 
+// Mirror enum RoadmapStatus trong prisma/schema.prisma — cùng lý do
+// với StudySessionStatus ở trên (frontend không import được @prisma/client).
+export type RoadmapStatus = "ACTIVE" | "COMPLETED" | "ARCHIVED";
+
+// 1 item trong danh sách "Lộ trình của tôi" — gộp LearningGoal (đơn vị
+// user nhìn thấy như "1 lộ trình") với plan MỚI NHẤT của goal đó
+// (Roadmap.months mới nhất, xem roadmap.service.ts -> listGoalsForUser).
+// progressPercent tính từ chính plan này (số topic "done" / tổng số
+// topic) — phản ánh đúng trạng thái plan tại lần AI sinh/cập nhật gần
+// nhất, KHÔNG tự động re-tính khi học sinh làm quiz ở nơi khác (đây là
+// giới hạn đã có sẵn từ trước trong hệ thống, xem TODO trong
+// generateRoadmap(), không phải hạn chế mới phát sinh do thay đổi này).
+export interface GoalWithRoadmap {
+  id: string; // id của LearningGoal — dùng cho mọi thao tác PATCH/DELETE
+  title: string;
+  targetMonths: number;
+  status: RoadmapStatus;
+  createdAt: string;
+  progressPercent: number;
+  plan: RoadmapPlan[] | null; // null nếu goal chưa từng generate được roadmap nào (hiếm, vd lỗi AI giữa chừng)
+}
+
 // Response chuẩn cho MỌI API route — giúp frontend xử lý lỗi đồng nhất
 // thay vì mỗi route trả lỗi một kiểu khác nhau.
 export type ApiResponse<T> =

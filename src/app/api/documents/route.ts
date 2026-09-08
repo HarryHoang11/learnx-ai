@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
       ORDER BY "uploadedAt" DESC
     `;
 
-    const data: DocumentSummary[] = docs.map((d) => ({
+    const data: DocumentSummary[] = docs.map((d: DocumentRow) => ({
       id: d.id,
       fileName: d.fileName,
       fileType: d.fileType,

@@ -42,7 +42,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   // dấu tiếng Việt không bị lỗi/mất dấu khi trình duyệt lưu file.
   const encodedName = encodeURIComponent(doc.fileName);
 
-  return new NextResponse(doc.fileData, {
+  return new NextResponse(new Uint8Array(doc.fileData), {
     headers: {
       "Content-Type": doc.mimeType || "application/octet-stream",
       "Content-Disposition": `attachment; filename="${encodedName}"; filename*=UTF-8''${encodedName}`,

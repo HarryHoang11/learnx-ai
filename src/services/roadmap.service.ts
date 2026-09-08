@@ -16,7 +16,7 @@ import { generateJSON } from "@/lib/ai/router";
 import { buildRoadmapPrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/db/prisma";
 import { getSkillProfile } from "@/services/assessment.service";
-import type { RoadmapPlan } from "@/types";
+import type { RoadmapPlan, RoadmapStatus, GoalWithRoadmap } from "@/types";
 
 interface RawMonthFromAI {
   month: number;
@@ -82,4 +82,138 @@ export async function getLatestRoadmap(userId: string): Promise<RoadmapPlan[] | 
   });
   if (!latest) return null;
   return latest.months as unknown as RoadmapPlan[];
+}
+
+// ================================================================
+// MULTI-ROADMAP — quản lý nhiều LearningGoal độc lập của cùng 1 user
+// ================================================================
+// Mạch tư duy: các hàm PHÍA TRÊN (generateRoadmap, getLatestRoadmap)
+// giữ NGUYÊN VẸN, không sửa — vẫn phục vụ /api/roadmap và
+// /api/roadmap/generate cũ y hệt trước đây. Các hàm DƯỚI ĐÂY là lớp
+// mới, tái sử dụng generateRoadmap() làm lõi sinh plan, chỉ thêm khái
+// niệm "danh sách nhiều goal" + "lifecycle" lên trên.
+// ================================================================
+
+// % hoàn thành tính từ CHÍNH plan mới nhất của goal đó — đếm số topic
+// status="done" / tổng số topic trong toàn bộ các tháng. Đây là dữ
+// liệu THẬT lấy từ Roadmap.months đã lưu (không bịa), dù biết hạn chế
+// là months JSON không tự cập nhật real-time khi học sinh làm quiz ở
+// nơi khác (hạn chế đã có sẵn từ trước, xem TODO trong generateRoadmap).
+function computeProgressPercent(plan: RoadmapPlan[]): number {
+  const allTopics = plan.flatMap((m) => m.topics);
+  if (allTopics.length === 0) return 0;
+  const done = allTopics.filter((t) => t.status === "done").length;
+  return Math.round((done / allTopics.length) * 100);
+}
+
+async function toGoalWithRoadmap(goal: {
+  id: string;
+  title: string;
+  targetMonths: number;
+  status: string;
+  createdAt: Date;
+}): Promise<GoalWithRoadmap> {
+  const latestRoadmap = await prisma.roadmap.findFirst({
+    where: { learningGoalId: goal.id },
+    orderBy: { createdAt: "desc" },
+  });
+  const plan = latestRoadmap ? (latestRoadmap.months as unknown as RoadmapPlan[]) : null;
+
+  return {
+    id: goal.id,
+    title: goal.title,
+    targetMonths: goal.targetMonths,
+    status: goal.status as RoadmapStatus,
+    createdAt: goal.createdAt.toISOString(),
+    progressPercent: plan ? computeProgressPercent(plan) : 0,
+    plan,
+  };
+}
+
+// Danh sách TOÀN BỘ lộ trình (mọi status) của user — dùng cho màn
+// "Lộ trình của tôi". ACTIVE lên đầu (đang học thì cần thấy trước),
+// trong cùng status thì mới tạo lên đầu.
+export async function listGoalsForUser(userId: string): Promise<GoalWithRoadmap[]> {
+  const goals = await prisma.learningGoal.findMany({
+    where: { userId },
+    orderBy: [{ createdAt: "desc" }],
+  });
+
+  // status ACTIVE ưu tiên hiển thị trước COMPLETED/ARCHIVED — sort ở
+  // tầng application vì Prisma không hỗ trợ "ORDER BY CASE" trực tiếp
+  // qua query builder (chỉ có $queryRaw mới làm được, không đáng để
+  // dùng raw SQL chỉ cho 1 phép sort đơn giản như thế này).
+  const statusRank: Record<string, number> = { ACTIVE: 0, COMPLETED: 1, ARCHIVED: 2 };
+  const sorted = [...goals].sort((a, b) => statusRank[a.status] - statusRank[b.status]);
+
+  return Promise.all(sorted.map(toGoalWithRoadmap));
+}
+
+// Chi tiết 1 goal — PHẢI kiểm tra userId khớp (không chỉ id) để tránh
+// user A xem được goal của user B, cùng pattern với
+// api/roadmap/generate (findFirst where id+userId).
+export async function getGoalForUser(userId: string, goalId: string): Promise<GoalWithRoadmap | null> {
+  const goal = await prisma.learningGoal.findFirst({ where: { id: goalId, userId } });
+  if (!goal) return null;
+  return toGoalWithRoadmap(goal);
+}
+
+// Tạo LearningGoal MỚI + sinh Roadmap đầu tiên ngay — dùng cho nút
+// "+ Tạo lộ trình mới". KHÔNG đụng tới goal/roadmap cũ của user, chỉ
+// thêm bản ghi mới (LearningGoal.userId không unique, 1 user có thể có
+// nhiều LearningGoal — đây chính là thay đổi UX cốt lõi được yêu cầu).
+export async function createGoalWithRoadmap(params: {
+  userId: string;
+  goalTitle: string;
+  targetMonths: number;
+}): Promise<GoalWithRoadmap> {
+  const goal = await prisma.learningGoal.create({
+    data: { userId: params.userId, title: params.goalTitle, targetMonths: params.targetMonths },
+  });
+
+  // Tái sử dụng NGUYÊN VẸN generateRoadmap() đã có — không viết lại
+  // logic gọi AI/lấy skill profile, chỉ orchestrate thêm bước tạo goal
+  // ở trên.
+  await generateRoadmap({
+    userId: params.userId,
+    learningGoalId: goal.id,
+    goalTitle: goal.title,
+    targetMonths: goal.targetMonths,
+  });
+
+  const result = await toGoalWithRoadmap(goal);
+  return result;
+}
+
+// Đổi trạng thái 1 goal (ACTIVE/COMPLETED/ARCHIVED) — dùng cho "Đánh
+// dấu hoàn thành" và có thể mở lại (ACTIVE) sau này nếu UI cần.
+// Trả về null nếu goal không tồn tại HOẶC không thuộc user này —
+// route gọi hàm này phải tự trả 404 khi nhận null (không phân biệt 2
+// trường hợp để tránh lộ thông tin goal của user khác tồn tại hay không).
+export async function updateGoalStatus(
+  userId: string,
+  goalId: string,
+  status: RoadmapStatus
+): Promise<GoalWithRoadmap | null> {
+  const goal = await prisma.learningGoal.findFirst({ where: { id: goalId, userId } });
+  if (!goal) return null;
+
+  const updated = await prisma.learningGoal.update({ where: { id: goalId }, data: { status } });
+  return toGoalWithRoadmap(updated);
+}
+
+// Xoá 1 goal — dựa vào onDelete: Cascade trên FK Roadmap.learningGoalId
+// (xem migration 20260906030000_learning_goal_lifecycle) để tự động
+// xoá sạch mọi bản ghi Roadmap (lịch sử các lần AI sinh plan) thuộc
+// goal này, KHÔNG để lại orphan record. LearningProgress/Attempt hoàn
+// toàn KHÔNG bị ảnh hưởng — 2 bảng đó không có foreign key nào trỏ
+// tới LearningGoal/Roadmap (đã audit toàn bộ schema + codebase), nên
+// lịch sử làm bài/mastery của học sinh được giữ nguyên vẹn dù goal bị
+// xoá, đúng yêu cầu "không xóa dữ liệu progress theo roadmap".
+export async function deleteGoal(userId: string, goalId: string): Promise<boolean> {
+  const goal = await prisma.learningGoal.findFirst({ where: { id: goalId, userId } });
+  if (!goal) return false;
+
+  await prisma.learningGoal.delete({ where: { id: goalId } });
+  return true;
 }

@@ -1,18 +1,9 @@
 {
-  "/(app)/profile/page": "app/(app)/profile/page.js",
-  "/(app)/diagnostic/page": "app/(app)/diagnostic/page.js",
-  "/(app)/tutor/page": "app/(app)/tutor/page.js",
-  "/(app)/library/page": "app/(app)/library/page.js",
   "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
-  "/api/profile/route": "app/api/profile/route.js",
-  "/api/documents/upload/route": "app/api/documents/upload/route.js",
-  "/api/documents/route": "app/api/documents/route.js",
-  "/api/progress/route": "app/api/progress/route.js",
-  "/api/analytics/route": "app/api/analytics/route.js",
+  "/api/roadmaps/route": "app/api/roadmaps/route.js",
+  "/login/page": "app/login/page.js",
   "/(app)/roadmap/page": "app/(app)/roadmap/page.js",
-  "/(app)/progress/page": "app/(app)/progress/page.js",
-  "/api/roadmap/route": "app/api/roadmap/route.js",
+  "/(app)/profile/page": "app/(app)/profile/page.js",
   "/(app)/calendar/page": "app/(app)/calendar/page.js",
-  "/api/calendar/today/route": "app/api/calendar/today/route.js",
-  "/(app)/dashboard/page": "app/(app)/dashboard/page.js"
+  "/(app)/library/page": "app/(app)/library/page.js"
 }
