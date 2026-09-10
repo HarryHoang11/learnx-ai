@@ -1,9 +1,9 @@
 {
+  "/page": "app/page.js",
+  "/api/streak/route": "app/api/streak/route.js",
+  "/api/progress/route": "app/api/progress/route.js",
   "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
-  "/api/roadmaps/route": "app/api/roadmaps/route.js",
-  "/login/page": "app/login/page.js",
-  "/(app)/roadmap/page": "app/(app)/roadmap/page.js",
-  "/(app)/profile/page": "app/(app)/profile/page.js",
+  "/api/profile/photo/[type]/route": "app/api/profile/photo/[type]/route.js",
   "/(app)/calendar/page": "app/(app)/calendar/page.js",
-  "/(app)/library/page": "app/(app)/library/page.js"
+  "/(app)/dashboard/page": "app/(app)/dashboard/page.js"
 }

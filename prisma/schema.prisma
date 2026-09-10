@@ -23,6 +23,10 @@ model User {
   avatarMimeType String?
   coverData      Bytes?
   coverMimeType  String?
+  lifetimeXP     Int                @default(0)
+  lifetimeLXP    Int                @default(0)
+  lxpBalance     Int                @default(0)
+  level          Int                @default(1)
   accounts       Account[]
   achievements   Achievement[]
   assessments    Assessment[]
@@ -34,6 +38,12 @@ model User {
   roadmaps       Roadmap[]
   sessions       Session[]
   studySessions  StudySession[]
+  learningDays   LearningDay[]
+  xpTransactions  XPTransaction[]
+  pointTransactions PointTransaction[]
+  streak         Streak?
+  dailyChallenges DailyChallenge[]
+  userRewards    UserReward[]
 }
 
 model Account {
@@ -205,10 +215,138 @@ model Achievement {
   @@unique([userId, code])
 }
 
+model LearningDay {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime @db.Date
+  xpEarned  Int      @default(0)
+  lxpEarned Int      @default(0)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model XPTransaction {
+  id         String   @id @default(cuid())
+  userId     String
+  amount     Int
+  reason     String
+  sourceType String
+  sourceId   String?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([userId, sourceType, sourceId])
+}
+
+model PointTransaction {
+  id           String   @id @default(cuid())
+  userId       String
+  amount       Int
+  reason       String
+  sourceType   String
+  sourceId     String?
+  balanceAfter Int
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model Streak {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  currentStreak   Int       @default(0)
+  longestStreak   Int       @default(0)
+  lastLearningDay DateTime? @db.Date
+  updatedAt       DateTime  @updatedAt
+  user            User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model DailyChallenge {
+  id              String   @id @default(cuid())
+  userId          String
+  date            DateTime @db.Date
+  challengeType   String
+  subject         String?
+  topic           String?
+  targetCount     Int
+  completedCount  Int      @default(0)
+  xpReward        Int
+  lxpReward       Int
+  completed       Boolean  @default(false)
+  claimed         Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model Reward {
+  id           String        @id @default(cuid())
+  name         String
+  description  String
+  type         RewardType
+  rarity       RewardRarity  @default(COMMON)
+  costLXP      Int
+  icon         String?
+  imageUrl     String?
+  requirements Json?
+  stock        Int?
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  userRewards  UserReward[]
+}
+
+model UserReward {
+  id          String       @id @default(cuid())
+  userId      String
+  rewardId    String
+  status      RewardStatus @default(OWNED)
+  redeemedAt  DateTime     @default(now())
+  activatedAt DateTime?
+  expiresAt   DateTime?
+
+  reward      Reward       @relation(fields: [rewardId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+
+  @@unique([userId, rewardId])
+  @@index([userId, status])
+}
+
 enum Role {
   STUDENT
   TEACHER
   ADMIN
+}
+
+enum RewardType {
+  DIGITAL
+  LEARNING
+  REAL_WORLD
+  MILESTONE
+}
+
+enum RewardRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+enum RewardStatus {
+  OWNED
+  ACTIVE
+  USED
+  EXPIRED
 }
 
 enum StudySessionStatus {

@@ -13,6 +13,7 @@
 
 "use client";
 
+import { useState } from "react";
 import MarkdownLite from "./MarkdownLite";
 import { downloadSummaryAsMarkdown } from "@/lib/documents/downloadSummary";
 
@@ -33,10 +34,47 @@ interface DocumentDetailModalProps {
   onClose: () => void;
 }
 
-// Tên file .md tải xuống dựa theo tên tài liệu gốc — xem toSummaryFileName
-// trong lib/documents/downloadSummary.ts (dùng chung với DocumentCard).
+const FORMATS = [
+  { value: 'md', label: 'Markdown (.md)', icon: '📝' },
+  { value: 'txt', label: 'Text (.txt)', icon: '📄' },
+  { value: 'pdf', label: 'PDF (.pdf)', icon: '📕' },
+  { value: 'docx', label: 'Word (.docx)', icon: '📘' },
+] as const;
+
+type Format = typeof FORMATS[number]['value'];
 
 export default function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) {
+  const [showFormatModal, setShowFormatModal] = useState(false);
+
+  async function handleDownload(format: Format) {
+    setShowFormatModal(false);
+    try {
+      const res = await fetch(`/api/documents/${doc.id}/summary/download`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ format }),
+      });
+      
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Không thể tải file');
+      }
+      
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${doc.fileName.replace(/\.[^/.]+$/, '')}_summary.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download failed:', err);
+      alert(err instanceof Error ? err.message : 'Không thể tải file, thử lại sau');
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card-wide" onClick={(e) => e.stopPropagation()}>
@@ -87,22 +125,65 @@ export default function DocumentDetailModal({ doc, onClose }: DocumentDetailModa
 
         <div className="modal-footer-row">
           {doc.summary && (
-            <button className="btn-secondary" onClick={() => downloadSummaryAsMarkdown(doc.fileName, doc.summary!)}>
+            <button 
+              className="btn-secondary" 
+              onClick={() => setShowFormatModal(true)}
+            >
               ↓ Tải tóm tắt
             </button>
           )}
           {doc.hasOriginalFile && (
-            // Thẻ <a> điều hướng thẳng tới route download (server trả
-            // Content-Disposition: attachment) — KHÔNG cần fetch bằng
-            // JS, để trình duyệt tự xử lý luồng tải file nhị phân
-            // (đơn giản, hoạt động tốt với file lớn hơn so với tự fetch
-            // rồi tạo Blob trong bộ nhớ).
             <a className="btn-secondary" href={`/api/documents/${doc.id}/download`} download>
               ↓ Tải tài liệu gốc
             </a>
           )}
         </div>
       </div>
+
+      {/* Format Selection Modal */}
+      {showFormatModal && (
+        <div className="modal-overlay" onClick={() => setShowFormatModal(false)} style={{ zIndex: 200 }}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 360 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>Chọn định dạng tải xuống</div>
+              <button 
+                onClick={() => setShowFormatModal(false)} 
+                style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 20, cursor: "pointer", lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {FORMATS.map((fmt) => (
+                <button
+                  key={fmt.value}
+                  onClick={() => handleDownload(fmt.value)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: "12px 16px",
+                    background: "var(--panel-strong)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    color: "var(--text)",
+                    fontSize: 14,
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "all 150ms ease",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--indigo-soft)"; e.currentTarget.style.borderColor = "var(--indigo)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "var(--panel-strong)"; e.currentTarget.style.borderColor = "var(--border)"; }}
+                >
+                  <span style={{ fontSize: 20 }}>{fmt.icon}</span>
+                  <span>{fmt.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,17 +1,9 @@
 // ================================================================
-// CALENDAR SERVICE
+// CALENDAR SERVICE — Timezone-safe date handling
 // ================================================================
-// Mạch tư duy: đây là nơi DUY NHẤT tính toán khoảng thời gian
-// "hôm nay / tuần này / tháng này" — route chỉ gọi đúng hàm tương
-// ứng, không tự tính lại ngày giờ (tránh 3 route tự viết 3 công thức
-// tính "đầu tuần" khác nhau, dễ lệch nhau).
-//
-// TIMEZONE: MVP xử lý theo giờ SERVER (múi giờ của máy chạy Node),
-// KHÔNG theo múi giờ trình duyệt của học sinh. Với đối tượng học sinh
-// Việt Nam và server thường deploy ở khu vực gần (hoặc set TZ=
-// Asia/Ho_Chi_Minh trong môi trường production), sai lệch không đáng
-// kể — nhưng đây là điểm cần nâng cấp nếu mở rộng ra nhiều múi giờ
-// (xem ghi chú "TODO timezone" bên dưới).
+// KEY PRINCIPLE: All dates stored as YYYY-MM-DD strings (no time component).
+// When parsing YYYY-MM-DD, use local timezone to avoid UTC shift.
+// All range calculations use start-of-day in LOCAL timezone.
 // ================================================================
 
 import { prisma } from "@/lib/db/prisma";
@@ -25,49 +17,139 @@ export interface StudySessionInput {
   endTime: Date;
 }
 
-// --- Tính khoảng "hôm nay" [00:00:00, 24:00:00) ---
-function getTodayRange(): { start: Date; end: Date } {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
+// TIMEZONE: Use Asia/Ho_Chi_Minh (Vietnam) for all date calculations.
+// This ensures consistency between frontend, backend, and database.
+const VIETNAM_TIMEZONE = 'Asia/Ho_Chi_Minh';
+
+// --- Helper: Get current date in Vietnam timezone as YYYY-MM-DD ---
+export function getTodayDateString(): string {
+  const now = new Date();
+  // Convert to Vietnam timezone
+  const vietnamTime = new Date(now.toLocaleString('en-US', { timeZone: VIETNAM_TIMEZONE }));
+  return vietnamTime.toISOString().slice(0, 10);
+}
+
+// --- Helper: Parse YYYY-MM-DD string to Date at START OF DAY in local timezone ---
+// This avoids the UTC shift bug: new Date("2026-09-08") creates UTC midnight
+export function parseDateString(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  // Create date at local midnight (no timezone shift)
+  return new Date(year, month - 1, day);
+}
+
+// --- Helper: Get Date at start of day (00:00:00) in local timezone ---
+function startOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+// --- Helper: Get Date at end of day (23:59:59.999) in local timezone ---
+function endOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+// --- Tính khoảng "hôm nay" [00:00:00, 24:00:00) in local timezone ---
+export function getTodayRange(): { start: Date; end: Date } {
+  const todayStr = getTodayDateString();
+  const start = parseDateString(todayStr);
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
   return { start, end };
 }
 
-// --- Tính khoảng "tuần này", quy ước tuần bắt đầu từ Thứ 2 ---
-// (khớp UI mẫu trong yêu cầu: "T2 T3 T4 T5 T6 T7 CN")
-function getWeekRange(): { start: Date; end: Date } {
-  const now = new Date();
-  const day = now.getDay(); // 0 = CN, 1 = T2, ..., 6 = T7
-  // Số ngày cần lùi về để tới Thứ 2: nếu hôm nay là CN (0), lùi 6 ngày
+// --- Tính khoảng "tuần này", quy ước tuần bắt đầu từ Thứ 2 (Monday) ---
+// Returns range in local timezone
+export function getWeekRange(): { start: Date; end: Date } {
+  const todayStr = getTodayDateString();
+  const today = parseDateString(todayStr);
+  const day = today.getDay(); // 0 = CN, 1 = T2, ..., 6 = T7
   const diffToMonday = day === 0 ? 6 : day - 1;
-
-  const start = new Date(now);
-  start.setDate(now.getDate() - diffToMonday);
-  start.setHours(0, 0, 0, 0);
-
+  
+  const start = new Date(today);
+  start.setDate(today.getDate() - diffToMonday);
+  
   const end = new Date(start);
   end.setDate(start.getDate() + 7);
+  
   return { start, end };
 }
 
-// --- Tính khoảng "tháng này" [ngày 1, ngày 1 tháng sau) ---
-function getMonthRange(): { start: Date; end: Date } {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+// --- Tính khoảng "tháng này" [ngày 1, ngày 1 tháng sau) in local timezone ---
+export function getMonthRange(): { start: Date; end: Date } {
+  const todayStr = getTodayDateString();
+  const today = parseDateString(todayStr);
+  const start = new Date(today.getFullYear(), today.getMonth(), 1);
+  const end = new Date(today.getFullYear(), today.getMonth() + 1, 1);
   return { start, end };
 }
 
-// Hàm dùng chung cho cả 3 API (today/week/month) — CHỈ khác khoảng
-// [start, end) truyền vào, logic query hoàn toàn giống nhau.
+// --- Get month range for specific year/month (for calendar navigation) ---
+export function getMonthRangeFor(year: number, month: number): { start: Date; end: Date } {
+  // month is 1-12
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 1);
+  return { start, end };
+}
+
+// --- Get all days in a month grid (including prev/next month days for UI) ---
+// Returns array of { date: Date; isCurrentMonth: boolean; dateStr: 'YYYY-MM-DD' }
+export function getMonthGrid(year: number, month: number): Array<{ date: Date; isCurrentMonth: boolean; dateStr: string }> {
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 1);
+  
+  // Find first day of grid (Monday of week containing 1st)
+  const firstDayOfMonth = start.getDay(); // 0 = Sun, 1 = Mon
+  const diffToMonday = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
+  
+  const gridStart = new Date(start);
+  gridStart.setDate(start.getDate() - diffToMonday);
+  
+  const days: Array<{ date: Date; isCurrentMonth: boolean; dateStr: string }> = [];
+  const current = new Date(gridStart);
+  
+  // Generate 42 days (6 weeks)
+  for (let i = 0; i < 42; i++) {
+    const dateStr = current.toISOString().slice(0, 10);
+    days.push({
+      date: new Date(current),
+      isCurrentMonth: current.getMonth() === month - 1,
+      dateStr,
+    });
+    current.setDate(current.getDate() + 1);
+  }
+  
+  return days;
+}
+
+// --- Get LearningDay records for a date range (for calendar indicators) ---
+export async function getLearningDaysInRange(userId: string, start: Date, end: Date) {
+  return prisma.learningDay.findMany({
+    where: {
+      userId,
+      date: { gte: start, lt: end },
+    },
+    select: { date: true },
+    orderBy: { date: 'asc' },
+  });
+}
+
+// --- Get LearningDay records for a specific month ---
+export async function getLearningDaysForMonth(userId: string, year: number, month: number) {
+  const { start, end } = getMonthRangeFor(year, month);
+  return getLearningDaysInRange(userId, start, end);
+}
+
+// --- Get StudySession records for a range ---
 async function getSessionsInRange(userId: string, start: Date, end: Date) {
   return prisma.studySession.findMany({
     where: {
       userId,
       startTime: { gte: start, lt: end },
     },
-    orderBy: { startTime: "asc" },
+    orderBy: { startTime: 'asc' },
   });
 }
 
@@ -83,6 +165,12 @@ export async function getWeekSessions(userId: string) {
 
 export async function getMonthSessions(userId: string) {
   const { start, end } = getMonthRange();
+  return getSessionsInRange(userId, start, end);
+}
+
+// --- Get sessions for specific month (for calendar navigation) ---
+export async function getMonthSessionsFor(userId: string, year: number, month: number) {
+  const { start, end } = getMonthRangeFor(year, month);
   return getSessionsInRange(userId, start, end);
 }
 
@@ -104,17 +192,13 @@ export async function createStudySession(userId: string, input: StudySessionInpu
 }
 
 // --- Sửa 1 buổi học ---
-// QUAN TRỌNG: luôn where { id, userId } CÙNG LÚC, không chỉ where { id }
-// — đây là điểm chốt chặn user A sửa/xoá lịch của user B. Prisma
-// update/delete theo where không khớp sẽ throw lỗi "Record not found",
-// route sẽ bắt lỗi này và trả 404 thay vì 200 (xem route.ts).
 export async function updateStudySession(
   id: string,
   userId: string,
   data: Partial<StudySessionInput> & { status?: StudySessionStatus; progress?: number }
 ) {
   const existing = await prisma.studySession.findFirst({ where: { id, userId } });
-  if (!existing) return null; // null nghĩa là không tìm thấy HOẶC không thuộc user này
+  if (!existing) return null;
 
   return prisma.studySession.update({
     where: { id },
@@ -130,7 +214,58 @@ export async function deleteStudySession(id: string, userId: string) {
   return true;
 }
 
-// TODO (timezone): khi có học sinh ở nhiều múi giờ khác nhau, thay
-// getTodayRange/getWeekRange/getMonthRange bằng version nhận thêm
-// tham số `timezone` (lưu trong User khi đăng ký) và dùng thư viện
-// như date-fns-tz để tính đúng ranh giới ngày theo múi giờ đó.
+// --- Get streak info for user ---
+export async function getUserStreak(userId: string) {
+  const streak = await prisma.streak.findUnique({ where: { userId } });
+  if (!streak) return { current: 0, longest: 0, lastLearningDay: null };
+  return {
+    current: streak.currentStreak,
+    longest: streak.longestStreak,
+    lastLearningDay: streak.lastLearningDay?.toISOString().slice(0, 10) || null,
+  };
+}
+
+// --- Generate daily challenge for today ---
+export async function generateDailyChallenge(userId: string) {
+  const todayStr = getTodayDateString();
+  const today = parseDateString(todayStr);
+  
+  const existing = await prisma.dailyChallenge.findUnique({
+    where: { userId_date: { userId, date: today } },
+  });
+  
+  if (existing) return existing;
+
+  // Simple challenge generation - can be enhanced with AI
+  const challengeTypes = ['exercise', 'quiz', 'lesson', 'review'] as const;
+  const type = challengeTypes[Math.floor(Math.random() * challengeTypes.length)];
+  
+  const configs = {
+    exercise: { target: 5, xp: 40, lxp: 20 },
+    quiz: { target: 3, xp: 50, lxp: 20 },
+    lesson: { target: 1, xp: 30, lxp: 15 },
+    review: { target: 3, xp: 35, lxp: 15 },
+  } as const;
+  
+  const config = configs[type] ?? configs.exercise;
+
+  return prisma.dailyChallenge.create({
+    data: {
+      userId,
+      date: today,
+      challengeType: type,
+      targetCount: config.target,
+      xpReward: config.xp,
+      lxpReward: config.lxp,
+    },
+  });
+}
+
+export async function getDailyChallenge(userId: string) {
+  const todayStr = getTodayDateString();
+  const today = parseDateString(todayStr);
+  
+  return prisma.dailyChallenge.findUnique({
+    where: { userId_date: { userId, date: today } },
+  });
+}

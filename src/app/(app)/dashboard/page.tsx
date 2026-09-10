@@ -1,12 +1,5 @@
 // ================================================================
-// TRANG CHỦ (Home)
-// ================================================================
-// Mạch tư duy: trang này lấy dữ liệu THẬT từ /api/progress (đã xây ở
-// backend) để hiển thị stats + đề xuất ôn tập dựa trên topic yếu
-// nhất — KHÔNG hard-code số liệu như bản demo HTML tĩnh trước đó.
-// Ô "Hỏi LearnX AI" chuyển thẳng sang trang /tutor kèm câu hỏi qua
-// query param, để AI Tutor xử lý tiếp (tránh trang Home tự gọi luôn
-// /api/ai/chat — giữ đúng nguyên tắc 1 trang lo 1 việc).
+// TRANG CHỦ (Home) — Enhanced with XP/LXP/Level/Streak
 // ================================================================
 
 "use client";
@@ -26,10 +19,20 @@ interface ProgressData {
   streakDays: number;
 }
 
+interface ProgressResponse {
+  lifetimeXP: number;
+  lifetimeLXP: number;
+  lxpBalance: number;
+  level: number;
+  levelProgress: { current: number; next: number; percent: number; level: number };
+  streak: { current: number; longest: number; lastLearningDay: string | null };
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [askValue, setAskValue] = useState("");
   const [progress, setProgress] = useState<ProgressData | null>(null);
+  const [xpData, setXpData] = useState<ProgressResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +45,12 @@ export default function HomePage() {
       })
       .catch(() => setError("Không thể kết nối tới máy chủ."))
       .finally(() => setLoading(false));
+
+    fetch("/api/streak")
+      .then((res) => res.json())
+      .then((json: ApiResponse<ProgressResponse>) => {
+        if (json.success) setXpData(json.data);
+      });
   }, []);
 
   function goToTutor() {
@@ -49,11 +58,11 @@ export default function HomePage() {
     router.push(q ? `/tutor?q=${encodeURIComponent(q)}` : "/tutor");
   }
 
-  // Chủ đề yếu nhất để đề xuất ôn tập — nếu chưa có dữ liệu (học sinh
-  // mới, chưa làm bài nào), ẩn hẳn khối đề xuất thay vì bịa nội dung.
   const weakest = progress?.skillMap
     .filter((s) => s.isWeak)
     .sort((a, b) => a.masteryPercent - b.masteryPercent)[0];
+
+  const formatNumber = (num: number) => num.toLocaleString('vi-VN');
 
   return (
     <section>
@@ -99,14 +108,42 @@ export default function HomePage() {
       {loading && <StateMessage kind="loading" text="Đang tải dữ liệu học tập..." />}
       {error && <StateMessage kind="error" text={error} />}
 
-      {progress && (
+      {progress && xpData && (
         <>
-          <div className="grid-stats" style={{ margin: "22px 0 28px" }}>
-            <StatCard value={`🔥 ${progress.streakDays}`} label="Ngày học liên tục" />
-            <StatCard value={progress.totalAttempts} label="Bài đã làm" />
-            <StatCard value={`${progress.accuracyPercent}%`} label="Độ chính xác" />
-            <StatCard value={progress.skillMap.length} label="Chủ đề đã theo dõi" />
+          {/* XP / Level / LXP Stats */}
+          <div className="grid-stats" style={{ marginBottom: 20 }}>
+            <StatCard 
+              value={`Level ${xpData.level}`} 
+              label={`XP: ${formatNumber(xpData.lifetimeXP)}`} 
+            />
+            <StatCard 
+              value={`${xpData.levelProgress.percent}%`} 
+              label={`Tới Level ${xpData.level + 1}`} 
+            />
+            <StatCard 
+              value={`${formatNumber(xpData.lxpBalance)} LXP`} 
+              label="LearnX Points" 
+            />
+            <StatCard value={`🔥 ${xpData.streak.current}`} label={`${xpData.streak.longest} ngày dài nhất`} />
           </div>
+
+          {/* XP Progress Bar */}
+          <Panel style={{ marginBottom: 24 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>
+                Level {xpData.level} → Level {xpData.level + 1}
+              </div>
+              <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>
+                {formatNumber(xpData.levelProgress.current)} / {formatNumber(xpData.levelProgress.next)} XP
+              </div>
+            </div>
+            <div className="bar-track" style={{ height: 12 }}>
+              <div 
+                className="bar-fill" 
+                style={{ width: `${xpData.levelProgress.percent}%`, background: "linear-gradient(90deg, var(--cyan), var(--indigo))" }} 
+              />
+            </div>
+          </Panel>
 
           <div style={{ marginBottom: 28 }}>
             <TodaySchedule />

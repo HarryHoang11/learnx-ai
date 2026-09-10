@@ -37,7 +37,19 @@ export default function Sidebar({ open = false, onNavigate }: SidebarProps) {
 
   return (
     <aside className={`sidebar ${open ? "sidebar--open" : ""}`}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 8px" }}>
+      <Link
+        href="/"
+        onClick={onNavigate}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "0 8px",
+          textDecoration: "none",
+          color: "inherit",
+          cursor: "pointer",
+        }}
+      >
         <div
           style={{
             width: 30,
@@ -51,14 +63,17 @@ export default function Sidebar({ open = false, onNavigate }: SidebarProps) {
             fontWeight: 700,
             fontSize: 15,
             color: "#0a0e16",
+            transition: "transform 0.15s ease, box-shadow 0.15s ease",
           }}
+          onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.05)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
         >
           X
         </div>
         <div style={{ fontFamily: "var(--font-space-grotesk), sans-serif", fontWeight: 600, fontSize: 17 }}>
           LearnX
         </div>
-      </div>
+      </Link>
 
       <nav style={{ display: "flex", flexDirection: "column", gap: 3 }}>
         {NAV_ITEMS.map((item) => {

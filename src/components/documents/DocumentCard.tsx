@@ -9,6 +9,7 @@
 
 "use client";
 
+import { useState } from "react";
 import { downloadSummaryAsMarkdown } from "@/lib/documents/downloadSummary";
 import type { LibraryDocument } from "./DocumentDetailModal";
 
@@ -37,7 +38,47 @@ function previewText(summary: string): string {
   return plain.length > PREVIEW_MAX_CHARS ? `${plain.slice(0, PREVIEW_MAX_CHARS)}...` : plain;
 }
 
+const FORMATS = [
+  { value: 'md', label: 'Markdown (.md)', icon: '📝' },
+  { value: 'txt', label: 'Text (.txt)', icon: '📄' },
+  { value: 'pdf', label: 'PDF (.pdf)', icon: '📕' },
+  { value: 'docx', label: 'Word (.docx)', icon: '📘' },
+] as const;
+
+type Format = typeof FORMATS[number]['value'];
+
 export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: DocumentCardProps) {
+  const [showFormatModal, setShowFormatModal] = useState(false);
+
+  async function handleDownload(format: Format) {
+    setShowFormatModal(false);
+    try {
+      const res = await fetch(`/api/documents/${doc.id}/summary/download`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ format }),
+      });
+      
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Không thể tải file');
+      }
+      
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${doc.fileName.replace(/\.[^/.]+$/, '')}_summary.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download failed:', err);
+      alert(err instanceof Error ? err.message : 'Không thể tải file, thử lại sau');
+    }
+  }
+
   return (
     <div
       style={{
@@ -81,7 +122,7 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
           {doc.summary && (
             <button
               className="btn-secondary"
-              onClick={() => downloadSummaryAsMarkdown(doc.fileName, doc.summary!)}
+              onClick={() => setShowFormatModal(true)}
               style={{ fontSize: 12.5, padding: "7px 14px" }}
             >
               Tải xuống
@@ -100,6 +141,51 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
           >
             {retrying ? "Đang thử lại..." : "Thử lại"}
           </button>
+        </div>
+      )}
+
+      {/* Format Selection Modal */}
+      {showFormatModal && (
+        <div className="modal-overlay" onClick={() => setShowFormatModal(false)} style={{ zIndex: 200 }}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 360 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>Chọn định dạng tải xuống</div>
+              <button 
+                onClick={() => setShowFormatModal(false)} 
+                style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 20, cursor: "pointer", lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {FORMATS.map((fmt) => (
+                <button
+                  key={fmt.value}
+                  onClick={() => handleDownload(fmt.value)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: "12px 16px",
+                    background: "var(--panel-strong)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    color: "var(--text)",
+                    fontSize: 14,
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "all 150ms ease",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--indigo-soft)"; e.currentTarget.style.borderColor = "var(--indigo)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "var(--panel-strong)"; e.currentTarget.style.borderColor = "var(--border)"; }}
+                >
+                  <span style={{ fontSize: 20 }}>{fmt.icon}</span>
+                  <span>{fmt.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>

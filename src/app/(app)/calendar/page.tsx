@@ -1,12 +1,8 @@
 // ================================================================
-// TRANG LỊCH HỌC (Calendar)
+// TRANG LỊCH HỌC (Calendar) — Fixed date handling with LearningDay integration
 // ================================================================
-// Mạch tư duy: 3 tab (Today/Week/Month) gọi 3 API riêng biệt đã xây
-// (GET /api/calendar/today|week|month) — KHÔNG gọi 1 API rồi tự lọc
-// ở client, vì logic "thế nào là hôm nay/tuần này/tháng này" đã được
-// chuẩn hoá ở backend (calendar.service.ts), tránh 2 nơi tính lệch
-// nhau. Form tạo mới gọi POST /api/calendar, sau đó tự load lại tab
-// đang xem để thấy ngay buổi học vừa tạo.
+// Uses /api/calendar/month-grid for month view with proper date mapping
+// All dates handled in local timezone (Vietnam) to prevent UTC shift
 // ================================================================
 
 "use client";
@@ -28,6 +24,13 @@ interface StudySessionDto {
   status: "PENDING" | "IN_PROGRESS" | "COMPLETED";
 }
 
+interface CalendarDayDto {
+  date: string;
+  isCurrentMonth: boolean;
+  dateStr: string;
+  isLearned: boolean;
+}
+
 const TABS: { key: Tab; label: string }[] = [
   { key: "today", label: "Hôm nay" },
   { key: "week", label: "Tuần này" },
@@ -39,34 +42,86 @@ const WEEKDAY_LABELS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 export default function CalendarPage() {
   const [tab, setTab] = useState<Tab>("today");
   const [sessions, setSessions] = useState<StudySessionDto[] | null>(null);
+  const [monthGrid, setMonthGrid] = useState<CalendarDayDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() + 1 };
+  });
 
   async function load() {
     setSessions(null);
+    setMonthGrid(null);
     setError(null);
     try {
-      const res = await fetch(`/api/calendar/${tab}`);
-      const json: ApiResponse<StudySessionDto[]> = await res.json();
-      if (json.success) setSessions(json.data);
-      else setError(json.error);
+      if (tab === "month") {
+        const res = await fetch(`/api/calendar/month-grid?year=${currentMonth.year}&month=${currentMonth.month}`);
+        const json: ApiResponse<CalendarDayDto[]> = await res.json();
+        if (json.success) setMonthGrid(json.data);
+        else setError(json.error);
+      } else {
+        const res = await fetch(`/api/calendar/${tab}`);
+        const json: ApiResponse<StudySessionDto[]> = await res.json();
+        if (json.success) setSessions(json.data);
+        else setError(json.error);
+      }
     } catch {
       setError("Không thể kết nối tới máy chủ.");
+    }
+  }
+
+  async function navigateMonth(delta: number) {
+    let { year, month } = currentMonth;
+    month += delta;
+    if (month < 1) { month = 12; year--; }
+    if (month > 12) { month = 1; year++; }
+    const newMonth = { year, month };
+    setCurrentMonth(newMonth);
+    if (tab === "month") {
+      await load();
+    }
+  }
+
+  async function goToToday() {
+    const now = new Date();
+    const today = { year: now.getFullYear(), month: now.getMonth() + 1 };
+    setCurrentMonth(today);
+    if (tab === "month") {
+      await load();
     }
   }
 
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  }, [tab, currentMonth.year, currentMonth.month]);
 
   return (
     <section>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
         <h2 style={{ fontSize: 20 }}>Lịch học</h2>
-        <button className="btn-primary" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Đóng" : "+ Thêm buổi học"}
-        </button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button className="btn-secondary" onClick={() => setShowForm((v) => !v)}>
+            {showForm ? "Đóng" : "+ Thêm buổi học"}
+          </button>
+          {tab === "month" && (
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <button className="btn-secondary" onClick={() => navigateMonth(-1)} style={{ fontSize: 13, padding: "7px 12px" }}>
+                ← Trước
+              </button>
+              <span style={{ fontWeight: 500, minWidth: 140, textAlign: "center" }}>
+                {currentMonth.month}/{currentMonth.year}
+              </span>
+              <button className="btn-secondary" onClick={() => navigateMonth(1)} style={{ fontSize: 13, padding: "7px 12px" }}>
+                Sau →
+              </button>
+              <button className="btn-secondary" onClick={goToToday} style={{ fontSize: 13, padding: "7px 12px" }}>
+                Hôm nay
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {showForm && (
@@ -78,24 +133,26 @@ export default function CalendarPage() {
         />
       )}
 
-      <div style={{ display: "flex", gap: 6, margin: "18px 0" }}>
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={tab === t.key ? "btn-primary" : "btn-secondary"}
-            style={{ fontSize: 13 }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {tab !== "month" && (
+        <div style={{ display: "flex", gap: 6, margin: "18px 0" }}>
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={tab === t.key ? "btn-primary" : "btn-secondary"}
+              style={{ fontSize: 13 }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && <StateMessage kind="error" text={error} />}
-      {!error && sessions === null && <StateMessage kind="loading" text="Đang tải lịch..." />}
+      {!error && sessions === null && monthGrid === null && <StateMessage kind="loading" text="Đang tải lịch..." />}
 
       {sessions && tab !== "month" && <SessionListView sessions={sessions} onChanged={load} />}
-      {sessions && tab === "month" && <MonthGridView sessions={sessions} />}
+      {monthGrid && tab === "month" && <MonthCalendarView days={monthGrid} />}
     </section>
   );
 }
@@ -162,57 +219,73 @@ function SessionListView({ sessions, onChanged }: { sessions: StudySessionDto[];
   );
 }
 
-// --- Lưới theo tuần (môn học x thứ trong tuần), dùng khi tab = month ---
-// Đơn giản hoá: nhóm theo môn học, đánh dấu ô nếu môn đó có buổi học
-// rơi vào ngày tương ứng trong tuần đầu của dữ liệu tháng — đủ để
-// nhìn tổng quan "môn nào học vào thứ mấy", không nhằm thay thế lịch
-// đầy đủ dạng ô ngày-tháng chi tiết.
-function MonthGridView({ sessions }: { sessions: StudySessionDto[] }) {
-  const subjects = Array.from(new Set(sessions.map((s) => s.subject)));
-
-  function hasSessionOnWeekday(subject: string, weekdayIndex: number): boolean {
-    // weekdayIndex: 0 = T2 ... 6 = CN
-    return sessions.some((s) => {
-      if (s.subject !== subject) return false;
-      const day = new Date(s.startTime).getDay(); // 0 = CN
-      const normalized = day === 0 ? 6 : day - 1;
-      return normalized === weekdayIndex;
-    });
-  }
-
-  if (subjects.length === 0) {
-    return (
-      <Panel>
-        <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>Chưa có buổi học nào trong tháng này.</p>
-      </Panel>
-    );
-  }
+// --- Lịch tháng dạng lưới ngày (6 tuần x 7 ngày) với đánh dấu LearningDay ---
+function MonthCalendarView({ days }: { days: CalendarDayDto[] }) {
+  // Find today's date string for highlighting
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   return (
     <Panel>
       <div className="scroll-x-mobile">
-      <div style={{ display: "grid", gridTemplateColumns: `140px repeat(7, 1fr)`, gap: 8, fontSize: 13, minWidth: 640 }}>
-        <div />
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(7, 1fr)`, gap: 4, fontSize: 13, minWidth: 560 }}>
+        {/* Weekday headers */}
         {WEEKDAY_LABELS.map((d) => (
-          <div key={d} style={{ textAlign: "center", color: "var(--text-dim)" }}>
+          <div key={d} style={{ textAlign: "center", color: "var(--text-dim)", fontWeight: 600, padding: "8px 0" }}>
             {d}
           </div>
         ))}
-        {subjects.map((subject) => (
-          <Fragment key={subject}>
-            <div style={{ color: "var(--text)" }}>{subject}</div>
-            {WEEKDAY_LABELS.map((_, idx) => (
-              <div
-                key={`${subject}-${idx}`}
-                style={{
-                  height: 24,
-                  borderRadius: 6,
-                  background: hasSessionOnWeekday(subject, idx) ? "var(--indigo-soft)" : "var(--panel-strong)",
-                  border: hasSessionOnWeekday(subject, idx) ? "1px solid var(--indigo)" : "1px solid var(--border-soft)",
-                }}
-              />
-            ))}
-          </Fragment>
+        {/* Days */}
+        {days.map((day) => (
+          <div
+            key={day.dateStr}
+            style={{
+              aspectRatio: "1",
+              minHeight: 70,
+              borderRadius: 8,
+              border: "1px solid var(--border-soft)",
+              background: day.isCurrentMonth ? "var(--panel)" : "var(--bg)",
+              color: day.isCurrentMonth ? "var(--text)" : "var(--text-faint)",
+              display: "flex",
+              flexDirection: "column",
+              position: "relative",
+            }}
+          >
+            {/* Date number */}
+            <div style={{ 
+              padding: "6px 8px", 
+              fontWeight: day.dateStr === todayStr ? 700 : 500,
+              color: day.dateStr === todayStr ? "var(--cyan)" : "inherit",
+              background: day.dateStr === todayStr ? "var(--cyan-soft)" : "transparent",
+              borderRadius: "6px 6px 0 0",
+            }}>
+              {new Date(day.dateStr + 'T00:00:00').getDate()}
+            </div>
+            
+            {/* Learning indicator */}
+            {day.isLearned && day.isCurrentMonth && (
+              <div style={{ 
+                marginTop: "auto", 
+                padding: "4px 8px 8px",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+              }}>
+                <span style={{ 
+                  fontSize: 10, 
+                  background: "var(--cyan)", 
+                  color: "#0a0e16",
+                  padding: "2px 6px",
+                  borderRadius: 4,
+                  fontWeight: 600,
+                }}>
+                  ✓ Đã học
+                </span>
+              </div>
+            )}
+            
+            {/* Study sessions indicator (dots) */}
+            {/* Could add session dots here if needed */}
+          </div>
         ))}
       </div>
       </div>

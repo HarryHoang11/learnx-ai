@@ -557,3 +557,81 @@ h3 {
   transform: translateY(-2px) scale(1.05);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
 }
+
+/* ================================================================
+   BUTTON MICRO-INTERACTIONS
+   ================================================================ */
+
+.btn-primary,
+.btn-secondary {
+  transition: all 150ms ease;
+  transform: translateY(0);
+}
+
+.btn-primary:hover:not(:disabled),
+.btn-secondary:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled),
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(1px) scale(0.98);
+  transition: all 50ms ease;
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Loading spinner for buttons */
+.btn-loading {
+  position: relative;
+  color: transparent !important;
+}
+.btn-loading::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  left: 50%;
+  top: 50%;
+  margin: -8px 0 0 -8px;
+}
+
+/* Icon hover animation for buttons with icons */
+.btn-primary svg,
+.btn-secondary svg {
+  transition: transform 150ms ease;
+}
+
+.btn-primary:hover svg,
+.btn-secondary:hover svg {
+  transform: translateX(2px);
+}
+
+/* Focus visible for accessibility */
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* Select dropdown styling */
+select {
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+select:hover:not(:disabled) {
+  border-color: var(--indigo);
+}
+select:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px var(--indigo-soft);
+}
