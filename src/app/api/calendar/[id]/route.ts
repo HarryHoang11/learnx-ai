@@ -15,7 +15,7 @@ import { deleteStudySession, updateStudySession } from "@/services/calendar.serv
 import type { ApiResponse, StudySessionStatus } from "@/types";
 
 interface RouteParams {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
@@ -23,21 +23,27 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
 
+    const { id } = await params;
+
     const body = await req.json();
-    const { title, subject, topic, startTime, endTime, status, progress } = body as {
+    const { title, subject, topic, description, learningGoalId, startTime, endTime, status, progress } = body as {
       title?: string;
       subject?: string;
       topic?: string;
+      description?: string;
+      learningGoalId?: string | null;
       startTime?: string;
       endTime?: string;
       status?: StudySessionStatus;
       progress?: number;
     };
 
-    const updated = await updateStudySession(params.id, userId, {
+    const updated = await updateStudySession(id, userId, {
       ...(title && { title }),
       ...(subject && { subject }),
       ...(topic !== undefined && { topic }),
+      ...(description !== undefined && { description }),
+      ...(learningGoalId !== undefined && { learningGoalId }),
       ...(startTime && { startTime: new Date(startTime) }),
       ...(endTime && { endTime: new Date(endTime) }),
       ...(status && { status }),
@@ -69,7 +75,8 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
 
-    const deleted = await deleteStudySession(params.id, userId);
+    const { id } = await params;
+    const deleted = await deleteStudySession(id, userId);
     if (!deleted) {
       return NextResponse.json<ApiResponse<never>>(
         { success: false, error: "Không tìm thấy buổi học này." },

@@ -16,13 +16,14 @@ import { processDocument } from "@/services/document.service";
 import { extractTextFromBuffer, UnsupportedFileTypeError } from "@/lib/documents/extractText";
 import type { ApiResponse } from "@/types";
 
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
 
+    const { id } = await params;
     const doc = await prisma.document.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { userId: true, status: true, fileType: true, fileData: true },
     });
 
@@ -65,24 +66,24 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
         err instanceof UnsupportedFileTypeError
           ? err.message
           : "Không thể đọc lại nội dung file gốc — file có thể bị hỏng.";
-      await prisma.document.update({ where: { id: params.id }, data: { status: "failed", errorMessage: message } });
+      await prisma.document.update({ where: { id }, data: { status: "failed", errorMessage: message } });
       return NextResponse.json<ApiResponse<never>>({ success: false, error: message }, { status: 400 });
     }
 
     await prisma.document.update({
-      where: { id: params.id },
+      where: { id },
       data: { status: "processing", errorMessage: null },
     });
 
     // Fire-and-forget giống hệt luồng upload — frontend quay lại polling
     // GET /api/documents để thấy status chuyển "processing" -> "ready"/"failed".
-    processDocument(params.id, extractedText).catch((err) =>
-      console.error(`[documents/retry] Xử lý lại document ${params.id} thất bại:`, err)
+    processDocument(id, extractedText).catch((err) =>
+      console.error(`[documents/retry] Xử lý lại document ${id} thất bại:`, err)
     );
 
     return NextResponse.json<ApiResponse<{ documentId: string }>>({
       success: true,
-      data: { documentId: params.id },
+      data: { documentId: id },
     });
   } catch (err) {
     console.error("[api/documents/:id/retry] Lỗi:", err);

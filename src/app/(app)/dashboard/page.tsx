@@ -9,7 +9,9 @@ import { useRouter } from "next/navigation";
 import Panel from "@/components/ui/Panel";
 import StatCard from "@/components/ui/StatCard";
 import StateMessage from "@/components/ui/StateMessage";
+import LevelProgressBar from "@/components/ui/LevelProgressBar";
 import TodaySchedule from "@/components/calendar/TodaySchedule";
+import { getLevelProgressDetails } from "@/lib/constants/xp";
 import type { ApiResponse, SkillMasteryPoint } from "@/types";
 
 interface ProgressData {
@@ -28,11 +30,16 @@ interface ProgressResponse {
   streak: { current: number; longest: number; lastLearningDay: string | null };
 }
 
+interface StreakResponse {
+  streak: { current: number; longest: number; lastLearningDay: string | null };
+  progress: ProgressResponse | null;
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [askValue, setAskValue] = useState("");
   const [progress, setProgress] = useState<ProgressData | null>(null);
-  const [xpData, setXpData] = useState<ProgressResponse | null>(null);
+  const [xpData, setXpData] = useState<StreakResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,7 +55,7 @@ export default function HomePage() {
 
     fetch("/api/streak")
       .then((res) => res.json())
-      .then((json: ApiResponse<ProgressResponse>) => {
+      .then((json: ApiResponse<StreakResponse>) => {
         if (json.success) setXpData(json.data);
       });
   }, []);
@@ -63,6 +70,12 @@ export default function HomePage() {
     .sort((a, b) => a.masteryPercent - b.masteryPercent)[0];
 
   const formatNumber = (num: number) => num.toLocaleString('vi-VN');
+
+  const xp = xpData?.progress;
+  const streak = xpData?.streak;
+  // Single source: % hiển thị suy từ lifetimeXP, đồng nhất với
+  // LevelProgressBar bên dưới (không dùng percent thô từ API).
+  const levelDetails = xp ? getLevelProgressDetails(xp.lifetimeXP) : null;
 
   return (
     <section>
@@ -108,42 +121,27 @@ export default function HomePage() {
       {loading && <StateMessage kind="loading" text="Đang tải dữ liệu học tập..." />}
       {error && <StateMessage kind="error" text={error} />}
 
-      {progress && xpData && (
+      {progress && xp && streak && (
         <>
           {/* XP / Level / LXP Stats */}
           <div className="grid-stats" style={{ marginBottom: 20 }}>
             <StatCard 
-              value={`Level ${xpData.level}`} 
-              label={`XP: ${formatNumber(xpData.lifetimeXP)}`} 
+              value={`Level ${levelDetails?.level ?? xp.level}`} 
+              label={`XP: ${formatNumber(xp.lifetimeXP)}`} 
             />
             <StatCard 
-              value={`${xpData.levelProgress.percent}%`} 
-              label={`Tới Level ${xpData.level + 1}`} 
+              value={`${levelDetails?.progressPercent ?? xp.levelProgress.percent}%`} 
+              label={`Tới Level ${(levelDetails?.level ?? xp.level) + 1}`} 
             />
             <StatCard 
-              value={`${formatNumber(xpData.lxpBalance)} LXP`} 
+              value={`${formatNumber(xp.lxpBalance)} LXP`} 
               label="LearnX Points" 
             />
-            <StatCard value={`🔥 ${xpData.streak.current}`} label={`${xpData.streak.longest} ngày dài nhất`} />
+            <StatCard value={`🔥 ${streak.current}`} label={`${streak.longest} ngày dài nhất`} />
           </div>
 
-          {/* XP Progress Bar */}
-          <Panel style={{ marginBottom: 24 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>
-                Level {xpData.level} → Level {xpData.level + 1}
-              </div>
-              <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>
-                {formatNumber(xpData.levelProgress.current)} / {formatNumber(xpData.levelProgress.next)} XP
-              </div>
-            </div>
-            <div className="bar-track" style={{ height: 12 }}>
-              <div 
-                className="bar-fill" 
-                style={{ width: `${xpData.levelProgress.percent}%`, background: "linear-gradient(90deg, var(--cyan), var(--indigo))" }} 
-              />
-            </div>
-          </Panel>
+          {/* XP Progress Bar — dùng component chung, cùng 1 công thức */}
+          <LevelProgressBar lifetimeXP={xp.lifetimeXP} />
 
           <div style={{ marginBottom: 28 }}>
             <TodaySchedule />

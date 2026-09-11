@@ -1,7 +1,10 @@
 // ================================================================
-// TRANG TIẾN ĐỘ (Progress) — Enhanced with XP/LXP/Level/Streak
+// TRANG TIẾN ĐỘ (Progress) — Level Hero ở đầu, stats phía dưới
 // ================================================================
-// Uses new /api/streak endpoint for comprehensive progress data
+// Hierarchy: Page title → LEVEL HERO → Stats → Skill Map / AI Insights.
+// Số liệu Level/XP suy ra từ lifetimeXP bằng getLevelProgressDetails
+// (single source of truth) — không render trực tiếp current/next thô
+// từ API để không bao giờ hiển thị số âm hay bar full khi XP = 0.
 // ================================================================
 
 "use client";
@@ -11,6 +14,8 @@ import Panel from "@/components/ui/Panel";
 import StatCard from "@/components/ui/StatCard";
 import SkillBar from "@/components/ui/SkillBar";
 import StateMessage from "@/components/ui/StateMessage";
+import LevelHero from "@/components/ui/LevelHero";
+import { getLevelProgressDetails } from "@/lib/constants/xp";
 import type { ApiResponse, SkillMasteryPoint } from "@/types";
 
 interface ProgressData {
@@ -35,6 +40,11 @@ interface ProgressResponse {
   streak: StreakData;
 }
 
+interface StreakResponse {
+  streak: StreakData;
+  progress: ProgressResponse;
+}
+
 export default function ProgressPage() {
   const [progress, setProgress] = useState<ProgressData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,7 +53,7 @@ export default function ProgressPage() {
   const [insight, setInsight] = useState<string | null>(null);
   const [insightLoading, setInsightLoading] = useState(true);
 
-  const [xpData, setXpData] = useState<ProgressResponse | null>(null);
+  const [xpData, setXpData] = useState<StreakResponse | null>(null);
   const [xpLoading, setXpLoading] = useState(true);
 
   useEffect(() => {
@@ -65,7 +75,7 @@ export default function ProgressPage() {
 
     fetch("/api/streak")
       .then((res) => res.json())
-      .then((json: ApiResponse<ProgressResponse>) => {
+      .then((json: ApiResponse<{ streak: StreakData; progress: ProgressResponse }>) => {
         if (json.success) setXpData(json.data);
       })
       .finally(() => setXpLoading(false));
@@ -75,59 +85,60 @@ export default function ProgressPage() {
   if (error) return <StateMessage kind="error" text={error} />;
   if (!progress) return null;
 
-  const formatNumber = (num: number) => num.toLocaleString('vi-VN');
+  const formatNumber = (num: number) => num.toLocaleString("vi-VN");
+
+  const xp = xpData?.progress;
+  const streak = xpData?.streak;
+  // Single source: mọi con số Level suy từ lifetimeXP, không dùng
+  // current/next thô từ API (chống drift khi API/backend cũ còn sót).
+  const levelDetails = xp ? getLevelProgressDetails(xp.lifetimeXP) : null;
+  const hasLearningData = progress.totalAttempts > 0;
 
   return (
-    <section>
-      <h2 style={{ fontSize: 20, marginBottom: 18 }}>Tiến độ học tập</h2>
+    <section className="page-enter">
+      <h2 className="page-title">Tiến độ học tập</h2>
 
-      {/* XP / Level / LXP Stats */}
-      {xpData && (
-        <div className="grid-stats" style={{ marginBottom: 24 }}>
-          <StatCard 
-            value={`Level ${xpData.level}`} 
-            label={`XP: ${formatNumber(xpData.lifetimeXP)}`} 
-          />
-          <StatCard 
-            value={`${xpData.levelProgress.percent}%`} 
-            label={`Tới Level ${xpData.level + 1} (${formatNumber(xpData.levelProgress.next)} XP)`} 
-          />
-          <StatCard 
-            value={`${formatNumber(xpData.lxpBalance)} LXP`} 
-            label="LearnX Points" 
-          />
-          <StatCard value={`🔥 ${xpData.streak.current}`} label={`${xpData.streak.longest} ngày dài nhất`} />
-        </div>
-      )}
-
-      <div className="grid-stats" style={{ marginBottom: 24 }}>
-        <StatCard value={progress.totalAttempts} label="Bài đã làm" />
-        <StatCard value={`${progress.accuracyPercent}%`} label="Độ chính xác" />
-        <StatCard value={progress.skillMap.length} label="Chủ đề đã theo dõi" />
-        <StatCard value={xpData ? formatNumber(xpData.lifetimeLXP) : "—"} label="Tổng LXP kiếm được" />
-      </div>
-
-      {/* XP Progress Bar */}
-      {xpData && (
+      {/* LEVEL HERO — vị trí nổi bật nhất, trên mọi stats */}
+      {xpLoading ? (
         <Panel style={{ marginBottom: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>
-              Level {xpData.level} → Level {xpData.level + 1}
-            </div>
-            <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>
-              {formatNumber(xpData.levelProgress.current)} / {formatNumber(xpData.levelProgress.next)} XP
-            </div>
-          </div>
-          <div className="bar-track" style={{ height: 12 }}>
-            <div 
-              className="bar-fill" 
-              style={{ width: `${xpData.levelProgress.percent}%`, background: "linear-gradient(90deg, var(--cyan), var(--indigo))" }} 
-            />
-          </div>
+          <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>Đang tải cấp độ...</p>
+        </Panel>
+      ) : xp && levelDetails ? (
+        <div className="enter enter--1">
+          <LevelHero lifetimeXP={xp.lifetimeXP} />
+        </div>
+      ) : (
+        <Panel style={{ marginBottom: 24 }}>
+          <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>
+            Chưa có dữ liệu cấp độ — hãy hoàn thành bài đầu tiên để bắt đầu tích XP.
+          </p>
         </Panel>
       )}
 
-      <div className="grid-progress" style={{ marginTop: 20 }}>
+      {/* Stats — secondary sau Level */}
+      {xp && streak && (
+        <div className="grid-stats enter enter--2" style={{ marginBottom: 24 }}>
+          <StatCard
+            value={`${formatNumber(xp.lxpBalance)} LXP`}
+            label="LearnX Points"
+          />
+          <StatCard value={`🔥 ${streak.current}`} label={`${streak.longest} ngày dài nhất`} />
+          <StatCard
+            value={hasLearningData ? progress.totalAttempts : "—"}
+            label={hasLearningData ? "Bài đã làm" : "Chưa làm bài nào"}
+          />
+          <StatCard
+            value={hasLearningData ? `${progress.accuracyPercent}%` : "—"}
+            label={hasLearningData ? "Độ chính xác" : "Làm bài để có thống kê"}
+          />
+          <StatCard value={progress.skillMap.length || "—"} label="Chủ đề đã theo dõi" />
+          <StatCard value={formatNumber(xp.lifetimeXP)} label="Tổng XP" />
+          <StatCard value={formatNumber(xp.lifetimeLXP)} label="Tổng LXP kiếm được" />
+          <StatCard value={`${streak.longest} ngày`} label="Streak dài nhất" />
+        </div>
+      )}
+
+      <div className="grid-progress enter enter--3" style={{ marginTop: 20 }}>
         <Panel>
           <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 10 }}>Bản đồ năng lực</div>
           {progress.skillMap.length === 0 ? (

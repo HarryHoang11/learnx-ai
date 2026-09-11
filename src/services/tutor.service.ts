@@ -8,7 +8,7 @@
 // ================================================================
 
 import { generateText } from "@/lib/ai/router";
-import { buildTutorSystemPrompt } from "@/lib/ai/prompts";
+import { buildSocraticPrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/db/prisma";
 import type { ChatMessage } from "@/types";
 
@@ -44,7 +44,7 @@ export async function sendTutorMessage(params: {
     { role: "user", content: params.userMessage, hintLevel: params.hintLevel },
   ];
 
-  const systemPrompt = buildTutorSystemPrompt(params.topic, params.hintLevel);
+  const systemPrompt = buildSocraticPrompt(params.topic, params.hintLevel);
 
   // Truyền vài lượt hội thoại gần nhất làm ngữ cảnh (không truyền cả
   // lịch sử để tránh vượt giới hạn token) — 6 tin nhắn gần nhất là đủ

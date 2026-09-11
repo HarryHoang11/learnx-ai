@@ -6,8 +6,17 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
-import { getMonthGrid, getLearningDaysForMonth } from "@/services/calendar.service";
+import { getMonthGrid, getLearningDaysForMonth, getMonthSessionsFor } from "@/services/calendar.service";
 import type { ApiResponse } from "@/types";
+
+// Date local YYYY-MM-DD — KHÔNG dùng toISOString() ở đây vì DateTime
+// trong DB mang giờ UTC, toISOString sẽ lệch ngày với múi giờ +07.
+function toLocalDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,17 +34,26 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const [grid, learningDays] = await Promise.all([
+    const [grid, learningDays, sessions] = await Promise.all([
       getMonthGrid(year, month),
       getLearningDaysForMonth(userId, year, month),
+      getMonthSessionsFor(userId, year, month),
     ]);
 
     // Create a Set of date strings for quick lookup
     const learnedDates = new Set(learningDays.map(d => d.date.toISOString().slice(0, 10)));
 
+    // Đếm session theo ngày local để vẽ dots trên lưới tháng.
+    const sessionCounts = new Map<string, number>();
+    for (const s of sessions) {
+      const key = toLocalDateStr(new Date(s.startTime));
+      sessionCounts.set(key, (sessionCounts.get(key) ?? 0) + 1);
+    }
+
     const gridWithIndicators = grid.map(day => ({
       ...day,
       isLearned: learnedDates.has(day.dateStr),
+      sessionCount: sessionCounts.get(day.dateStr) ?? 0,
     }));
 
     return NextResponse.json<ApiResponse<typeof gridWithIndicators>>({

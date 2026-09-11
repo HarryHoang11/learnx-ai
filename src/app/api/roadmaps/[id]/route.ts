@@ -17,12 +17,13 @@ import type { ApiResponse, GoalWithRoadmap, RoadmapStatus } from "@/types";
 
 const VALID_STATUSES: RoadmapStatus[] = ["ACTIVE", "COMPLETED", "ARCHIVED"];
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
 
-    const goal = await getGoalForUser(userId, params.id);
+    const { id } = await params;
+    const goal = await getGoalForUser(userId, id);
     if (!goal) {
       return NextResponse.json<ApiResponse<never>>(
         { success: false, error: "Không tìm thấy lộ trình." },
@@ -39,10 +40,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
+
+    const { id } = await params;
 
     const body = await req.json();
     const status = body.status as string | undefined;
@@ -54,7 +57,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       );
     }
 
-    const goal = await updateGoalStatus(userId, params.id, status as RoadmapStatus);
+    const goal = await updateGoalStatus(userId, id, status as RoadmapStatus);
     if (!goal) {
       // KHÔNG phân biệt "không tồn tại" vs "tồn tại nhưng của user
       // khác" — luôn trả 404 chung chung, đúng nguyên tắc ownership đã
@@ -75,15 +78,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
 
+    const { id } = await params;
+
     // deleteGoal() tự kiểm tra ownership (userId) trước khi xoá, trả
     // false nếu không tìm thấy/không thuộc user này — route KHÔNG bao
     // giờ cho phép xoá roadmap của user khác (đúng yêu cầu bảo mật).
-    const ok = await deleteGoal(userId, params.id);
+    const ok = await deleteGoal(userId, id);
     if (!ok) {
       return NextResponse.json<ApiResponse<never>>(
         { success: false, error: "Không tìm thấy lộ trình." },

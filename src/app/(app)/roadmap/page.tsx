@@ -27,6 +27,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
 import RoadmapCard from "@/components/roadmap/RoadmapCard";
+import RoadmapTaskDetail from "@/components/roadmap/RoadmapTaskDetail";
 import DeleteRoadmapDialog from "@/components/roadmap/DeleteRoadmapDialog";
 import type { ApiResponse, GoalWithRoadmap, RoadmapPlan } from "@/types";
 
@@ -251,7 +252,7 @@ export default function RoadmapPage() {
 
       {/* --- Timeline của lộ trình đang chọn (JSX gốc, giữ nguyên) --- */}
       {selectedGoal.plan ? (
-        <RoadmapTimeline plan={selectedGoal.plan} />
+        <RoadmapTimeline plan={selectedGoal.plan} goalId={selectedGoal.id} />
       ) : (
         <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>
           Lộ trình này chưa có kế hoạch chi tiết (có thể do AI xử lý lỗi lúc tạo).
@@ -297,7 +298,11 @@ export default function RoadmapPage() {
 // Timeline theo tháng — TÁCH NGUYÊN VẸN từ JSX gốc của trang (không
 // đổi 1 dòng logic/style nào), chỉ đặt vào component riêng để trang
 // chính không bị phình to khi thêm phần quản lý nhiều lộ trình.
-function RoadmapTimeline({ plan }: { plan: RoadmapPlan[] }) {
+// Bổ sung: bấm vào 1 topic để mở chi tiết (tài liệu + bài tập +
+// gợi ý + lên lịch) qua RoadmapTaskDetail.
+function RoadmapTimeline({ plan, goalId }: { plan: RoadmapPlan[]; goalId: string }) {
+  const [openTopic, setOpenTopic] = useState<string | null>(null);
+
   return (
     <div>
       {plan.map((m, idx) => (
@@ -327,13 +332,15 @@ function RoadmapTimeline({ plan }: { plan: RoadmapPlan[] }) {
             <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>{m.label}</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {m.topics.map((t) => (
-                <div
+                <button
                   key={t.name}
+                  onClick={() => setOpenTopic((prev) => (prev === t.name ? null : t.name))}
+                  title="Bấm để xem tài liệu, bài tập và lên lịch"
                   style={{
                     fontSize: 13,
                     padding: "7px 12px",
                     borderRadius: 9,
-                    background: "var(--panel-strong)",
+                    background: openTopic === t.name ? "var(--indigo-soft)" : "var(--panel-strong)",
                     border: `1px solid ${
                       t.status === "current" ? "var(--indigo)" : t.status === "done" ? "var(--cyan)" : "var(--border)"
                     }`,
@@ -345,12 +352,16 @@ function RoadmapTimeline({ plan }: { plan: RoadmapPlan[] }) {
                         : t.status === "locked"
                         ? "var(--text-faint)"
                         : "var(--text)",
+                    cursor: "pointer",
                   }}
                 >
                   {t.name}
-                </div>
+                </button>
               ))}
             </div>
+            {openTopic && m.topics.some((t) => t.name === openTopic) && (
+              <RoadmapTaskDetail goalId={goalId} topic={openTopic} />
+            )}
           </div>
         </div>
       ))}

@@ -13,6 +13,8 @@ export interface StudySessionInput {
   title: string;
   subject: string;
   topic?: string;
+  description?: string;
+  learningGoalId?: string | null;
   startTime: Date;
   endTime: Date;
 }
@@ -174,10 +176,42 @@ export async function getMonthSessionsFor(userId: string, year: number, month: n
   return getSessionsInRange(userId, start, end);
 }
 
+// --- Get sessions for an arbitrary week containing `date` (Mon–Sun) ---
+export async function getWeekSessionsFor(userId: string, date: Date) {
+  const day = date.getDay(); // 0 = CN
+  const diffToMonday = day === 0 ? 6 : day - 1;
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - diffToMonday);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+  return getSessionsInRange(userId, start, end);
+}
+
+// --- Get sessions for a single day (YYYY-MM-DD, local timezone) ---
+export async function getDaySessions(userId: string, dateStr: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    throw new Error("Ngày không hợp lệ (định dạng YYYY-MM-DD).");
+  }
+  const start = parseDateString(dateStr);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return getSessionsInRange(userId, start, end);
+}
+
 // --- Tạo 1 buổi học mới ---
+// Nếu gắn learningGoalId thì verify goal thuộc về đúng user để chống
+// IDOR (user A gắn session vào goal của user B).
 export async function createStudySession(userId: string, input: StudySessionInput) {
   if (input.endTime <= input.startTime) {
     throw new Error("Thời gian kết thúc phải sau thời gian bắt đầu.");
+  }
+  if (input.learningGoalId) {
+    const goal = await prisma.learningGoal.findFirst({
+      where: { id: input.learningGoalId, userId },
+      select: { id: true },
+    });
+    if (!goal) throw new Error("Lộ trình liên kết không tồn tại.");
   }
   return prisma.studySession.create({
     data: {
@@ -185,6 +219,8 @@ export async function createStudySession(userId: string, input: StudySessionInpu
       title: input.title,
       subject: input.subject,
       topic: input.topic,
+      description: input.description,
+      learningGoalId: input.learningGoalId,
       startTime: input.startTime,
       endTime: input.endTime,
     },
@@ -192,6 +228,9 @@ export async function createStudySession(userId: string, input: StudySessionInpu
 }
 
 // --- Sửa 1 buổi học ---
+// CHỈ lần chuyển trạng thái sang COMPLETED đầu tiên mới ghi XP/streak
+// (qua recordLearningActivity) — mở/xem/reschedule/delete không farm
+// được XP, và complete lặp lại cũng không cộng thêm.
 export async function updateStudySession(
   id: string,
   userId: string,
@@ -200,10 +239,34 @@ export async function updateStudySession(
   const existing = await prisma.studySession.findFirst({ where: { id, userId } });
   if (!existing) return null;
 
-  return prisma.studySession.update({
+  if (data.learningGoalId) {
+    const goal = await prisma.learningGoal.findFirst({
+      where: { id: data.learningGoalId, userId },
+      select: { id: true },
+    });
+    if (!goal) throw new Error("Lộ trình liên kết không tồn tại.");
+  }
+
+  const updated = await prisma.studySession.update({
     where: { id },
     data,
   });
+
+  const justCompleted = existing.status !== "COMPLETED" && updated.status === "COMPLETED";
+  if (justCompleted) {
+    const { recordLearningActivity } = await import("@/services/learning-activity.service");
+    await recordLearningActivity({
+      userId,
+      type: "study_session_completed",
+      difficulty: "medium",
+      scorePercent: 100,
+      isFirstCompletion: true,
+      sourceId: updated.id,
+      sourceType: "study_session",
+    });
+  }
+
+  return updated;
 }
 
 export async function deleteStudySession(id: string, userId: string) {

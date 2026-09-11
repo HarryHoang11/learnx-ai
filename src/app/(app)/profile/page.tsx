@@ -12,9 +12,20 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
+import LevelProgressBar from "@/components/ui/LevelProgressBar";
 import ProfileHeader from "@/components/profile/ProfileHeader";
 import EditProfileModal from "@/components/profile/EditProfileModal";
 import type { ApiResponse, UserProfile } from "@/types";
+
+interface StreakResponse {
+  streak: { current: number; longest: number; lastLearningDay: string | null };
+  progress: {
+    lifetimeXP: number;
+    lifetimeLXP: number;
+    lxpBalance: number;
+    level: number;
+  } | null;
+}
 
 export default function ProfilePage() {
   // update(): hàm của next-auth để yêu cầu refresh lại session hiện
@@ -23,6 +34,7 @@ export default function ProfilePage() {
   // Topbar/FloatingAIButton không đổi theo khi đổi avatar ở trang này.
   const { update: updateSession } = useSession();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [lifetimeXP, setLifetimeXP] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -36,6 +48,17 @@ export default function ProfilePage() {
       })
       .catch(() => setError("Không thể kết nối tới máy chủ."))
       .finally(() => setLoading(false));
+
+    // Tái dùng API streak sẵn có (không đổi contract) chỉ để lấy
+    // lifetimeXP cho thanh Level — lỗi thì đơn giản không hiện thanh.
+    fetch("/api/streak")
+      .then((res) => res.json())
+      .then((json: ApiResponse<StreakResponse>) => {
+        if (json.success && typeof json.data.progress?.lifetimeXP === "number") {
+          setLifetimeXP(json.data.progress.lifetimeXP);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   if (loading) return <StateMessage kind="loading" text="Đang tải hồ sơ..." />;
@@ -84,6 +107,8 @@ export default function ProfilePage() {
           {profile.bio || "Chưa có tiểu sử — bấm \"Chỉnh sửa trang cá nhân\" để thêm vài dòng giới thiệu về bạn."}
         </p>
       </Panel>
+
+      {lifetimeXP !== null && <LevelProgressBar lifetimeXP={lifetimeXP} />}
 
       {isEditing && (
         <EditProfileModal

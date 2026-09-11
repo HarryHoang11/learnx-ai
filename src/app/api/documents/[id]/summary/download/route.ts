@@ -130,11 +130,13 @@ async function generateDOCX(fileName: string, summary: string): Promise<Uint8Arr
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
+
+    const { id } = await params;
 
     const body = await req.json();
     const format = body.format as Format;
@@ -147,7 +149,7 @@ export async function POST(
     }
 
     const doc = await prisma.document.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { userId: true, fileName: true, summary: true },
     });
 

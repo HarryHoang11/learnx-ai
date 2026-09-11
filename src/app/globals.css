@@ -635,3 +635,358 @@ select:focus {
   border-color: var(--cyan);
   box-shadow: 0 0 0 3px var(--indigo-soft);
 }
+
+/* ================================================================
+   DESIGN SYSTEM — Level Hero / Sidebar / Topbar / Entrance
+   ================================================================
+   Mạch tư duy: mọi style bổ sung cho đợt UI upgrade nằm gọn trong
+   khối này, tái dùng tokens :root ở trên — không hard-code màu mới.
+   Animation chỉ dùng transform/opacity (tránh layout thrashing),
+   không animation vô hạn, tôn trọng prefers-reduced-motion.
+   ================================================================ */
+
+/* --------- Page title hierarchy --------- */
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 18px;
+}
+
+/* --------- Level Hero --------- */
+.level-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  padding: 26px 28px;
+  margin-bottom: 24px;
+  background:
+    linear-gradient(135deg, rgba(124, 108, 240, 0.14), rgba(53, 208, 216, 0.08)),
+    var(--panel-strong);
+  border: 1px solid rgba(124, 108, 240, 0.28);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 32px rgba(124, 108, 240, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.level-hero__glow {
+  position: absolute;
+  inset: -60px -40px auto auto;
+  width: 340px;
+  height: 220px;
+  background: radial-gradient(closest-side, rgba(124, 108, 240, 0.28), transparent);
+  pointer-events: none;
+}
+
+.level-hero__row {
+  position: relative;
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+
+.level-hero__badge {
+  flex-shrink: 0;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--indigo), var(--cyan));
+  box-shadow: 0 0 24px rgba(124, 108, 240, 0.45), inset 0 0 0 3px rgba(255, 255, 255, 0.18);
+  color: #0a0e16;
+}
+
+.level-hero__badge-num {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.level-hero__badge-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  margin-top: 4px;
+  opacity: 0.75;
+}
+
+.level-hero__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.level-hero__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.level-hero__level {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.level-hero__title {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.level-hero__xp {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.level-hero__gain {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0a0e16;
+  background: linear-gradient(135deg, var(--cyan), #7cf0e6);
+  animation: gain-pop 0.45s ease;
+}
+
+@keyframes gain-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.level-hero__track {
+  height: 14px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.level-hero__fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--cyan), var(--indigo));
+  box-shadow: 0 0 12px rgba(53, 208, 216, 0.5);
+}
+
+.level-hero__bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.level-hero__percent {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.level-hero__levelup {
+  color: var(--cyan);
+  font-weight: 700;
+}
+
+/* Level-up: badge pulse ngắn 1 lần, không lặp vô hạn */
+.level-hero--leveled .level-hero__badge {
+  animation: badge-pulse 0.9s ease;
+}
+
+@keyframes badge-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 24px rgba(124, 108, 240, 0.45);
+  }
+  35% {
+    transform: scale(1.08);
+    box-shadow: 0 0 44px rgba(53, 208, 216, 0.65);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 24px rgba(124, 108, 240, 0.45);
+  }
+}
+
+@media (max-width: 640px) {
+  .level-hero {
+    padding: 20px;
+  }
+  .level-hero__row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .level-hero__badge {
+    width: 72px;
+    height: 72px;
+  }
+  .level-hero__badge-num {
+    font-size: 24px;
+  }
+  .level-hero__top {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .level-hero__xp {
+    text-align: left;
+  }
+}
+
+/* --------- Sidebar grouping --------- */
+.sidebar-group-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 0 12px;
+  margin-bottom: 6px;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.sidebar-link:hover {
+  color: var(--text);
+  background: var(--panel);
+  transform: translateX(2px);
+}
+
+.sidebar-link--active {
+  color: var(--text);
+  background: var(--panel-strong);
+  border-color: var(--border);
+}
+
+.sidebar-link:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+.sidebar-logo {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--indigo), var(--cyan));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  color: #0a0e16;
+  transition: transform 150ms ease;
+}
+
+a:hover .sidebar-logo {
+  transform: scale(1.05);
+}
+
+/* --------- Topbar: sticky gọn --------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+  padding: 10px 0;
+  background: linear-gradient(var(--bg) 70%, transparent);
+}
+
+/* --------- Page entrance: stagger nhẹ, không lạm dụng --------- */
+.page-enter .enter {
+  opacity: 0;
+  animation: page-rise 0.45s ease forwards;
+}
+
+.page-enter .enter--1 {
+  animation-delay: 0.03s;
+}
+
+.page-enter .enter--2 {
+  animation-delay: 0.12s;
+}
+
+.page-enter .enter--3 {
+  animation-delay: 0.2s;
+}
+
+@keyframes page-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --------- Card hover: border glow nhẹ --------- */
+.panel {
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+a .panel:hover,
+button .panel:hover {
+  border-color: rgba(124, 108, 240, 0.35);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
+}
+
+/* --------- Focus chung cho accessibility --------- */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* --------- Tôn trọng reduced motion --------- */
+@media (prefers-reduced-motion: reduce) {
+  .page-enter .enter,
+  .level-hero__gain,
+  .level-hero--leveled .level-hero__badge {
+    animation: none;
+    opacity: 1;
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .sidebar-link,
+  .panel {
+    transition: none;
+  }
+}

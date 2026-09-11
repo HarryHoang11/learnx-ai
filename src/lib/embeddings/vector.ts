@@ -149,3 +149,25 @@ export async function searchSimilarChunks(
   `;
   return rows;
 }
+
+// Tìm chunk gần nhất ở các tài liệu KHÁC (phục vụ phát hiện trùng lặp).
+// Khác với searchSimilarChunks (chỉ tìm trong 1 document cho RAG),
+// hàm này loại trừ document hiện tại và trả kèm documentId để biết
+// chunk giống nhất thuộc về tài liệu nào.
+export async function searchSimilarChunksAcrossDocuments(
+  excludeDocumentId: string,
+  query: string,
+  topK = 5
+): Promise<{ documentId: string; content: string; chunkIndex: number }[]> {
+  const queryEmbedding = await embedText(query, TaskType.RETRIEVAL_QUERY);
+  const vectorLiteral = `[${queryEmbedding.join(",")}]`;
+
+  const rows = await prisma.$queryRaw<{ documentId: string; content: string; chunkIndex: number }[]>`
+    SELECT "documentId", content, "chunkIndex"
+    FROM "DocumentChunk"
+    WHERE "documentId" <> ${excludeDocumentId}
+    ORDER BY embedding <-> ${vectorLiteral}::vector
+    LIMIT ${topK}
+  `;
+  return rows;
+}

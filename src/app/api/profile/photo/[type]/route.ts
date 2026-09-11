@@ -23,9 +23,10 @@ type PhotoType = "avatar" | "cover";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { type: string } },
+  { params }: { params: Promise<{ type: string }> },
 ) {
-  const type = params.type as PhotoType;
+  const { type: rawType } = await params;
+  const type = rawType as PhotoType;
 
   if (type !== "avatar" && type !== "cover") {
     return NextResponse.json(

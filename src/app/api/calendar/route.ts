@@ -18,10 +18,12 @@ export async function POST(req: NextRequest) {
     if (!userId) return unauthorizedResponse();
 
     const body = await req.json();
-    const { title, subject, topic, startTime, endTime } = body as {
+    const { title, subject, topic, description, learningGoalId, startTime, endTime } = body as {
       title?: string;
       subject?: string;
       topic?: string;
+      description?: string;
+      learningGoalId?: string;
       startTime?: string;
       endTime?: string;
     };
@@ -42,7 +44,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const session = await createStudySession(userId, { title, subject, topic, startTime: start, endTime: end });
+    const session = await createStudySession(userId, {
+      title,
+      subject,
+      topic,
+      description: description || undefined,
+      learningGoalId: learningGoalId || undefined,
+      startTime: start,
+      endTime: end,
+    });
     return NextResponse.json<ApiResponse<typeof session>>({ success: true, data: session });
   } catch (err) {
     console.error("[api/calendar POST] Lỗi:", err);

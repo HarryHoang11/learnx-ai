@@ -16,12 +16,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
   if (!userId) return unauthorizedResponse();
 
+  const { id } = await params;
   const doc = await prisma.document.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: { userId: true, fileName: true, fileData: true, mimeType: true },
   });
 

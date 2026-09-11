@@ -28,11 +28,11 @@ model User {
   lxpBalance     Int                @default(0)
   level          Int                @default(1)
   accounts       Account[]
-  achievements   Achievement[]
   assessments    Assessment[]
   attempts       Attempt[]
   conversations  Conversation[]
   documents      Document[]
+  communityDocuments CommunityDocument[]
   goals          LearningGoal[]
   progress       LearningProgress[]
   roadmaps       Roadmap[]
@@ -44,6 +44,29 @@ model User {
   streak         Streak?
   dailyChallenges DailyChallenge[]
   userRewards    UserReward[]
+  mindMaps       MindMap[]
+  reviewItems    ReviewItem[]
+  reviewAttempts ReviewAttempt[]
+  learningAgentPlans LearningAgentPlan[]
+  learningAgentTasks LearningAgentTask[]
+  tutorSessions  TutorSession[]
+  diagnosticSessions DiagnosticSession[]
+  learningActivities LearningActivity[]
+  userAchievements UserAchievement[]
+  aiRequestLogs  AIRequestLog[]
+  contributorProfile ContributorProfile?
+  contributionEvents ContributionEvent[]
+  documentRatings DocumentRating[]
+  documentVotes   DocumentVote[]
+  documentReports DocumentReport[]
+  documentSaves   DocumentSave[]
+  sentFriendRequests     Friendship[] @relation("FriendRequester")
+  receivedFriendRequests Friendship[] @relation("FriendAddressee")
+  learningResources      LearningResource[]
+  resourceRatings        ResourceRating[]
+  resourceReports        ResourceReport[]
+  createdExercises       Exercise[] @relation("ExerciseAuthor")
+  exerciseAttempts       ExerciseAttempt[]
 }
 
 model Account {
@@ -96,16 +119,21 @@ model LearningGoal {
   createdAt    DateTime      @default(now())
   user         User          @relation(fields: [userId], references: [id])
   roadmaps     Roadmap[]
+  roadmapLinks RoadmapResource[]
+  studySessions StudySession[]
 }
 
 model Assessment {
-  id          String    @id @default(cuid())
-  userId      String
-  status      String    @default("in_progress")
-  startedAt   DateTime  @default(now())
-  completedAt DateTime?
-  user        User      @relation(fields: [userId], references: [id])
-  attempts    Attempt[]
+  id                String    @id @default(cuid())
+  userId            String
+  status            String    @default("in_progress")
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+  user              User      @relation(fields: [userId], references: [id])
+  attempts          Attempt[]
+  diagnosticSessions DiagnosticSession[]
+
+  @@index([userId])
 }
 
 model Attempt {
@@ -175,6 +203,7 @@ model Document {
   updatedAt  DateTime        @updatedAt
   user       User            @relation(fields: [userId], references: [id])
   chunks     DocumentChunk[]
+  mindMaps   MindMap[]
 }
 
 model DocumentChunk {
@@ -189,30 +218,258 @@ model DocumentChunk {
 }
 
 model StudySession {
-  id        String             @id @default(cuid())
-  userId    String
-  title     String
-  subject   String
-  topic     String?
-  startTime DateTime
-  endTime   DateTime
-  status    StudySessionStatus @default(PENDING)
-  progress  Int                @default(0)
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String             @id @default(cuid())
+  userId         String
+  title          String
+  description    String?
+  subject        String
+  topic          String?
+  // Liên kết tới LearningGoal khi session được lên lịch từ Roadmap —
+  // optional để các session tạo tay không bắt buộc có goal.
+  learningGoalId String?
+  startTime      DateTime
+  endTime        DateTime
+  status         StudySessionStatus @default(PENDING)
+  progress       Int                @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  learningGoal   LearningGoal?      @relation(fields: [learningGoalId], references: [id], onDelete: SetNull)
 
   @@index([userId, startTime])
+  @@index([learningGoalId])
 }
 
 model Achievement {
-  id       String   @id @default(cuid())
-  userId   String
-  code     String
-  earnedAt DateTime @default(now())
-  user     User     @relation(fields: [userId], references: [id])
+  id          String   @id @default(cuid())
+  code        String   @unique
+  title       String
+  description String
+  icon        String?
+  category    String
+  xpReward    Int      @default(0)
+  lxpReward   Int      @default(0)
+  metadata    Json?
+  createdAt   DateTime @default(now())
 
-  @@unique([userId, code])
+  userAchievements UserAchievement[]
+
+  @@index([category])
+}
+
+model UserAchievement {
+  id             String      @id @default(cuid())
+  userId         String
+  achievementId  String
+  unlockedAt     DateTime    @default(now())
+  metadata       Json?
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement    Achievement     @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId, unlockedAt])
+}
+
+model MindMap {
+  id                String   @id @default(cuid())
+  userId            String
+  title             String
+  description       String?
+  sourceDocumentId  String?
+  subject           String?
+  topic             String?
+  data              Json
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceDocument    Document? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([sourceDocumentId])
+  @@index([userId, updatedAt])
+}
+
+model ReviewItem {
+  id                String   @id @default(cuid())
+  userId            String
+  subject           String?
+  topic             String
+  concept           String?
+  sourceType        String?
+  sourceId          String?
+  prompt            String
+  answer            String?
+  metadata          Json?
+  difficulty        Float    @default(0.5)
+  easeFactor        Float    @default(2.5)
+  intervalDays      Int      @default(0)
+  repetitions       Int      @default(0)
+  lapses            Int      @default(0)
+  lastReviewedAt    DateTime?
+  nextReviewAt      DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attempts        ReviewAttempt[]
+
+  @@index([userId])
+  @@index([userId, nextReviewAt])
+  @@index([userId, topic])
+  @@index([userId, nextReviewAt, difficulty])
+}
+
+model ReviewAttempt {
+  id              String      @id @default(cuid())
+  reviewItemId    String
+  userId          String
+  rating          Int
+  correct         Boolean
+  response        String?
+  timeSpentSec    Int?
+  previousInterval Int?
+  newInterval      Int?
+  reviewedAt      DateTime    @default(now())
+
+  reviewItem      ReviewItem  @relation(fields: [reviewItemId], references: [id], onDelete: Cascade)
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([reviewItemId])
+  @@index([userId, reviewedAt])
+}
+
+model LearningAgentPlan {
+  id           String   @id @default(cuid())
+  userId       String
+  title        String
+  goal         String
+  status       String   @default("active")
+  startDate    DateTime @default(now())
+  targetDate   DateTime?
+  currentPhase Int      @default(1)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks        LearningAgentTask[]
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, targetDate])
+}
+
+model LearningAgentTask {
+  id           String   @id @default(cuid())
+  planId       String
+  userId       String
+  title        String
+  description  String?
+  type         String
+  topic        String?
+  priority     Int      @default(0)
+  status       String   @default("pending")
+  dueDate      DateTime?
+  completedAt  DateTime?
+  estimatedMinutes Int    @default(30)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  plan         LearningAgentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@index([userId])
+  @@index([userId, dueDate])
+  @@index([userId, status])
+}
+
+model TutorSession {
+  id                String   @id @default(cuid())
+  userId            String
+  topic             String?
+  subject           String?
+  mode              String   @default("socratic")
+  difficulty        Float    @default(0.5)
+  hintsUsed         Int      @default(0)
+  correctAnswers    Int      @default(0)
+  incorrectAnswers  Int      @default(0)
+  startedAt         DateTime @default(now())
+  completedAt       DateTime?
+  metadata          Json?
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, startedAt])
+}
+
+model DiagnosticSession {
+  id                String    @id @default(cuid())
+  userId            String
+  assessmentId      String?
+  subject           String?
+  topic             String?
+  status            String    @default("in_progress")
+  currentDifficulty Float     @default(0.5)
+  totalQuestions    Int       @default(0)
+  answeredQuestions Int       @default(0)
+  correctAnswers    Int       @default(0)
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+  result            Json?
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assessment        Assessment? @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, status])
+}
+
+model LearningActivity {
+  id           String   @id @default(cuid())
+  userId       String
+  type         String
+  subject      String?
+  topic        String?
+  sourceType   String?
+  sourceId     String?
+  xpAwarded    Int      @default(0)
+  lxpAwarded   Int      @default(0)
+  metadata     Json?
+  occurredAt   DateTime @default(now())
+  eventKey     String?  @unique
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, occurredAt])
+  @@index([userId, type, occurredAt])
+  @@index([userId, topic, occurredAt])
+}
+
+model AIRequestLog {
+  id           String    @id @default(cuid())
+  userId       String?
+  role         String
+  task         String
+  provider     String
+  model        String
+  status       String
+  latencyMs    Int?
+  fallbackUsed Boolean   @default(false)
+  inputTokens  Int?
+  outputTokens Int?
+  errorCode    String?
+  metadata     Json?
+  createdAt    DateTime  @default(now())
+
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([provider, model, createdAt])
+  @@index([role, createdAt])
+  @@index([status, createdAt])
 }
 
 model LearningDay {
@@ -366,4 +623,489 @@ enum RoadmapStatus {
   ACTIVE
   COMPLETED
   ARCHIVED
+}
+
+enum SubjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum DocumentVisibility {
+  PRIVATE
+  COMMUNITY
+  MODERATION
+  REJECTED
+}
+
+enum DocumentStatus {
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum ReportReason {
+  WRONG_INFO
+  SPAM
+  DUPLICATE
+  MISLEADING
+  INAPPROPRIATE
+  COPYRIGHT
+  WRONG_SUBJECT
+  OTHER
+}
+
+enum ContributionEventType {
+  UPLOAD_ACCEPTED
+  QUALITY_BONUS
+  HELPFUL_VOTE
+  DOWNLOAD_REWARD
+  SAVE_REWARD
+  DUPLICATE_PENALTY
+  REPORT_PENALTY
+  MODERATOR_ADJUSTMENT
+  DAILY_CAP
+  WEEKLY_CAP
+}
+
+enum DocumentTrustLevel {
+  NEW
+  COMMUNITY_VERIFIED
+  HIGH_QUALITY
+  NEEDS_REVIEW
+  LOW_QUALITY
+}
+
+model Subject {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  icon        String?
+  color       String?
+  order       Int      @default(0)
+  status      SubjectStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  topics      SubjectTopic[]
+  documents   CommunityDocument[]
+
+  @@index([status])
+  @@index([order])
+}
+
+model SubjectTopic {
+  id          String   @id @default(cuid())
+  subjectId   String
+  name        String
+  slug        String
+  description String?
+  parentId    String?
+  order       Int      @default(0)
+  status      SubjectStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subject     Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  parent      SubjectTopic?    @relation("TopicHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    SubjectTopic[]   @relation("TopicHierarchy")
+  documents   CommunityDocument[]
+
+  @@unique([subjectId, slug])
+  @@index([subjectId])
+  @@index([parentId])
+  @@index([status])
+}
+
+model CommunityDocument {
+  id              String             @id @default(cuid())
+  ownerId         String
+  subjectId       String?
+  topicId         String?
+  title           String
+  description     String?
+  fileName        String
+  fileType        String
+  fileSize        Int
+  status          DocumentStatus     @default(PROCESSING)
+  visibility      DocumentVisibility @default(PRIVATE)
+  summary         String?
+  errorMessage    String?
+  fileData        Bytes?
+  mimeType        String?
+  
+  // Quality & Trust
+  qualityScore    Float              @default(0)
+  trustScore      Float              @default(0)
+  trustLevel      DocumentTrustLevel @default(NEW)
+  aiQuality       Json?
+  aiEvaluatedAt   DateTime?
+  
+  // Engagement
+  viewCount       Int                @default(0)
+  downloadCount   Int                @default(0)
+  saveCount       Int                @default(0)
+  ratingSum       Int                @default(0)
+  ratingCount     Int                @default(0)
+  helpfulVotes    Int                @default(0)
+  reportCount     Int                @default(0)
+  
+  // Metadata
+  difficulty      String?
+  language        String?            @default("vi")
+  grade           String?
+  tags            String[]
+  version         Int                @default(1)
+  previousVersionId String?          @unique
+  
+  // Timestamps
+  uploadedAt      DateTime           @default(now())
+  publishedAt     DateTime?
+  lastViewedAt    DateTime?
+  qualityEvaluatedAt DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  owner           User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  subject         Subject?           @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  topic           SubjectTopic?      @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  ratings         DocumentRating[]
+  reports         DocumentReport[]
+  saves           DocumentSave[]
+  votes           DocumentVote[]
+  previousVersion CommunityDocument? @relation("DocumentVersions", fields: [previousVersionId], references: [id])
+  nextVersion     CommunityDocument? @relation("DocumentVersions")
+  quality         DocumentQuality?
+  duplicateOf     CommunityDocument? @relation("DocumentDuplicates", fields: [id], references: [id], map: "duplicate_fk")
+  duplicates      CommunityDocument[] @relation("DocumentDuplicates")
+  learningResources LearningResource[]
+
+  @@index([ownerId])
+  @@index([subjectId])
+  @@index([topicId])
+  @@index([status])
+  @@index([visibility])
+  @@index([trustLevel])
+  @@index([qualityScore])
+  @@index([uploadedAt])
+  @@index([publishedAt])
+  @@index([ownerId, visibility])
+  @@index([subjectId, trustLevel])
+}
+
+model DocumentRating {
+  id          String   @id @default(cuid())
+  userId      String
+  documentId  String
+  rating      Int
+  review      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document    CommunityDocument  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, documentId])
+  @@index([documentId])
+  @@index([userId])
+}
+
+model DocumentVote {
+  id          String   @id @default(cuid())
+  userId      String
+  documentId  String
+  helpful     Boolean
+  createdAt   DateTime @default(now())
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document    CommunityDocument  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, documentId])
+  @@index([documentId])
+  @@index([userId])
+}
+
+model DocumentReport {
+  id          String       @id @default(cuid())
+  userId      String
+  documentId  String
+  reason      ReportReason
+  description String?
+  status      String       @default("pending")
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document    CommunityDocument    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([userId])
+  @@index([status])
+}
+
+model DocumentQuality {
+  id                String   @id @default(cuid())
+  documentId        String   @unique
+  clarity           Float?
+  structure         Float?
+  completeness      Float?
+  educationalValue  Float?
+  accuracyConfidence Float?
+  difficultyAccuracy Float?
+  topicRelevance    Float?
+  duplicateSimilarity Float?
+  aiEvaluatedAt     DateTime
+  aiModel           String?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  document          CommunityDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model DocumentSave {
+  id          String   @id @default(cuid())
+  userId      String
+  documentId  String
+  createdAt   DateTime @default(now())
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document    CommunityDocument  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, documentId])
+  @@index([userId])
+  @@index([documentId])
+}
+
+model ContributorProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  contributionPoints Int    @default(0)
+  level           Int      @default(1)
+  totalUploads    Int      @default(0)
+  totalQuality    Float    @default(0)
+  avgQuality      Float    @default(0)
+  helpfulVotes    Int      @default(0)
+  totalDownloads  Int      @default(0)
+  totalSaves      Int      @default(0)
+  totalReports    Int      @default(0)
+  currentStreak   Int      @default(0)
+  longestStreak   Int      @default(0)
+  lastContributionAt DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events          ContributionEvent[]
+
+  @@index([contributionPoints])
+  @@index([level])
+}
+
+model ContributionEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  profileId   String?
+  type        ContributionEventType
+  points      Int
+  documentId  String?
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile     ContributorProfile?  @relation(fields: [profileId], references: [userId])
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([type])
+}
+
+model ContributionLeaderboard {
+  id              String   @id @default(cuid())
+  period          String   // "weekly", "monthly", "alltime"
+  periodStart     DateTime
+  periodEnd       DateTime
+  userId          String
+  rank            Int
+  contributionPoints Int
+  totalUploads    Int
+  avgQuality      Float
+  helpfulVotes    Int
+  createdAt       DateTime @default(now())
+
+  @@unique([period, periodStart, userId])
+  @@index([period, rank])
+  @@index([periodStart, periodEnd])
+}
+
+// ================================================================
+// SOCIAL + LEARNING RESOURCES + EXERCISES (Phase Friends/Resources)
+// ================================================================
+// Mạch tư duy: Friendship giữ hướng requester->addressee để UX phân
+// biệt "đã gửi" / "được nhận"; tính đối xứng (A-B duy nhất) được
+// đảm bảo ở service (kiểm tra cả 2 chiều) vì unique DB chỉ chặn
+// trùng đúng 1 chiều — xem friendship.service.ts.
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model Friendship {
+  id          String           @id @default(cuid())
+  requesterId String
+  addresseeId String
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  requester User @relation("FriendRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@index([requesterId, status])
+  @@index([addresseeId, status])
+}
+
+enum ResourceType {
+  ARTICLE
+  VIDEO
+  DOCUMENTATION
+  DOCUMENT
+  WEBSITE
+  EXERCISE_SET
+  OTHER
+}
+
+enum ResourceStatus {
+  ACTIVE
+  HIDDEN
+  REMOVED
+}
+
+model LearningResource {
+  id                  String         @id @default(cuid())
+  contributorId       String
+  title               String
+  description         String?
+  subject             String?
+  topic               String?
+  difficulty          String?
+  type                ResourceType
+  url                 String?
+  communityDocumentId String?        @unique
+  ratingSum           Int            @default(0)
+  ratingCount         Int            @default(0)
+  usageCount          Int            @default(0)
+  qualityScore        Float          @default(0)
+  reportCount         Int            @default(0)
+  status              ResourceStatus @default(ACTIVE)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  contributor       User               @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  communityDocument CommunityDocument? @relation(fields: [communityDocumentId], references: [id], onDelete: SetNull)
+  ratings           ResourceRating[]
+  reports           ResourceReport[]
+  roadmapLinks      RoadmapResource[]
+
+  @@index([subject, topic])
+  @@index([type])
+  @@index([qualityScore])
+  @@index([status])
+  @@index([contributorId])
+}
+
+model ResourceRating {
+  id         String   @id @default(cuid())
+  userId     String
+  resourceId String
+  rating     Int
+  review     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resource LearningResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, resourceId])
+  @@index([resourceId])
+}
+
+model ResourceReport {
+  id          String       @id @default(cuid())
+  userId      String
+  resourceId  String
+  reason      ReportReason
+  description String?
+  status      String       @default("pending")
+  createdAt   DateTime     @default(now())
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resource LearningResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@index([resourceId])
+  @@index([status])
+}
+
+model RoadmapResource {
+  id             String   @id @default(cuid())
+  learningGoalId String
+  topic          String
+  kind           String   @default("LEARN")
+  resourceId     String?
+  exerciseId     String?
+  createdAt      DateTime @default(now())
+
+  goal     LearningGoal      @relation(fields: [learningGoalId], references: [id], onDelete: Cascade)
+  resource LearningResource? @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  exercise Exercise?          @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@index([learningGoalId, topic])
+  @@index([resourceId])
+  @@index([exerciseId])
+}
+
+model Exercise {
+  id             String   @id @default(cuid())
+  createdById    String?
+  title          String
+  subject        String
+  topic          String
+  difficulty     String   @default("medium")
+  statement      String
+  constraints    String?
+  examples       Json?
+  expectedOutput String?
+  xpReward       Int      @default(20)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  author       User?             @relation("ExerciseAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  attempts     ExerciseAttempt[]
+  roadmapLinks RoadmapResource[]
+
+  @@index([subject, topic])
+  @@index([difficulty])
+  @@index([createdById])
+}
+
+model ExerciseAttempt {
+  id         String   @id @default(cuid())
+  userId     String
+  exerciseId String
+  answer     String
+  isCorrect  Boolean  @default(false)
+  score      Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@index([userId, exerciseId])
+  @@index([exerciseId, createdAt])
 }

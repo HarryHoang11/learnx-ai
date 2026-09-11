@@ -45,10 +45,12 @@ interface DocumentDetailRow {
   updatedAt: Date;
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
+
+    const { id: documentId } = await params;
 
     // $queryRaw thay vì findUnique + select fileData: true — tránh tải
     // nguyên bytes file gốc (có thể vài MB) chỉ để kiểm tra có/không,
@@ -59,7 +61,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         ("fileData" IS NOT NULL) AS "hasOriginalFile",
         "uploadedAt", "updatedAt"
       FROM "Document"
-      WHERE "id" = ${params.id}
+      WHERE "id" = ${documentId}
       LIMIT 1
     `;
     const doc = rows[0];

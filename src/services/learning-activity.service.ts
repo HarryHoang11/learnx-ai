@@ -131,6 +131,18 @@ async function checkAndUpdateDailyChallenge(tx: any, userId: string, activityTyp
     daily_mission: 'mission',
     weekly_mission: 'mission',
     mastery_milestone: 'mastery',
+    achievement_unlocked: 'achievement',
+    tutor_session_completed: 'tutor',
+    mindmap_created: 'mindmap',
+    document_analyzed: 'document',
+    reflection_completed: 'reflection',
+    task_completed: 'task',
+    diagnostic_completed: 'diagnostic',
+    roadmap_completed: 'roadmap',
+    review_completed: 'review',
+    // Hoàn thành 1 buổi học tính như hoạt động lesson cho daily
+    // challenge (mỗi session chỉ complete/XP 1 lần ở calendar.service).
+    study_session_completed: 'lesson',
   };
 
   if (challengeMap[activityType] !== challenge.challengeType) return;

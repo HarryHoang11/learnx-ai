@@ -44,7 +44,7 @@ export interface RoadmapPlan {
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
-  hintLevel?: 0 | 1 | 2 | 3; // 0 = chưa gợi ý, 1=🟢 2=🟡 3=🔴 (xem lib/ai/prompts.ts)
+  hintLevel?: 0 | 1 | 2 | 3 | 4 | 5; // 0 = chưa gợi ý, 1=🟢 2=🟡 3=🔴 4=🟣 5=🟤 (xem lib/ai/prompts.ts)
 }
 
 // Trạng thái 1 buổi học trong lịch — định nghĩa lại ở đây (thay vì
@@ -100,4 +100,117 @@ export interface UserProfile {
   bio: string | null;
   image: string | null;
   coverImage: string | null;
+}
+
+// --- LEARNING AGENT TYPES ---
+export type AgentPlanStatus = "draft" | "active" | "paused" | "completed" | "archived";
+
+export type AgentTaskType = 
+  | "diagnostic"
+  | "lesson"
+  | "practice"
+  | "review"
+  | "mindmap"
+  | "roadmap"
+  | "reflection";
+
+export type AgentTaskStatus = 
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "skipped"
+  | "cancelled";
+
+export interface LearningAgentPlan {
+  id: string;
+  userId: string;
+  title: string;
+  goal: string;
+  status: AgentPlanStatus;
+  startDate: Date | string;
+  targetDate?: Date | string;
+  currentPhase: number;
+  metadata?: any;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  tasks?: LearningAgentTask[];
+}
+
+export interface LearningAgentTask {
+  id: string;
+  planId: string;
+  userId: string;
+  title: string;
+  description?: string;
+  type: AgentTaskType;
+  topic?: string;
+  priority: number;
+  status: AgentTaskStatus;
+  dueDate?: Date | string;
+  completedAt?: Date | string;
+  estimatedMinutes: number;
+  metadata?: any;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+// Môn học kèm danh sách chủ đề — khớp với response của
+// GET /api/community/subjects?includeTopics=true và props của
+// SubjectFilter/SubjectTopicItem.
+export interface SubjectTopicItem {
+  id: string;
+  name: string;
+  icon?: string | null;
+}
+
+export interface SubjectWithTopics {
+  id: string;
+  name: string;
+  icon?: string | null;
+  topics?: SubjectTopicItem[];
+}
+
+// Bộ lọc trang duyệt tài liệu cộng đồng — dùng chung cho state
+// filters ở community/page.tsx để tránh `any`.
+export interface BrowseFilters {
+  subjectId: string;
+  topicId: string;
+  difficulty: string;
+  language: string;
+  grade: string;
+  search: string;
+  sortBy: string;
+  trustLevel: string;
+  page: number;
+  limit: number;
+}
+
+// Tài liệu cộng đồng kèm relations — khớp với Prisma CommunityDocument
+// + các field tính toán mà service trả về (averageRating, userRating...).
+// Định nghĩa tập trung ở đây để DocumentCard/DocumentDetail/page dùng chung.
+export interface CommunityDocumentWithRelations {
+  id: string;
+  title: string;
+  description?: string | null;
+  fileName: string;
+  difficulty?: string | null;
+  language?: string | null;
+  qualityScore: number;
+  trustScore: number;
+  trustLevel: string;
+  averageRating: number;
+  ratingCount: number;
+  helpfulVotes: number;
+  viewCount: number;
+  downloadCount: number;
+  saveCount: number;
+  tags: string[];
+  summary?: string | null;
+  aiQuality?: Record<string, number> | null;
+  aiEvaluatedAt?: Date | string | null;
+  uploadedAt: Date | string;
+  publishedAt?: Date | string | null;
+  owner: { id: string; name?: string | null; nickname?: string | null; image?: string | null };
+  subject?: { icon?: string | null; name: string } | null;
+  topic?: { icon?: string | null; name: string } | null;
 }
