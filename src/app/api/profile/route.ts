@@ -19,7 +19,7 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, name: true, nickname: true, email: true, bio: true, image: true, coverImage: true },
+      select: { id: true, name: true, nickname: true, email: true, bio: true, image: true, coverImage: true, language: true },
     });
 
     if (!user) return unauthorizedResponse();
@@ -49,6 +49,15 @@ export async function PATCH(req: NextRequest) {
     const name = typeof body.name === "string" ? body.name.trim() : undefined;
     const nickname = typeof body.nickname === "string" ? body.nickname.trim() : undefined;
     const bio = typeof body.bio === "string" ? body.bio.trim() : undefined;
+    // Ngôn ngữ UI — chỉ nhận đúng 2 giá trị, giá trị lạ thì 400 thay vì
+    // lưu bừa vào DB (tránh state ngôn ngữ không bao giờ render được).
+    const language = body.language === "vi" || body.language === "en" ? body.language : undefined;
+    if (body.language !== undefined && language === undefined) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "Ngôn ngữ không hợp lệ (chỉ nhận vi/en)." },
+        { status: 400 }
+      );
+    }
 
     // Validate BIO length ở tầng server — KHÔNG chỉ tin giới hạn
     // maxLength của <textarea> phía client, vì request có thể được gửi
@@ -75,8 +84,9 @@ export async function PATCH(req: NextRequest) {
         // khác với name (không cho rỗng, đã chặn ở trên).
         ...(nickname !== undefined && { nickname: nickname || null }),
         ...(bio !== undefined && { bio: bio || null }),
+        ...(language !== undefined && { language }),
       },
-      select: { id: true, name: true, nickname: true, email: true, bio: true, image: true, coverImage: true },
+      select: { id: true, name: true, nickname: true, email: true, bio: true, image: true, coverImage: true, language: true },
     });
 
     return NextResponse.json<ApiResponse<UserProfile>>({ success: true, data: user });

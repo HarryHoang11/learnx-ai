@@ -30,14 +30,43 @@ import DocumentCard from "@/components/documents/DocumentCard";
 import DocumentDetailModal, { type LibraryDocument } from "@/components/documents/DocumentDetailModal";
 import type { ApiResponse } from "@/types";
 
+// Khớp Phase 2 (môn học) + chuẩn difficulty easy/medium/hard dùng chung
+// toàn project (type Difficulty, form upload cộng đồng).
+const SUBJECT_OPTIONS = [
+  "Toán",
+  "Vật lý",
+  "Hóa học",
+  "Sinh học",
+  "Tin học",
+  "Tiếng Anh",
+  "Ngữ văn",
+  "Lịch sử",
+  "Địa lý",
+  "Khác",
+];
+
+const DIFFICULTY_OPTIONS = [
+  { value: "easy", label: "Dễ" },
+  { value: "medium", label: "Trung bình" },
+  { value: "hard", label: "Khó" },
+];
+
 export default function LibraryPage() {
   const [docs, setDocs] = useState<LibraryDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadStage, setUploadStage] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [openDocId, setOpenDocId] = useState<string | null>(null);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  // File đã chọn nhưng chưa upload — hiện form metadata (môn/chủ đề/độ
+  // khó) trước khi gửi, đúng spec upload (Phase 9).
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [metaSubject, setMetaSubject] = useState("");
+  const [metaTopic, setMetaTopic] = useState("");
+  const [metaDifficulty, setMetaDifficulty] = useState("medium");
+  const [metaDescription, setMetaDescription] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -80,26 +109,53 @@ export default function LibraryPage() {
     };
   }, []);
 
-  async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+  function handleFileSelect(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadError(null);
+    setPendingFile(file);
+  }
+
+  function cancelPending() {
+    setPendingFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function handleUpload() {
+    if (!pendingFile || uploading) return;
+    if (!metaSubject) {
+      setUploadError("Vui lòng chọn môn học cho tài liệu.");
+      return;
+    }
 
     setUploading(true);
     setUploadError(null);
+    // Upload là 1 POST duy nhất nhưng server làm 2 việc thật nối tiếp:
+    // nhận bytes + validate + trích xuất text — label phản ánh đúng để
+    // user không tưởng app treo với file lớn. Sau đó poll trạng thái
+    // "processing" (chunk + embedding + tóm tắt AI) cho tới ready/failed.
+    setUploadStage("Đang tải lên & kiểm tra file...");
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", pendingFile);
+      formData.append("subject", metaSubject);
+      if (metaTopic.trim()) formData.append("topic", metaTopic.trim());
+      formData.append("difficulty", metaDifficulty);
+      if (metaDescription.trim()) formData.append("description", metaDescription.trim());
 
       const res = await fetch("/api/documents/upload", { method: "POST", body: formData });
       const json: ApiResponse<{ documentId: string }> = await res.json();
       if (!json.success) throw new Error(json.error);
 
+      setUploadStage("Đang trích xuất & phân tích nội dung...");
       await loadDocs();
       ensurePolling();
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Không thể upload tài liệu.");
     } finally {
       setUploading(false);
+      setUploadStage(null);
+      setPendingFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
@@ -140,15 +196,94 @@ export default function LibraryPage() {
           cursor: uploading ? "not-allowed" : "pointer",
         }}
       >
-        {uploading ? "Đang tải lên..." : "⇧ Chọn PDF, Word, PowerPoint hoặc ảnh — LearnX sẽ tự tạo tóm tắt"}
+        {/* Chỉ nhận đúng định dạng pipeline hỗ trợ (.txt/.md/.pdf/
+            .docx/.pptx) — trước đây label mời cả "ảnh" nhưng ảnh luôn
+            fail extraction, gây hiểu nhầm "upload lỗi". */}
+        {uploading ? (uploadStage ?? "Đang tải lên...") : "⇧ Chọn PDF, Word, PowerPoint hoặc Text — LearnX sẽ tự tạo tóm tắt"}
         <input
           ref={fileInputRef}
           type="file"
-          onChange={handleFileChange}
+          accept=".pdf,.docx,.doc,.pptx,.ppt,.txt,.md"
+          onChange={handleFileSelect}
           disabled={uploading}
           style={{ display: "none" }}
         />
       </label>
+
+      {/* Form metadata hiện sau khi chọn file, trước khi upload thật —
+          đúng spec: File + Subject (bắt buộc) + Topic + Difficulty +
+          Description. */}
+      {pendingFile && !uploading && (
+        <Panel style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, wordBreak: "break-word" }}>
+            {pendingFile.name}
+          </div>
+          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 12 }}>
+            {(pendingFile.size / 1024).toFixed(0)} KB — khai báo thông tin để LearnX gợi ý đúng
+          </div>
+          <div className="grid-form-2col" style={{ marginBottom: 10 }}>
+            <div>
+              <label className="form-label" htmlFor="doc-subject">Môn học *</label>
+              <select
+                id="doc-subject"
+                className="form-input"
+                value={metaSubject}
+                onChange={(e) => setMetaSubject(e.target.value)}
+                required
+              >
+                <option value="">— Chọn môn —</option>
+                {SUBJECT_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="form-label" htmlFor="doc-difficulty">Độ khó</label>
+              <select
+                id="doc-difficulty"
+                className="form-input"
+                value={metaDifficulty}
+                onChange={(e) => setMetaDifficulty(e.target.value)}
+              >
+                {DIFFICULTY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <label className="form-label" htmlFor="doc-topic">Chủ đề (tùy chọn)</label>
+            <input
+              id="doc-topic"
+              className="form-input"
+              value={metaTopic}
+              onChange={(e) => setMetaTopic(e.target.value)}
+              placeholder="vd: Phương trình bậc hai"
+              maxLength={120}
+            />
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label className="form-label" htmlFor="doc-desc">Mô tả (tùy chọn)</label>
+            <textarea
+              id="doc-desc"
+              className="form-textarea"
+              value={metaDescription}
+              onChange={(e) => setMetaDescription(e.target.value)}
+              placeholder="Nội dung chính của tài liệu..."
+              rows={2}
+              maxLength={500}
+            />
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" className="btn-primary" onClick={handleUpload}>
+              Tải lên
+            </button>
+            <button type="button" className="btn-secondary" onClick={cancelPending}>
+              Hủy
+            </button>
+          </div>
+        </Panel>
+      )}
 
       {uploadError && (
         <div style={{ marginBottom: 14 }}>

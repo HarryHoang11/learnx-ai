@@ -86,7 +86,12 @@ function minutesOfDay(iso: string): number {
 export default function CalendarPage() {
   const router = useRouter();
   const [view, setView] = useState<View>("week");
-  const [anchor, setAnchor] = useState(() => toDateStr(new Date()));
+  // anchor = null cho tới khi mount ở client. KHÔNG khởi tạo bằng
+  // new Date() trong useState: giá trị đó chạy cả ở server (SSR) lẫn
+  // client, mà múi giờ server ≠ trình duyệt (vd server UTC, user +07)
+  // là tiêu đề render khác nhau → hydration mismatch thật, mỗi sáng
+  // 00:00–07:00 giờ VN. useEffect chỉ chạy ở client nên luôn đúng TZ.
+  const [anchor, setAnchor] = useState<string | null>(null);
   const [sessions, setSessions] = useState<StudySessionDto[] | null>(null);
   const [monthGrid, setMonthGrid] = useState<CalendarDayDto[] | null>(null);
   const [goals, setGoals] = useState<GoalOption[]>([]);
@@ -96,6 +101,7 @@ export default function CalendarPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   async function load() {
+    if (anchor === null) return;
     setError(null);
     try {
       if (view === "month") {
@@ -129,6 +135,7 @@ export default function CalendarPage() {
 
   // Goals cho dropdown "gắn lộ trình" trong form tạo session.
   useEffect(() => {
+    setAnchor((a) => a ?? toDateStr(new Date()));
     fetch("/api/roadmaps")
       .then((res) => res.json())
       .then((json: ApiResponse<GoalOption[]>) => {
@@ -138,6 +145,7 @@ export default function CalendarPage() {
   }, []);
 
   useEffect(() => {
+    if (anchor === null) return;
     setSessions(null);
     setMonthGrid(null);
     load();
@@ -145,7 +153,7 @@ export default function CalendarPage() {
   }, [view, anchor]);
 
   function shift(days: number) {
-    setAnchor((a) => addDays(a, days));
+    setAnchor((a) => (a === null ? a : addDays(a, days)));
   }
 
   function goToToday() {
@@ -164,13 +172,19 @@ export default function CalendarPage() {
 
   const selected = selectedId ? sessions?.find((s) => s.id === selectedId) ?? null : null;
 
-  const anchorDate = parseDateStr(anchor);
-  const title =
-    view === "month"
-      ? `Tháng ${anchorDate.getMonth() + 1}/${anchorDate.getFullYear()}`
-      : view === "week"
-        ? `Tuần ${mondayOf(anchor).slice(8, 10)}/${mondayOf(anchor).slice(5, 7)} – ${addDays(mondayOf(anchor), 6).slice(8, 10)}/${addDays(mondayOf(anchor), 6).slice(5, 7)}`
-        : `Ngày ${anchorDate.getDate()}/${anchorDate.getMonth() + 1}/${anchorDate.getFullYear()}`;
+  // Tiêu đề ổn định giữa SSR và client: khi anchor còn null (chưa
+  // mount) thì hiện chữ tĩnh "Lịch học" ở cả hai phía — không bao giờ
+  // render ngày tháng khác nhau giữa server/client.
+  const title = (() => {
+    if (anchor === null) return "Lịch học";
+    const anchorDate = parseDateStr(anchor);
+    if (view === "month") return `Tháng ${anchorDate.getMonth() + 1}/${anchorDate.getFullYear()}`;
+    if (view === "week") {
+      const mon = mondayOf(anchor);
+      return `Tuần ${mon.slice(8, 10)}/${mon.slice(5, 7)} – ${addDays(mon, 6).slice(8, 10)}/${addDays(mon, 6).slice(5, 7)}`;
+    }
+    return `Ngày ${anchorDate.getDate()}/${anchorDate.getMonth() + 1}/${anchorDate.getFullYear()}`;
+  })();
 
   return (
     <section>
@@ -229,10 +243,10 @@ export default function CalendarPage() {
       {view === "month" && monthGrid && (
         <MonthCalendarView days={monthGrid} onOpenDay={openDay} />
       )}
-      {view === "week" && sessions && (
+      {view === "week" && sessions && anchor !== null && (
         <WeekView weekStart={mondayOf(anchor)} sessions={sessions} onSelect={setSelectedId} />
       )}
-      {view === "day" && sessions && (
+      {view === "day" && sessions && anchor !== null && (
         <DayView
           dateStr={anchor}
           sessions={sessions}

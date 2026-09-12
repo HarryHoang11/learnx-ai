@@ -11,6 +11,8 @@
 
 import { useState } from "react";
 import { downloadSummaryAsMarkdown } from "@/lib/documents/downloadSummary";
+import { describeDocumentError } from "@/lib/documents/docErrors";
+import { useToast } from "@/components/ui/Toast";
 import type { LibraryDocument } from "./DocumentDetailModal";
 
 interface DocumentCardProps {
@@ -49,6 +51,7 @@ type Format = typeof FORMATS[number]['value'];
 
 export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: DocumentCardProps) {
   const [showFormatModal, setShowFormatModal] = useState(false);
+  const { push } = useToast();
 
   async function handleDownload(format: Format) {
     setShowFormatModal(false);
@@ -75,7 +78,7 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Download failed:', err);
-      alert(err instanceof Error ? err.message : 'Không thể tải file, thử lại sau');
+      push("error", err instanceof Error ? err.message : 'Không thể tải file, thử lại sau');
     }
   }
 
@@ -107,6 +110,30 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
 
       <StatusLine status={doc.status} />
 
+      {/* Metadata học tập khai lúc upload — phục vụ nhận biết/lọc nhanh. */}
+      {(doc.subject || doc.topic || doc.difficulty) && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }} aria-label="Thông tin tài liệu">
+          {doc.subject && (
+            <span style={{ fontSize: 11.5, background: "var(--indigo-soft)", color: "var(--indigo)", padding: "3px 9px", borderRadius: 99, fontWeight: 600 }}>
+              {doc.subject}
+            </span>
+          )}
+          {doc.topic && (
+            <span style={{ fontSize: 11.5, background: "var(--panel-strong)", border: "1px solid var(--border)", color: "var(--text-dim)", padding: "3px 9px", borderRadius: 99 }}>
+              {doc.topic}
+            </span>
+          )}
+          {doc.difficulty && (
+            <span style={{ fontSize: 11.5, background: "var(--cyan-soft)", color: "var(--cyan)", padding: "3px 9px", borderRadius: 99 }}>
+              {doc.difficulty === "easy" ? "Dễ" : doc.difficulty === "hard" ? "Khó" : "Trung bình"}
+            </span>
+          )}
+        </div>
+      )}
+      {doc.description && (
+        <div style={{ fontSize: 12.5, color: "var(--text-dim)", lineHeight: 1.55 }}>{doc.description}</div>
+      )}
+
       {doc.status === "ready" && doc.summary && (
         <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>
           <span style={{ color: "var(--text-faint)" }}>Tóm tắt: </span>
@@ -133,11 +160,15 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
 
       {doc.status === "failed" && (
         <div style={{ marginTop: 4 }}>
+          {/* Nguyên nhân CỤ THỂ suy từ error code lưu DB (PDF hỏng /
+              scan / quá lớn / AI quá tải...) + gợi ý khắc phục — không
+              bao giờ hiện "File bị khóa" mơ hồ. */}
+          <FailedCause errorMessage={doc.errorMessage} />
           <button
             className="btn-secondary"
             onClick={onRetry}
             disabled={retrying}
-            style={{ fontSize: 12.5, padding: "7px 14px", opacity: retrying ? 0.6 : 1 }}
+            style={{ fontSize: 12.5, padding: "7px 14px", opacity: retrying ? 0.6 : 1, marginTop: 8 }}
           >
             {retrying ? "Đang thử lại..." : "Thử lại"}
           </button>
@@ -188,6 +219,26 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function FailedCause({ errorMessage }: { errorMessage: string | null }) {
+  const { userMessage, suggestion } = describeDocumentError(errorMessage);
+  return (
+    <div
+      role="alert"
+      style={{
+        fontSize: 12.5,
+        lineHeight: 1.6,
+        background: "rgba(239,106,125,0.08)",
+        border: "1px solid rgba(239,106,125,0.3)",
+        borderRadius: 8,
+        padding: "9px 12px",
+      }}
+    >
+      <div style={{ fontWeight: 600, color: "var(--rose)" }}>Không thể xử lý: {userMessage}</div>
+      <div style={{ color: "var(--text-dim)", marginTop: 2 }}>Gợi ý: {suggestion}</div>
     </div>
   );
 }

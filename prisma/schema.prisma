@@ -27,6 +27,9 @@ model User {
   lifetimeLXP    Int                @default(0)
   lxpBalance     Int                @default(0)
   level          Int                @default(1)
+  // Ngôn ngữ UI của user ("vi" | "en") — Topbar switcher lưu vào đây
+  // (kèm localStorage để có ngay trước khi session tải xong).
+  language       String             @default("vi")
   accounts       Account[]
   assessments    Assessment[]
   attempts       Attempt[]
@@ -108,6 +111,11 @@ model LearningGoal {
   userId       String
   title        String
   targetMonths Int
+  // Metadata phục vụ Skill Gap: môn học, kết quả mong muốn (vd "IELTS
+  // 7.0"), hạn hoàn thành. Nullable để goal cũ vẫn hợp lệ.
+  subject       String?
+  targetOutcome String?
+  deadline      DateTime?
   // Lifecycle của 1 "lộ trình" theo góc nhìn người dùng (1 LearningGoal
   // = 1 card trong "Lộ trình của tôi", vd "C++ → OLP"). Đặt ở đây thay
   // vì ở Roadmap vì mỗi lần AI tái sinh plan chỉ tạo thêm 1 bản ghi
@@ -191,6 +199,12 @@ model Document {
   fileType   String
   status     String          @default("processing")
   summary    String?
+  // Metadata học tập do user khai lúc upload (subject bắt buộc nếu
+  // dùng cho hệ thống học tập) — phục vụ lọc/tìm kiếm/gợi ý.
+  subject     String?
+  topic       String?
+  difficulty  String?
+  description String?
   // Lý do lỗi thật (status="failed") — dùng cho debug/log và API detail,
   // KHÔNG hiển thị raw ra UI (xem library/page.tsx, DocumentCard.tsx).
   errorMessage String?
@@ -211,6 +225,9 @@ model DocumentChunk {
   documentId String
   content    String
   chunkIndex Int
+  // Số trang PDF chứa chunk này (null với txt/md/docx/pptx và chunk cũ
+  // tạo trước migration) — phục vụ trích dẫn nguồn theo trang cho RAG.
+  pageNumber Int?
   embedding  Unsupported("vector")?
   document   Document               @relation(fields: [documentId], references: [id])
 

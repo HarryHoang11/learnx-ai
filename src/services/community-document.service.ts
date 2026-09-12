@@ -172,7 +172,7 @@ async function processDocument(documentId: string): Promise<void> {
     // Single entry point that selects the extractor by fileType
     // (see extractText.ts) — do NOT branch on mimeType here.
     const { extractTextFromBuffer } = await import("@/lib/documents/extractText");
-    const text = await extractTextFromBuffer(document.fileData, document.fileType);
+    const { text } = await extractTextFromBuffer(document.fileData, document.fileType);
 
     if (!text.trim()) {
       await prisma.communityDocument.update({

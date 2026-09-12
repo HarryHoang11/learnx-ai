@@ -39,6 +39,22 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const goalTitle = body.goalTitle as string | undefined;
     const targetMonths = body.targetMonths as number | undefined;
+    const subject = typeof body.subject === "string" && body.subject.trim() !== "" ? body.subject.trim().slice(0, 60) : null;
+    const targetOutcome =
+      typeof body.targetOutcome === "string" && body.targetOutcome.trim() !== ""
+        ? body.targetOutcome.trim().slice(0, 200)
+        : null;
+    let deadline: Date | null = null;
+    if (typeof body.deadline === "string" && body.deadline !== "") {
+      const parsed = new Date(body.deadline);
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json<ApiResponse<never>>(
+          { success: false, error: "Deadline không hợp lệ (cần YYYY-MM-DD)." },
+          { status: 400 }
+        );
+      }
+      deadline = parsed;
+    }
 
     if (!goalTitle || !targetMonths) {
       return NextResponse.json<ApiResponse<never>>(
@@ -50,7 +66,7 @@ export async function POST(req: NextRequest) {
     // KHÔNG kiểm tra/giới hạn số lượng goal hiện có của user — đây
     // chính là yêu cầu cốt lõi: "Không được giới hạn user chỉ có một
     // roadmap". Goal/roadmap cũ hoàn toàn không bị đụng tới.
-    const goal = await createGoalWithRoadmap({ userId, goalTitle, targetMonths });
+    const goal = await createGoalWithRoadmap({ userId, goalTitle, targetMonths, subject, targetOutcome, deadline });
     return NextResponse.json<ApiResponse<GoalWithRoadmap>>({ success: true, data: goal });
   } catch (err) {
     console.error("[api/roadmaps] Lỗi tạo lộ trình mới:", err);

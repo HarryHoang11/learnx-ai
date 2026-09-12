@@ -288,3 +288,241 @@ npm run dev
 - **`STORAGE_BUCKET_URL`/`STORAGE_BUCKET_KEY`** được khai báo dự phòng nhưng chưa có code nào đọc cho **tài liệu Library** — file gốc học sinh upload (Document) chưa được lưu bền vững ngoài chunk đã xử lý.
 - **Avatar/cover (Trang cá nhân) lưu vào `public/uploads/` trên đĩa cục bộ** (`lib/storage/localUpload.ts`), KHÔNG persistent khi deploy serverless/nhiều instance — cần thay bằng S3/Supabase Storage thật khi lên production (signature hàm giữ nguyên, chỉ cần đổi phần thân hàm).
 - **`icon.png` là favicon TĨNH**, không còn dùng `next/og` `ImageResponse` — lý do: bug đã biết của Next.js 14.2.x + `@vercel/og` trên Windows (`ERR_INVALID_URL` khi tự tải font mặc định), né hoàn toàn bằng cách dùng file ảnh tĩnh thay vì sinh động bằng code.
+
+---
+
+## 10. UI/UX & Learning Experience Upgrade (đợt nâng cấp)
+
+### 10.1. Math rendering (KaTeX) — ưu tiên cao nhất
+
+- Dependency mới duy nhất: `katex` (MIT). Cài bằng `npm install katex --legacy-peer-deps`
+  (flag cần thiết vì `next-auth@5.0.0-beta.25` khai báo peer `next@^14||^15` trong khi
+  project dùng `next@16` — xung đột có sẵn, không do KaTeX gây ra; xem mục 10.6).
+- `src/components/math/SafeMath.tsx` — **nơi duy nhất** render công thức. Hỗ trợ
+  `$$..$$` block, `\[..\]` block, `\(..\)` inline, `$..$` inline (single-`$` chỉ render
+  khi ruột có dấu hiệu toán học để không nuốt ký hiệu tiền tệ). `throwOnError: false`
+  nên công thức lỗi cú pháp rơi về text — không bao giờ trắng trang.
+- An toàn: text thường qua React node (tự escape); chỉ HTML do chính KaTeX sinh ra mới
+  qua `dangerouslySetInnerHTML`. `renderToString` thuần túy nên SSR/client đồng nhất,
+  không hydration mismatch. Mỗi công thức có `role="img"` + `aria-label` LaTeX gốc.
+- Đã nối vào: tutor chat (`ChatBubble`, chỉ tin nhắn AI), tóm tắt tài liệu
+  (`MarkdownLite` — tách math TRƯỚC rồi mới format bold/code), câu hỏi + đáp án
+  diagnostic, đề bài `ExerciseSolver`.
+- `lib/ai/prompts.ts`: thêm `MATH_FORMAT_RULE` vào prompt Socratic, sinh câu hỏi,
+  diagnostic — AI ra LaTeX đúng delimiters, mỗi đáp án là 1 công thức trọn vẹn.
+- CSS KaTeX nạp 1 lần ở root layout (`katex/dist/katex.min.css`, font woff2 đóng gói
+  local, không hotlink). Khối display cuộn ngang trên mobile (`.math-block`).
+- Test: `src/components/math/__tests__/splitMathSegments.test.ts` (6 cases).
+
+### 10.2. Typography & Level system
+
+- Font nạp thêm subset `vietnamese` (Inter + Space Grotesk đều hỗ trợ) — trước đây chỉ
+  `latin` nên chữ Việt rơi về font hệ thống. Token mới `--font-code` thống nhất cho code.
+- Level/XP: `xpToReachLevel(1) = 0` (trước đây = 100 nên user mới hiện `-55%`,
+  `-100/182 XP`). `getLevelProgress` ủy thác cho `getLevelProgressDetails` — 1 nguồn
+  sự thật cho API và mọi UI. Ngưỡng Level 2+ giữ nguyên nên level user cũ không đổi.
+- `LevelHero` (đầu trang Tiến độ) + `LevelProgressBar` (bản gọn): animate 0→thật lúc
+  mount bằng rAF, `role="progressbar"`, tôn trọng `prefers-reduced-motion`.
+
+### 10.3. Design primitives & feedback
+
+- `Skeleton`, `EmptyState`, Toast system (`ToastProvider` ở `(app)/layout`, `useToast()`),
+  `useCountUp` (animate số XP). Toast thay thế `alert()` trong modal tài liệu.
+- Dashboard thành trung tâm học tập: lịch hôm nay (có sẵn) + ôn tập đến hạn
+  (`/api/review/due`) + học tiếp (`/api/roadmaps`, goal ACTIVE đầu tiên) + tổng quan
+  năng lực (Vững/Đang học/Cần củng cố từ skillMap) + hoạt động gần đây
+  (`/api/xp/history`) + XP counter animate. Không hardcode, empty state đầy đủ.
+
+### 10.4. Mind Map (backend đã có, bổ sung UI)
+
+- Backend có sẵn: `GET/POST /api/mindmap`, `POST /api/mindmap/generate`. Mới thêm:
+  `PUT /api/mindmap/[id]` (lưu sau khi sửa node, verify ownership chống IDOR).
+- Trang `/mindmap`: không `?id=` → danh sách mind map của user; có `?id=` → cây thu
+  gọn/mở rộng, zoom, tìm kiếm + highlight, sửa/thêm/xóa node (xóa cả nhánh con, cấm
+  xóa root), Lưu (PUT), Export JSON. Vào sidebar nhóm Tài nguyên.
+- Modal tóm tắt tài liệu: nút “🧠 Tạo Mind Map” → generate → chuyển sang trang mind map.
+- Chủ ý không dùng React Flow: cây phân cấp tự vẽ đủ expand/collapse/zoom/pan
+  (cuộn)/search/highlight, nhẹ hơn nhiều và không thêm dependency.
+
+### 10.5. Community save/download
+
+- 2 nút `Lưu`/`Tải` ở trang Community trước đây là `TODO` chết — đã nối API thật:
+  `POST .../save` (lạc quan + rollback khi lỗi) và `POST .../download` (track + trả
+  bytes, tải qua blob, không hotlink).
+
+### 10.6. Điểm mở còn lại (sau đợt này)
+
+- `npm install` cần `--legacy-peer-deps` do xung đột peer có sẵn
+  (`next-auth@5.0.0-beta.25` vs `next@16`). Nên nâng cấp `next-auth` hoặc `next` để
+  khớp trong 1 PR riêng.
+- Script `npm run lint` hỏng sẵn (Next 16 bỏ `next lint`) — kiểm tra bằng
+  `npx eslint <file>` trực tiếp; nên đổi script sang `eslint .`.
+- Cảnh báo `middleware` deprecated (Next 16 muốn `proxy`) — chưa migrate vì rủi ro auth.
+- Review submissions UI: API `/api/review/*` đầy đủ nhưng chưa có trang `/review`
+  riêng — dashboard hiện dẫn sang `/practice` để ôn.
+- Chưa có minimap cho Mind Map (ghi rõ là optional).
+
+### 10.7. Kiểm tra sau đợt nâng cấp
+
+```bash
+npm test            # 21 passed (15 AI router + 6 math segmenter)
+npx tsc --noEmit    # PASS
+npx eslint <file>   # PASS (0 errors trên mọi file đã chạm)
+npm run build       # PASS (83+ routes)
+```
+
+---
+
+## 11. Document pipeline — audit & nâng cấp độ tin cậy
+
+### 11.1. Kết luận audit (dựa trên code, không đoán)
+
+- **KHÔNG phải file locking**: pipeline không chạm filesystem — bytes đi
+  `FormData → Buffer → cột DB Bytes`. Chỗ duy nhất ghi file là avatar/cover.
+  Lần duy nhất gặp EPERM thật là `prisma generate` khi DLL query engine bị
+  giữ bởi process `next start` cũ còn sót — kill process là xong.
+- **KHÔNG phải PDF→Markdown**: pipeline chưa từng có bước convert Markdown
+  (Markdown chỉ là format của summary hiển thị). Summary fail không còn làm
+  fail cả document (non-fatal, mục 11.2).
+- **KHÔNG phải race condition**: không temp file, không stream, không tên
+  file dùng chung giữa request (in-memory + DB).
+- **Nguyên nhân thật**:
+  1. `pdf-parse@1.1.1` (pdf.js cũ) parse fail với PDF dùng xref stream nén
+     ("bad XRef entry" — PDF xuất từ nhiều công cụ hiện đại) mà không có
+     fallback → rớt cả tài liệu hợp lệ.
+  2. PDF scan/ảnh → text rỗng nhưng pipeline vẫn chạy tiếp: 0 chunk, AI tóm
+     tắt từ khoảng trống ("upload thành công nhưng AI không nhận nội dung").
+     Label UI còn mời upload ảnh dù ảnh luôn fail.
+  3. Không validate (magic bytes, size), không error code/stage, message
+     chung chung; không giới hạn file lớn; nhánh retry 501 chết song song
+     với retry thật ở `/api/documents/[id]/retry`.
+
+### 11.2. Kiến trúc sau sửa
+
+```text
+Upload → validate (empty/size/magic bytes) → extract (A: pdf-parse
+per-page, fail → B: pdfjs-dist hiện đại) → scan detect (mọi trang rỗng
+→ PDF_NO_TEXT_LAYER + hook OCR) → normalize NFC (giữ tiếng Việt + toán)
+→ chunk THEO TRANG (pageNumber) → embedding → DB → summary NON-FATAL
+```
+
+- `src/lib/documents/docErrors.ts`: 14 error codes + stage + retryable +
+  HTTP status + message/gợi ý tiếng Việt; `describeDocumentError()` cho UI;
+  logging theo stage (`[DOCUMENT] stage=...`, chỉ metadata).
+- `extractText.ts`: `ExtractionResult { text, pages, pageCount }`;
+  `MAX_UPLOAD_BYTES` 20MB, `MAX_PDF_PAGES` 150, `MAX_EXTRACTED_CHARS` 400k.
+- `document.service.ts`: chunk theo trang, cap 300 chunks, summary lỗi →
+  vẫn `ready` (summary null, UI hiện "Chưa có tóm tắt").
+- Migration `20260913000000_add_chunk_page_number`: `DocumentChunk.pageNumber`
+  (nullable, an toàn dữ liệu cũ). Chạy `npx prisma migrate deploy` khi deploy.
+- Routes trả đúng status (400/413/422/503) kèm message + suggestion; dev có
+  thêm `debug`. Nhánh 501 ở `/api/documents/process` đã gỡ (retry thật ở
+  `[id]/retry`).
+- UI Thư viện: trạng thái upload theo phase thật, card failed hiện nguyên
+  nhân + gợi ý (suy từ `[CODE]`), input `accept` đúng định dạng, toast thay
+  `alert()`.
+- OCR: chưa cài (đề xuất `tesseract.js` + model `vie`, opt-in từng document
+  vì nặng/chậm) — pipeline có sẵn vị trí cắm `attemptOcrPdfText()`.
+
+### 11.3. Dependencies thêm
+
+| Package | Vì sao | Thay thế đã loại |
+|---|---|---|
+| `pdfjs-dist@6.3.289` (Apache-2.0) | Fallback parser hiện đại khi pdf-parse fail xref nén; chỉ nạp khi cần (dynamic import) | Nâng pdf-parse (nhánh 1.x bị bỏ, 2.x đổi API); `unpdf` (thừa abstraction) |
+
+Cài bằng `npm install pdfjs-dist --legacy-peer-deps` (xung đột peer
+next-auth/next16 có sẵn, xem 10.6).
+
+### 11.4. Test pipeline (không cần DB/AI)
+
+```bash
+npm test  # 40 passed, gồm 14 tests extraction thực tế
+```
+
+Bao phủ: PDF đơn giản / NFC tiếng Việt / giữ ký tự toán / 3 trang +
+30 trang đúng pageNumber-thứ tự / scan→OCR_UNAVAILABLE (phân biệt file
+hỏng) / corrupt→PDF_CORRUPTED hoặc PDF_PARSE_FAILED / 2 request đồng
+thời không lẫn / empty-oversize-giả PDF-unsupported / đồng thời.
+Chưa test với DB thật: double-submit guard, retry end-to-end, restart
+giữa job (fire-and-forget, đã ghi TODO queue BullMQ từ trước).
+
+---
+
+## 12. Đợt audit lớn: hydration, UI resources, Goal→Gap, i18n
+
+### 12.1. Hydration — kết luận sau audit
+
+- **Warning đã báo (`data-new-gr-c-s-check-loaded`,
+  `data-gr-ext-installed` trên `<body>`): do Grammarly/browser extension
+  inject — EXTERNAL, không phải bug LearnX.** `suppressHydrationWarning`
+  ở `<html>` không che được attrs của `<body>` (React áp dụng 1 cấp),
+  nên thêm `suppressHydrationWarning` đúng vào `<body>` — children vẫn
+  warn bình thường, không che bug thật.
+- **Bug thật tìm thấy và đã sửa**: `calendar/page.tsx` khởi tạo
+  `anchor = toDateStr(new Date())` trong `useState` → SSR render tiêu đề
+  bằng giờ server, client hydrate bằng giờ trình duyệt (lệch TZ, rõ nhất
+  00:00–07:00 giờ VN) → mismatch. Sửa bằng mounted-pattern
+  (`anchor: null` + set trong `useEffect`, tiêu đề fallback tĩnh).
+- **Đã audit, an toàn**: `toLocaleString` số (deterministic), date/time
+  trong session render sau fetch client-side, `matchMedia` trong effect,
+  `Date.now()` trong handler, SessionProvider/Toast/Language providers
+  (không đọc storage trong render), không `button>a` lồng sai.
+
+### 12.2. Tài nguyên UI đã tải thật (không chỉ gợi ý link)
+
+| Package | License | Lưu ở | Dùng ở component |
+|---|---|---|---|
+| `lucide-react@1.45.0` | ISC | `node_modules` (npm) | `Sidebar` (13 icons), `Topbar` (Menu), streak `Flame` |
+
+Trước đó đã có `katex` (render toán) và `pdfjs-dist` (fallback PDF).
+Không tải illustration/template ngoài — glassmorphism hiện tại đủ, tránh
+bloat và rủi ro license.
+
+### 12.3. Goal → Gap → Roadmap
+
+- `LearningGoal` thêm `subject`, `targetOutcome` (vd "IELTS 7.0"),
+  `deadline` (migration `20260914000000_learning_metadata`); form tạo
+  goal có 3 trường mới (validate deadline YYYY-MM-DD ở API).
+- `GET /api/goals/[id]/gap` (`getGoalGap`): current từ
+  `LearningProgress` THẬT (không từ user tự khai), target 80%, priority
+  HIGH ≥50 / MEDIUM ≥25 / LOW, topic chưa có dữ liệu ghi rõ "chưa đánh
+  giá". Trang roadmap hiện panel gap sắp xếp giảm dần.
+- Đã verify: mastery cập nhật từ diagnostic/quiz/exercise qua
+  `updateMastery()` chung (evidence-based, không hardcode).
+
+### 12.4. Upload metadata + resources
+
+- Upload Thư viện: form File + Subject (bắt buộc) + Topic + Difficulty
+  (easy/medium/hard, chuẩn chung) + Description; API validate + lưu DB;
+  card hiện chips metadata.
+- Resource URL: validate http/https sẵn có ở `createResource`; AI
+  recommendations deterministic từ DB (không bịa URL); link thật render
+  `target=_blank rel=noreferrer`.
+- Tutor hiểu intent "tìm tài liệu/video/bài tập" → tìm catalog THẬT
+  (`/api/resources?search=`) → resource cards có nút "Mở nguồn học ↗"
+  đính kèm tin nhắn AI (song song, không chèn vào prompt).
+
+### 12.5. i18n VI/EN + mobile sidebar
+
+- `src/lib/i18n/dictionary.ts` (key type-safe) + `LanguageProvider`
+  (localStorage tức thì + `User.language` persist qua `/api/profile`,
+  DB thắng khi đăng nhập; đặt `document.lang`; không đọc storage trong
+  render). Đã dịch: sidebar, topbar (+switcher VI/EN), pattern cho page
+  tiếp theo — chưa dịch hết 50+ component (ghi rõ, làm dần).
+- Mobile drawer: `100dvh`, `overflow-y: auto`,
+  `overscroll-behavior: contain`, momentum iOS, reduced-motion; overlay
+  chỉ chặn pointer, không khóa body scroll sai cách.
+
+### 12.6. Kiểm tra đợt này
+
+```bash
+npm test            # 42 passed (6 files)
+npx tsc --noEmit    # PASS
+npx eslint <file>   # PASS (0 errors)
+npm run build       # PASS (84 routes, gồm /api/goals/[id]/gap)
+```
+
+Smoke (prod): `/login` 200, `/roadmap|/tutor|/library|/calendar` 307 về
+login (đúng auth flow), không 500. Lưu ý: `prisma generate` EPERM khi
+dev server đang giữ DLL (xem 11.1) — types vẫn regenerate xong trước
+bước copy engine; `migrate deploy` đã chạy OK (DB localhost:2402).

@@ -13,7 +13,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { processDocument } from "@/services/document.service";
-import { extractTextFromBuffer, UnsupportedFileTypeError } from "@/lib/documents/extractText";
+import {
+  extractTextFromBuffer,
+  type ExtractionResult,
+} from "@/lib/documents/extractText";
+import { DocumentProcessingError, logDocumentError } from "@/lib/documents/docErrors";
 import type { ApiResponse } from "@/types";
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -56,18 +60,29 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
     // Trích xuất lại text NGAY tại đây (giống upload/route.ts) để nếu
     // file gốc thật sự hỏng (không phải lỗi tạm thời của AI provider
-    // lần trước), báo lỗi rõ ràng ngay thay vì lại rơi vào "processing"
-    // rồi "failed" lần nữa sau vài giây.
-    let extractedText: string;
+    // lần trước), báo lỗi CÓ CODE rõ ràng ngay thay vì lại rơi vào
+    // "processing" rồi "failed" lần nữa sau vài giây.
+    let extraction: ExtractionResult;
     try {
-      extractedText = await extractTextFromBuffer(doc.fileData, doc.fileType);
+      extraction = await extractTextFromBuffer(doc.fileData, doc.fileType);
     } catch (err) {
+      logDocumentError(id, "TEXT_EXTRACTION", err);
       const message =
-        err instanceof UnsupportedFileTypeError
-          ? err.message
+        err instanceof DocumentProcessingError
+          ? `${err.userMessage} ${err.suggestion}`
           : "Không thể đọc lại nội dung file gốc — file có thể bị hỏng.";
-      await prisma.document.update({ where: { id }, data: { status: "failed", errorMessage: message } });
-      return NextResponse.json<ApiResponse<never>>({ success: false, error: message }, { status: 400 });
+      const status = err instanceof DocumentProcessingError ? err.httpStatus : 400;
+      await prisma.document.update({ where: { id }, data: { status: "failed", errorMessage: err instanceof Error ? err.message : message } });
+      return NextResponse.json<ApiResponse<never>>({ success: false, error: message }, { status });
+    }
+
+    if (extraction.text.trim() === "") {
+      const coded = new DocumentProcessingError("DOCUMENT_EMPTY", "TEXT_EXTRACTION");
+      await prisma.document.update({ where: { id }, data: { status: "failed", errorMessage: coded.message } });
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: `${coded.userMessage} ${coded.suggestion}` },
+        { status: coded.httpStatus }
+      );
     }
 
     await prisma.document.update({
@@ -77,7 +92,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
     // Fire-and-forget giống hệt luồng upload — frontend quay lại polling
     // GET /api/documents để thấy status chuyển "processing" -> "ready"/"failed".
-    processDocument(id, extractedText).catch((err) =>
+    processDocument(id, extraction).catch((err) =>
       console.error(`[documents/retry] Xử lý lại document ${id} thất bại:`, err)
     );
 

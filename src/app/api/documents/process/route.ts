@@ -1,12 +1,12 @@
 // ================================================================
 // POST /api/documents/process
 // ================================================================
-// Mạch tư duy: route này phục vụ 2 mục đích, phân biệt qua body.action:
-//   - action = "retry": tài liệu bị status "failed" (lỗi lúc upload),
-//     học sinh bấm nút "Xử lý lại" -> gọi lại processDocument().
-//   - action = "ask": học sinh hỏi 1 câu hỏi CỤ THỂ dựa trên tài liệu
-//     đã "ready" -> dùng answerFromDocument() (RAG thật sự, có tìm
-//     kiếm chunk liên quan) thay vì chat chung chung.
+// Mạch tư duy: route này phục vụ hỏi-đáp RAG trên tài liệu đã "ready"
+// (action = "ask") — dùng answerFromDocument() (tìm chunk liên quan)
+// thay vì chat chung chung. Retry tài liệu failed KHÔNG nằm ở đây mà
+// ở POST /api/documents/[id]/retry (đọc lại fileData đã lưu, xử lý
+// lại trên chính record cũ) — nhánh retry 501 cũ đã được gỡ bỏ để
+// không còn 2 đường retry mâu thuẫn nhau.
 // Không gộp vào /api/ai/chat vì luồng RAG cần thêm bước tìm chunk,
 // khác hẳn luồng Socratic hint của AI Tutor.
 // ================================================================
@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { answerFromDocument, processDocument } from "@/services/document.service";
+import { answerFromDocument } from "@/services/document.service";
 import type { ApiResponse } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     if (!userId) return unauthorizedResponse();
 
     const body = await req.json();
-    const { documentId, action } = body as { documentId: string; action: "retry" | "ask"; question?: string };
+    const { documentId, action } = body as { documentId: string; action: "ask"; question?: string };
 
     if (!documentId) {
       return NextResponse.json<ApiResponse<never>>(
@@ -42,17 +42,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (action === "retry") {
-      // Lưu ý: retry cần rawText gốc — MVP này CHƯA lưu rawText đầy đủ
-      // vào DB (chỉ lưu chunk đã xử lý), nên retry thật sự cần thiết kế
-      // thêm 1 cột "rawText" hoặc lưu file gốc trong storage để đọc lại.
-      // Đây là điểm cần hoàn thiện khi chuyển từ demo sang production.
-      return NextResponse.json<ApiResponse<never>>(
-        { success: false, error: "Retry cần rawText gốc — xem TODO trong code để hoàn thiện." },
-        { status: 501 }
-      );
-    }
-
     if (action === "ask") {
       if (!body.question) {
         return NextResponse.json<ApiResponse<never>>(
@@ -65,7 +54,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json<ApiResponse<never>>(
-      { success: false, error: "action phải là 'retry' hoặc 'ask'." },
+      { success: false, error: "action phải là 'ask'." },
       { status: 400 }
     );
   } catch (err) {
@@ -76,8 +65,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
-// Import processDocument dù chưa dùng trực tiếp trong action "retry" ở
-// trên (để dành khi bạn nối thêm cột rawText) — giữ import tường minh
-// thay vì xoá đi rồi phải nhớ thêm lại.
-void processDocument;

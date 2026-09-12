@@ -3,67 +3,89 @@
 // ================================================================
 // Mạch tư duy: "use client" bắt buộc vì cần usePathname() để biết
 // đang ở trang nào và tô sáng đúng mục nav. Nav khai báo theo nhóm
-// (LEARN / AI / PROGRESS / COMMUNITY / RESOURCES / ACCOUNT) để
+// (Học tập / AI / Tiến độ / Cộng đồng / Tài nguyên / Tài khoản) để
 // sidebar dài 13 mục vẫn scan nhanh — thêm/bớt mục chỉ cần sửa mảng
-// NAV_GROUPS, không sửa JSX.
+// NAV_GROUPS, không sửa JSX. Icon dùng lucide-react (ISC license,
+// vector đồng nhất, không vỡ font như emoji/glyph ký tự).
 // ================================================================
 
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  BarChart3,
+  BookOpen,
+  Bot,
+  CalendarDays,
+  FlaskConical,
+  Flame,
+  Heart,
+  Home,
+  Library,
+  Network,
+  Route,
+  Sparkles,
+  Trophy,
+  User,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import type { I18nKey } from "@/lib/i18n/dictionary";
 
 interface NavItem {
   href: string;
-  label: string;
-  icon: string;
+  labelKey: I18nKey;
+  icon: LucideIcon;
 }
 
 interface NavGroup {
-  title: string;
+  titleKey: I18nKey;
   items: NavItem[];
 }
 
 // Chỉ gồm các route đã tồn tại — không đổi route vì lý do UI.
 const NAV_GROUPS: NavGroup[] = [
   {
-    title: "Học tập",
+    titleKey: "nav.groups.learn",
     items: [
-      { href: "/dashboard", label: "Trang chủ", icon: "⌂" },
-      { href: "/calendar", label: "Lịch học", icon: "🗓" },
-      { href: "/roadmap", label: "Lộ trình học", icon: "⟿" },
-      { href: "/practice", label: "Luyện tập", icon: "🧪" },
+      { href: "/dashboard", labelKey: "nav.dashboard", icon: Home },
+      { href: "/calendar", labelKey: "nav.calendar", icon: CalendarDays },
+      { href: "/roadmap", labelKey: "nav.roadmap", icon: Route },
+      { href: "/practice", labelKey: "nav.practice", icon: FlaskConical },
     ],
   },
   {
-    title: "AI",
+    titleKey: "nav.groups.ai",
     items: [
-      { href: "/diagnostic", label: "Kiểm tra năng lực", icon: "◈" },
-      { href: "/tutor", label: "AI Gia sư", icon: "✺" },
+      { href: "/diagnostic", labelKey: "nav.diagnostic", icon: Sparkles },
+      { href: "/tutor", labelKey: "nav.tutor", icon: Bot },
     ],
   },
   {
-    title: "Tiến độ",
-    items: [{ href: "/progress", label: "Tiến độ", icon: "◐" }],
+    titleKey: "nav.groups.progress",
+    items: [{ href: "/progress", labelKey: "nav.progress", icon: BarChart3 }],
   },
   {
-    title: "Cộng đồng",
+    titleKey: "nav.groups.community",
     items: [
-      { href: "/friends", label: "Bạn bè", icon: "♥" },
-      { href: "/leaderboard", label: "Bảng xếp hạng", icon: "🏆" },
-      { href: "/community", label: "Cộng đồng", icon: "👥" },
+      { href: "/friends", labelKey: "nav.friends", icon: Heart },
+      { href: "/leaderboard", labelKey: "nav.leaderboard", icon: Trophy },
+      { href: "/community", labelKey: "nav.community", icon: Users },
     ],
   },
   {
-    title: "Tài nguyên",
+    titleKey: "nav.groups.resources",
     items: [
-      { href: "/library", label: "Thư viện", icon: "▤" },
-      { href: "/resources", label: "Tài liệu học", icon: "📚" },
+      { href: "/library", labelKey: "nav.library", icon: Library },
+      { href: "/resources", labelKey: "nav.resources", icon: BookOpen },
+      { href: "/mindmap", labelKey: "nav.mindmap", icon: Network },
     ],
   },
   {
-    title: "Tài khoản",
-    items: [{ href: "/profile", label: "Trang cá nhân", icon: "◎" }],
+    titleKey: "nav.groups.account",
+    items: [{ href: "/profile", labelKey: "nav.profile", icon: User }],
   },
 ];
 
@@ -76,6 +98,7 @@ interface SidebarProps {
 
 export default function Sidebar({ open = false, onNavigate }: SidebarProps) {
   const pathname = usePathname();
+  const { t } = useLanguage();
 
   return (
     <aside className={`sidebar ${open ? "sidebar--open" : ""}`} aria-label="Điều hướng chính">
@@ -100,11 +123,12 @@ export default function Sidebar({ open = false, onNavigate }: SidebarProps) {
 
       <nav style={{ display: "flex", flexDirection: "column", gap: 14 }} aria-label="Menu học tập">
         {NAV_GROUPS.map((group) => (
-          <div key={group.title}>
-            <div className="sidebar-group-title">{group.title}</div>
+          <div key={group.titleKey}>
+            <div className="sidebar-group-title">{t(group.titleKey)}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               {group.items.map((item) => {
                 const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);
+                const Icon = item.icon;
                 return (
                   <Link
                     key={item.href}
@@ -113,10 +137,8 @@ export default function Sidebar({ open = false, onNavigate }: SidebarProps) {
                     aria-current={active ? "page" : undefined}
                     className={`sidebar-link${active ? " sidebar-link--active" : ""}`}
                   >
-                    <span style={{ width: 17, textAlign: "center", fontSize: 15 }} aria-hidden="true">
-                      {item.icon}
-                    </span>
-                    {item.label}
+                    <Icon size={16} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0 }} />
+                    {t(item.labelKey)}
                   </Link>
                 );
               })}
@@ -139,7 +161,7 @@ export default function Sidebar({ open = false, onNavigate }: SidebarProps) {
             borderRadius: 10,
           }}
         >
-          🔥 <span>Chuỗi ngày học</span>
+          <Flame size={15} aria-hidden="true" /> <span>{t("nav.streak")}</span>
         </div>
       </div>
     </aside>

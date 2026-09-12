@@ -14,7 +14,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import MarkdownLite from "./MarkdownLite";
+import { useToast } from "@/components/ui/Toast";
 import { downloadSummaryAsMarkdown } from "@/lib/documents/downloadSummary";
 
 export interface LibraryDocument {
@@ -23,7 +25,15 @@ export interface LibraryDocument {
   fileType: string;
   status: string;
   summary: string | null;
+  // Lý do lỗi có prefix [CODE] khi status="failed" (GET /api/documents
+  // chỉ expose khi failed) — UI suy ra nguyên nhân + gợi ý cụ thể qua
+  // describeDocumentError(), không hiện raw message kỹ thuật.
   errorMessage: string | null;
+  // Metadata học tập khai lúc upload (subject bắt buộc từ API).
+  subject: string | null;
+  topic: string | null;
+  difficulty: string | null;
+  description: string | null;
   hasOriginalFile: boolean;
   uploadedAt: string;
   updatedAt: string;
@@ -45,6 +55,33 @@ type Format = typeof FORMATS[number]['value'];
 
 export default function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) {
   const [showFormatModal, setShowFormatModal] = useState(false);
+  const [creatingMap, setCreatingMap] = useState(false);
+  const router = useRouter();
+  const { push } = useToast();
+
+  async function handleCreateMindMap() {
+    if (creatingMap) return;
+    setCreatingMap(true);
+    try {
+      const res = await fetch("/api/mindmap/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId: doc.id }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        push("error", json.error ?? "Không thể tạo Mind Map.");
+        return;
+      }
+      push("success", "Đã tạo Mind Map từ tài liệu.");
+      onClose();
+      router.push(`/mindmap?id=${json.data.id}`);
+    } catch {
+      push("error", "Không thể tạo Mind Map, thử lại sau.");
+    } finally {
+      setCreatingMap(false);
+    }
+  }
 
   async function handleDownload(format: Format) {
     setShowFormatModal(false);
@@ -71,7 +108,7 @@ export default function DocumentDetailModal({ doc, onClose }: DocumentDetailModa
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Download failed:', err);
-      alert(err instanceof Error ? err.message : 'Không thể tải file, thử lại sau');
+      push("error", err instanceof Error ? err.message : 'Không thể tải file, thử lại sau');
     }
   }
 
@@ -125,12 +162,21 @@ export default function DocumentDetailModal({ doc, onClose }: DocumentDetailModa
 
         <div className="modal-footer-row">
           {doc.summary && (
-            <button 
-              className="btn-secondary" 
-              onClick={() => setShowFormatModal(true)}
-            >
-              ↓ Tải tóm tắt
-            </button>
+            <>
+              <button
+                className="btn-secondary"
+                onClick={handleCreateMindMap}
+                disabled={creatingMap}
+              >
+                {creatingMap ? "Đang tạo Mind Map..." : "🧠 Tạo Mind Map"}
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => setShowFormatModal(true)}
+              >
+                ↓ Tải tóm tắt
+              </button>
+            </>
           )}
           {doc.hasOriginalFile && (
             <a className="btn-secondary" href={`/api/documents/${doc.id}/download`} download>

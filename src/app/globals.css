@@ -27,6 +27,9 @@
   --radius-lg: 16px;
   --radius-md: 11px;
   --radius-sm: 8px;
+  /* Typography tokens — code/math dùng stack riêng, không để mỗi
+     component tự chọn font (tránh chữ vỡ, icon ô vuông). */
+  --font-code: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 * {
@@ -188,20 +191,35 @@ h3 {
      nội dung (position: fixed) thay vì chiếm chỗ cố định trong luồng
      flex như trên desktop — nếu không, Sidebar 230px sẽ ép nội dung
      chính co lại rất hẹp trên màn hình nhỏ (đây chính là lỗi
-     responsive gốc của app trước khi sửa). */
+     responsive gốc của app trước khi sửa).
+     Scroll mượt trên mobile: drawer tự cuộn (100dvh theo viewport
+     động, overscroll-behavior chặn scroll "lây" sang page chính,
+     momentum touch trên iOS). Page chính không bị khóa scroll sai
+     cách — overlay chỉ chặn pointer, không đụng body overflow. */
   .sidebar {
     position: fixed;
     top: 0;
     left: 0;
-    height: 100%;
+    height: 100vh;
+    height: 100dvh;
     z-index: 50;
     transform: translateX(-100%);
     transition: transform 0.22s ease;
     box-shadow: 8px 0 24px rgba(0, 0, 0, 0.35);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
   }
 
   .sidebar--open {
     transform: translateX(0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sidebar {
+      transition: none;
+    }
   }
 
   .sidebar-overlay {
@@ -988,5 +1006,122 @@ input:focus-visible {
   .sidebar-link,
   .panel {
     transition: none;
+  }
+}
+
+/* ================================================================
+   MATH RENDERING (KaTeX) — dark mode + mobile
+   ================================================================
+   KaTeX kế thừa color hiện tại nên tự hợp dark mode. Khối display
+   được cuộn ngang khi tràn (mobile) thay vì vỡ layout. Font KaTeX
+   tự đóng gói (woff2 trong node_modules) nên không hotlink ngoài.
+   ================================================================ */
+.math-block {
+  margin: 10px 0;
+  padding: 6px 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  line-height: 1.4;
+}
+
+.math-block > .katex-display {
+  margin: 0;
+}
+
+.math-inline {
+  white-space: nowrap;
+}
+
+.math-inline .katex {
+  font-size: 1.03em;
+}
+
+/* Code dùng token thống nhất thay vì fontFamily monospace rời rạc */
+code,
+pre {
+  font-family: var(--font-code);
+}
+
+/* ================================================================
+   SKELETON + TOAST
+   ================================================================ */
+.skeleton {
+  background: linear-gradient(90deg, var(--panel) 25%, var(--panel-strong) 50%, var(--panel) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.toast-host {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: min(360px, calc(100vw - 36px));
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  background: #141a28;
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.toast--success {
+  border-color: rgba(53, 208, 216, 0.5);
+}
+
+.toast--error {
+  border-color: rgba(239, 106, 125, 0.55);
+}
+
+.toast--info {
+  border-color: rgba(124, 108, 240, 0.5);
+}
+
+.toast-close {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.toast-enter {
+  animation: toast-in 0.25s ease;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton,
+  .toast-enter {
+    animation: none;
   }
 }

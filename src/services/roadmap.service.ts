@@ -112,6 +112,9 @@ async function toGoalWithRoadmap(goal: {
   targetMonths: number;
   status: string;
   createdAt: Date;
+  subject: string | null;
+  targetOutcome: string | null;
+  deadline: Date | null;
 }): Promise<GoalWithRoadmap> {
   const latestRoadmap = await prisma.roadmap.findFirst({
     where: { learningGoalId: goal.id },
@@ -125,6 +128,9 @@ async function toGoalWithRoadmap(goal: {
     targetMonths: goal.targetMonths,
     status: goal.status as RoadmapStatus,
     createdAt: goal.createdAt.toISOString(),
+    subject: goal.subject,
+    targetOutcome: goal.targetOutcome,
+    deadline: goal.deadline ? goal.deadline.toISOString() : null,
     progressPercent: plan ? computeProgressPercent(plan) : 0,
     plan,
   };
@@ -166,9 +172,19 @@ export async function createGoalWithRoadmap(params: {
   userId: string;
   goalTitle: string;
   targetMonths: number;
+  subject?: string | null;
+  targetOutcome?: string | null;
+  deadline?: Date | null;
 }): Promise<GoalWithRoadmap> {
   const goal = await prisma.learningGoal.create({
-    data: { userId: params.userId, title: params.goalTitle, targetMonths: params.targetMonths },
+    data: {
+      userId: params.userId,
+      title: params.goalTitle,
+      targetMonths: params.targetMonths,
+      subject: params.subject ?? null,
+      targetOutcome: params.targetOutcome ?? null,
+      deadline: params.deadline ?? null,
+    },
   });
 
   // Tái sử dụng NGUYÊN VẸN generateRoadmap() đã có — không viết lại
@@ -216,4 +232,58 @@ export async function deleteGoal(userId: string, goalId: string): Promise<boolea
 
   await prisma.learningGoal.delete({ where: { id: goalId } });
   return true;
+}
+
+// ================================================================
+// SKILL GAP — khoảng cách năng lực cho 1 goal
+// ================================================================
+// Mạch tư duy: gap = target − current theo từng topic trong plan MỚI
+// NHẤT của goal. current lấy từ LearningProgress THẬT (evidence từ
+// diagnostic/quiz/exercise qua updateMastery — KHÔNG bao giờ lấy từ
+// user tự khai). Topic trong plan chưa có dữ liệu → current null,
+// gap = full target + cờ hasData=false để UI ghi rõ "chưa đánh giá"
+// thay vì bịa số 0%. Target mặc định 80% (ngưỡng "vững").
+
+export interface SkillGapItem {
+  topic: string;
+  current: number | null;
+  target: number;
+  gap: number;
+  hasData: boolean;
+  priority: "HIGH" | "MEDIUM" | "LOW";
+}
+
+export const GAP_TARGET_DEFAULT = 80;
+
+export async function getGoalGap(userId: string, goalId: string): Promise<SkillGapItem[] | null> {
+  const goal = await prisma.learningGoal.findFirst({ where: { id: goalId, userId } });
+  if (!goal) return null;
+
+  const latestRoadmap = await prisma.roadmap.findFirst({
+    where: { learningGoalId: goalId },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!latestRoadmap) return [];
+
+  const plan = latestRoadmap.months as unknown as RoadmapPlan[];
+  const topics = [...new Set(plan.flatMap((m) => m.topics.map((t) => t.name)))];
+  if (topics.length === 0) return [];
+
+  const profile = await getSkillProfile(userId);
+  const byTopic = new Map(profile.map((p) => [p.topic.toLowerCase(), p.masteryPercent]));
+
+  return topics
+    .map((topic): SkillGapItem => {
+      const current = byTopic.get(topic.toLowerCase()) ?? null;
+      const gap = current === null ? GAP_TARGET_DEFAULT : Math.max(0, GAP_TARGET_DEFAULT - current);
+      return {
+        topic,
+        current,
+        target: GAP_TARGET_DEFAULT,
+        gap,
+        hasData: current !== null,
+        priority: gap >= 50 ? "HIGH" : gap >= 25 ? "MEDIUM" : "LOW",
+      };
+    })
+    .sort((a, b) => b.gap - a.gap);
 }

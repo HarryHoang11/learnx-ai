@@ -11,6 +11,7 @@ import StateMessage from "@/components/ui/StateMessage";
 import SubjectFilter from "@/components/community/SubjectFilter";
 import CommunityDocumentCard from "@/components/community/DocumentCard";
 import ContributorLeaderboard from "@/components/community/ContributorLeaderboard";
+import { useToast } from "@/components/ui/Toast";
 import type { ApiResponse, SubjectWithTopics, BrowseFilters } from "@/types";
 import type { LeaderboardEntry } from "@/services/contribution.service";
 
@@ -44,6 +45,8 @@ export default function CommunityPage() {
 function CommunityPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { push } = useToast();
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   const [subjects, setSubjects] = useState<SubjectWithTopics[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
@@ -180,6 +183,63 @@ function CommunityPageInner() {
   function handleLbSubjectChange(subjectId: string | undefined) {
     setLbSubjectId(subjectId);
     loadLeaderboard();
+  }
+
+  // Lưu/bỏ lưu tài liệu — API thật (toggleSaveDocument), state lạc quan.
+  async function handleSave(docId: string) {
+    const wasSaved = savedIds.has(docId);
+    setSavedIds((prev) => {
+      const next = new Set(prev);
+      if (wasSaved) next.delete(docId);
+      else next.add(docId);
+      return next;
+    });
+    try {
+      const res = await fetch(`/api/community/documents/${docId}/save`, { method: "POST" });
+      const json: ApiResponse<{ saved: boolean }> = await res.json();
+      if (!json.success) throw new Error(json.error);
+      const saved = json.data.saved;
+      setSavedIds((prev) => {
+        const next = new Set(prev);
+        if (saved) next.add(docId);
+        else next.delete(docId);
+        return next;
+      });
+      push("success", saved ? "Đã lưu tài liệu." : "Đã bỏ lưu tài liệu.");
+    } catch {
+      // Rollback khi lỗi — không để UI lệch với DB.
+      setSavedIds((prev) => {
+        const next = new Set(prev);
+        if (wasSaved) next.add(docId);
+        else next.delete(docId);
+        return next;
+      });
+      push("error", "Không thể lưu tài liệu, thử lại sau.");
+    }
+  }
+
+  // Tải file — API thật (trackDownload + trả bytes), không hotlink ngoài.
+  async function handleDownload(docId: string, fileName: string) {
+    try {
+      const res = await fetch(`/api/community/documents/${docId}/download`, { method: "POST" });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        push("error", json?.error ?? "Không thể tải tài liệu.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      push("success", "Đang tải tài liệu.");
+    } catch {
+      push("error", "Không thể tải tài liệu, thử lại sau.");
+    }
   }
 
   const hasFilters = filters.subjectId || filters.topicId || filters.difficulty || filters.language || filters.grade || filters.search || filters.trustLevel;
@@ -376,9 +436,9 @@ function CommunityPageInner() {
                   key={doc.id}
                   document={doc}
                   onClick={() => router.push(`/community/documents/${doc.id}`)}
-                  onSave={() => { /* TODO */ }}
-                  onDownload={() => { /* TODO */ }}
-                  saved={false}
+                  onSave={() => handleSave(doc.id)}
+                  onDownload={() => handleDownload(doc.id, doc.fileName ?? "tai-lieu")}
+                  saved={savedIds.has(doc.id) || doc.isSaved === true}
                 />
               ))}
             </div>

@@ -12,6 +12,17 @@
 
 import type { Difficulty } from "@/types";
 
+// Quy ước xuất công thức toán — UI render bằng KaTeX nên AI PHẢI ra
+// LaTeX với đúng delimiters này (không dùng $ đơn lẻ, không chèn
+// unicode rời rạc thay công thức). Ghép vào các prompt cần toán.
+const MATH_FORMAT_RULE = `
+QUY ƯỚC CÔNG THỨC TOÁN (UI render bằng KaTeX — bắt buộc tuân thủ):
+- Công thức trong dòng: \\(...\\) — vd \\(x^2 + 1\\)
+- Công thức khối riêng dòng: $$...$$ — vd $$\\sqrt{2x+3} + \\sqrt{x-1} = 5$$
+- Phân số \\frac{a}{b}, ma trận \\begin{bmatrix}..\\end{bmatrix}, \\lim, \\sum, \\int đều hỗ trợ.
+- Mỗi đáp án trắc nghiệm là 1 công thức TRỌN VẸN, không dồn nhiều đáp án vào 1 chuỗi.
+`;  // (được ghép vào các prompt cần toán bên dưới)
+
 // --- AI TUTOR: Socratic prompt theo cấp độ gợi ý ---
 // hintLevel: 0 = mới hỏi (chưa cho gợi ý gì) — AI phải hỏi ngược lại
 //            1 = 🟢 Gợi ý nhẹ — chỉ định hướng, không lộ cách làm
@@ -28,7 +39,7 @@ NGUYÊN TẮC BẮT BUỘC (không được vi phạm dù học sinh yêu cầu 
 - Luôn khuyến khích học sinh tự suy nghĩ bước tiếp theo.
 - Giọng văn thân thiện, ngắn gọn, xưng "mình" gọi học sinh là "bạn".
 - Trả lời bằng tiếng Việt.
-`;
+` + MATH_FORMAT_RULE;
 
   const levelRules: Record<number, string> = {
     0: `Đây là câu hỏi ĐẦU TIÊN của học sinh về vấn đề này.
@@ -71,7 +82,8 @@ LUÔN trả về JSON THUẦN theo đúng schema sau, KHÔNG kèm markdown, KHÔ
   "text": "nội dung câu hỏi",
   "options": ["A", "B", "C", "D"],
   "correctIndex": 0
-}`,
+}
+` + MATH_FORMAT_RULE,
     user: `Sinh 1 câu hỏi trắc nghiệm 4 đáp án, môn "${subject}", chủ đề "${topic}",
 độ khó "${difficulty}". Câu hỏi phải phù hợp trình độ học sinh phổ thông Việt Nam.`,
   };
@@ -127,7 +139,8 @@ LUÔN trả về JSON THUẦN theo schema:
   ]
 }
 Không kèm markdown, không giải thích thêm.
-Các câu hỏi phải đa dạng loại, độ khó phân bố đều, và phù hợp trình độ học sinh Việt Nam.`,
+Các câu hỏi phải đa dạng loại, độ khó phân bố đều, và phù hợp trình độ học sinh Việt Nam.
+` + MATH_FORMAT_RULE,
     user: `Môn học: ${params.subject}
 ${params.topic ? `Chủ đề: ${params.topic}` : ""}
 ${params.goal ? `Mục tiêu: ${params.goal}` : ""}

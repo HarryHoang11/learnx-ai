@@ -7,6 +7,8 @@
 
 import { useEffect, useState } from "react";
 import StateMessage from "@/components/ui/StateMessage";
+import SafeMath from "@/components/math/SafeMath";
+import { useToast } from "@/components/ui/Toast";
 import type { ApiResponse } from "@/types";
 
 interface ExerciseDetail {
@@ -33,6 +35,7 @@ interface SubmitResult {
 }
 
 export default function ExerciseSolver({ exerciseId, onSolved }: { exerciseId: string; onSolved?: () => void }) {
+  const { push } = useToast();
   const [exercise, setExercise] = useState<ExerciseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +75,14 @@ export default function ExerciseSolver({ exerciseId, onSolved }: { exerciseId: s
       }
       setResult(json.data);
       setError(null);
-      if (json.data.isCorrect) onSolved?.();
+      if (json.data.isCorrect) {
+        if (json.data.isFirstSolve && json.data.xpEarned > 0) {
+          push("success", `Chính xác! +${json.data.xpEarned} XP`);
+        } else if (!json.data.isFirstSolve) {
+          push("info", "Chính xác! Bài này đã nhận XP rồi nên không cộng thêm.");
+        }
+        onSolved?.();
+      }
     } catch {
       setError("Không thể nộp bài, thử lại sau.");
     } finally {
@@ -91,7 +101,9 @@ export default function ExerciseSolver({ exerciseId, onSolved }: { exerciseId: s
         {exercise.subject} · {exercise.topic} · {exercise.difficulty === "easy" ? "Dễ" : exercise.difficulty === "hard" ? "Khó" : "Trung bình"}
         {exercise.solvedByMe && <span style={{ color: "var(--cyan)", marginLeft: 8 }}>✓ Đã giải đúng trước đây</span>}
       </div>
-      <div style={{ fontSize: 14, lineHeight: 1.7, marginTop: 12, whiteSpace: "pre-wrap" }}>{exercise.statement}</div>
+      <div style={{ fontSize: 14, lineHeight: 1.7, marginTop: 12, whiteSpace: "pre-wrap" }}>
+        <SafeMath text={exercise.statement} />
+      </div>
       {exercise.constraints && (
         <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 10, whiteSpace: "pre-wrap" }}>
           Ràng buộc: {exercise.constraints}

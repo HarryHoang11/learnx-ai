@@ -116,14 +116,15 @@ export function splitIntoChunks(text: string, chunkSize = 1000, overlap = 100): 
 export async function saveChunkWithEmbedding(
   documentId: string,
   content: string,
-  chunkIndex: number
+  chunkIndex: number,
+  pageNumber: number | null = null
 ): Promise<void> {
   const embedding = await embedText(content);
   const vectorLiteral = `[${embedding.join(",")}]`;
 
   await prisma.$executeRaw`
-    INSERT INTO "DocumentChunk" (id, "documentId", content, "chunkIndex", embedding)
-    VALUES (gen_random_uuid()::text, ${documentId}, ${content}, ${chunkIndex}, ${vectorLiteral}::vector)
+    INSERT INTO "DocumentChunk" (id, "documentId", content, "chunkIndex", "pageNumber", embedding)
+    VALUES (gen_random_uuid()::text, ${documentId}, ${content}, ${chunkIndex}, ${pageNumber}, ${vectorLiteral}::vector)
   `;
 }
 

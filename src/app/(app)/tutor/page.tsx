@@ -39,6 +39,32 @@ interface DisplayMessage {
   tag?: string;
   // Nếu true, tin nhắn AI này đang chờ học sinh chọn mức gợi ý tiếp theo
   awaitingHint?: boolean;
+  // Resource cards đính kèm (khi AI/tutor phát hiện intent tìm tài liệu)
+  resources?: AttachedResource[];
+}
+
+interface AttachedResource {
+  id: string;
+  title: string;
+  type: string;
+  url: string | null;
+  difficulty: string | null;
+  description: string | null;
+}
+
+// Intent "xin nguồn học": tìm trong catalog THẬT, không để AI bịa URL.
+const RESOURCE_INTENT =
+  /(tài liệu|nguồn học|nguồn tham khảo|tham khảo|video|bài tập|tìm.*(học|đọc|tài liệu)|cho.*(link|nguồn)|resource|document)/i;
+
+function extractResourceQuery(message: string, fallbackTopic: string): string {
+  const cleaned = message
+    .replace(/cho\s+(tôi|mình|em)\s*/gi, "")
+    .replace(/(xin|tìm|kiếm|gợi ý|giới thiệu|cho)\s*/gi, "")
+    .replace(/(tài liệu|nguồn học|nguồn tham khảo|tham khảo|video|bài tập|link|nguồn|resource|document)s?/gi, "")
+    .replace(/(về|với|để học|để đọc|nào|gì|không|ạ|nhé|với)\s*/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned.length >= 2 ? cleaned : fallbackTopic;
 }
 
 const HINT_LABELS: Record<1 | 2 | 3, string> = {
@@ -80,6 +106,19 @@ function TutorPageInner() {
     setInput("");
     setSending(true);
 
+    // Intent xin nguồn học → tìm catalog THẬT song song với chat AI.
+    // Kết quả đính kèm vào tin nhắn AI (resource cards có link thật),
+    // KHÔNG chèn vào prompt để AI khỏi bịa URL.
+    const wantsResources = RESOURCE_INTENT.test(trimmed);
+    const resourcePromise = wantsResources
+      ? fetch(`/api/resources?search=${encodeURIComponent(extractResourceQuery(trimmed, topic))}&limit=4`)
+          .then((res) => res.json())
+          .then((json: ApiResponse<{ resources: AttachedResource[] }>) =>
+            json.success ? json.data.resources.filter((r) => r.url) : []
+          )
+          .catch(() => [])
+      : Promise.resolve([] as AttachedResource[]);
+
     try {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
@@ -87,11 +126,18 @@ function TutorPageInner() {
         body: JSON.stringify({ message: trimmed, topic, hintLevel: 0 }),
       });
       const json: ApiResponse<{ reply: string }> = await res.json();
+      const attached = await resourcePromise;
 
       if (json.success) {
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", tag: "AI GIA SƯ", content: json.data.reply, awaitingHint: true },
+          {
+            role: "assistant",
+            tag: "AI GIA SƯ",
+            content: json.data.reply,
+            awaitingHint: true,
+            resources: attached.length > 0 ? attached : undefined,
+          },
         ]);
       } else {
         setMessages((prev) => [...prev, { role: "assistant", tag: "LỖI", content: json.error }]);
@@ -146,6 +192,34 @@ function TutorPageInner() {
             {messages.map((m, i) => (
               <div key={i} style={{ display: "flex", flexDirection: "column" }}>
                 <ChatBubble role={m.role} content={m.content} tag={m.tag} />
+                {m.resources && m.resources.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8, maxWidth: "78%", alignSelf: "flex-start" }}>
+                    {m.resources.map((r) => (
+                      <div
+                        key={r.id}
+                        style={{
+                          background: "var(--panel)",
+                          border: "1px solid var(--border)",
+                          borderRadius: 10,
+                          padding: "10px 12px",
+                          fontSize: 13,
+                        }}
+                      >
+                        <div style={{ fontWeight: 600, marginBottom: 2 }}>{r.title}</div>
+                        <div style={{ color: "var(--text-dim)", fontSize: 12, marginBottom: 8 }}>
+                          {r.type}
+                          {r.difficulty ? ` · ${r.difficulty}` : ""}
+                          {r.description ? ` — ${r.description.slice(0, 80)}` : ""}
+                        </div>
+                        {r.url && (
+                          <a href={r.url} target="_blank" rel="noreferrer" style={{ color: "var(--cyan)", fontWeight: 600, fontSize: 12.5 }}>
+                            Mở nguồn học ↗
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {m.awaitingHint && i === messages.length - 1 && (
                   <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                     <HintButton label="🟢 Gợi ý" onClick={() => requestHint(1)} disabled={sending} />

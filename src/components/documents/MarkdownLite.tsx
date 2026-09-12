@@ -1,53 +1,75 @@
 // ================================================================
-// <MarkdownLite /> — render Markdown nhẹ, KHÔNG phụ thuộc thư viện
-// ngoài (react-markdown...)
+// <MarkdownLite /> — render Markdown nhẹ + công thức toán KaTeX
 // ================================================================
-// Mạch tư duy: project không có package.json trong bản audit hiện có
-// (không rõ đã cài sẵn thư viện markdown nào chưa) — thay vì yêu cầu
-// `npm install react-markdown` (rủi ro nếu môi trường build của user
-// chưa có mạng/registry lúc build), tự viết 1 parser dòng-theo-dòng
-// đơn giản, đủ khớp với ĐÚNG format mà buildDocumentSummaryPrompt()
-// yêu cầu AI xuất ra (xem lib/ai/prompts.ts): heading ##, bullet -,
-// numbered list, bold **text**, code block ```, inline `code`.
-//
-// KHÔNG cố parse toàn bộ CommonMark spec (bảng, footnote, link ảnh
-// phức tạp...) — nếu sau này cần Markdown đầy đủ hơn, khuyến nghị cài
-// `react-markdown` + `remark-gfm` thay thế file này, phần còn lại của
-// UI (modal, buttons) không cần đổi gì.
+// Mạch tư duy: parser Markdown dòng-theo-dòng tự viết (heading,
+// list, bold, code block) vẫn giữ nguyên để không thêm dependency
+// markdown nặng; RIÊNG công thức toán dùng KaTeX chuẩn (không tự
+// parse bằng regex) qua splitMathSegments() dùng chung với SafeMath.
 // ================================================================
 
 import type { ReactNode } from "react";
+import katex from "katex";
+import { splitMathSegments } from "@/components/math/SafeMath";
 
 interface MarkdownLiteProps {
   content: string;
 }
 
-// Render phần *inline* của 1 dòng: **bold**, `code`, còn lại là text
-// thường. Trả về mảng React node để chèn xen kẽ.
+// Render phần *inline* của 1 dòng: math LaTeX (\(..\), $$..$$) qua
+// KaTeX, **bold**, `code`, còn lại là text thường. Math được tách
+// TRƯỚC rồi mới format bold/code trên text — code block và công thức
+// không bao giờ parse lẫn nhau.
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter((p) => p !== "");
-  return parts.map((part, i) => {
-    const key = `${keyPrefix}-${i}`;
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={key}>{part.slice(2, -2)}</strong>;
-    }
-    if (part.startsWith("`") && part.endsWith("`")) {
-      return (
-        <code
-          key={key}
-          style={{
-            background: "var(--panel-strong)",
-            padding: "1px 6px",
-            borderRadius: 4,
-            fontSize: "0.9em",
-            fontFamily: "monospace",
-          }}
-        >
-          {part.slice(1, -1)}
-        </code>
+  return splitMathSegments(text).map((seg, si) => {
+    if (seg.type === "math") {
+      const html = katex.renderToString(seg.content, {
+        throwOnError: false,
+        displayMode: seg.display,
+        output: "html",
+        strict: false,
+        trust: false,
+      });
+      return seg.display ? (
+        <div
+          key={`${keyPrefix}-m${si}`}
+          className="math-block"
+          role="img"
+          aria-label={seg.content}
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      ) : (
+        <span
+          key={`${keyPrefix}-m${si}`}
+          className="math-inline"
+          role="img"
+          aria-label={seg.content}
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
       );
     }
-    return <span key={key}>{part}</span>;
+    const parts = seg.content.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter((p) => p !== "");
+    return parts.map((part, i) => {
+      const key = `${keyPrefix}-t${si}-${i}`;
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return <strong key={key}>{part.slice(2, -2)}</strong>;
+      }
+      if (part.startsWith("`") && part.endsWith("`")) {
+        return (
+          <code
+            key={key}
+            style={{
+              background: "var(--panel-strong)",
+              padding: "1px 6px",
+              borderRadius: 4,
+              fontSize: "0.9em",
+            }}
+          >
+            {part.slice(1, -1)}
+          </code>
+        );
+      }
+      return <span key={key}>{part}</span>;
+    });
   });
 }
 

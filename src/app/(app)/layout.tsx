@@ -11,7 +11,15 @@
 
 import type { ReactNode } from "react";
 import AppShell from "@/components/layout/AppShell";
+import { ToastProvider } from "@/components/ui/Toast";
+import { LanguageProvider } from "@/components/providers/LanguageProvider";
 
 export default function AppGroupLayout({ children }: { children: ReactNode }) {
-  return <AppShell>{children}</AppShell>;
+  return (
+    <LanguageProvider>
+      <ToastProvider>
+        <AppShell>{children}</AppShell>
+      </ToastProvider>
+    </LanguageProvider>
+  );
 }

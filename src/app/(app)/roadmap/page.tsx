@@ -31,6 +31,27 @@ import RoadmapTaskDetail from "@/components/roadmap/RoadmapTaskDetail";
 import DeleteRoadmapDialog from "@/components/roadmap/DeleteRoadmapDialog";
 import type { ApiResponse, GoalWithRoadmap, RoadmapPlan } from "@/types";
 
+interface SkillGapItem {
+  topic: string;
+  current: number | null;
+  target: number;
+  gap: number;
+  hasData: boolean;
+  priority: "HIGH" | "MEDIUM" | "LOW";
+}
+
+const PRIORITY_LABEL: Record<SkillGapItem["priority"], string> = {
+  HIGH: "Ưu tiên cao",
+  MEDIUM: "Ưu tiên vừa",
+  LOW: "Ưu tiên thấp",
+};
+
+const PRIORITY_COLOR: Record<SkillGapItem["priority"], string> = {
+  HIGH: "var(--rose)",
+  MEDIUM: "var(--amber)",
+  LOW: "var(--cyan)",
+};
+
 const CREATE_NEW_VALUE = "__create_new__";
 
 export default function RoadmapPage() {
@@ -45,12 +66,32 @@ export default function RoadmapPage() {
 
   const [goalTitle, setGoalTitle] = useState("Thi chuyên Tin");
   const [targetMonths, setTargetMonths] = useState(6);
+  const [goalSubject, setGoalSubject] = useState("Tin học");
+  const [goalTarget, setGoalTarget] = useState("");
+  const [goalDeadline, setGoalDeadline] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  // Skill gap của goal đang chọn — fetch riêng vì tính từ plan +
+  // LearningProgress, không nằm trong GoalWithRoadmap.
+  const [gap, setGap] = useState<SkillGapItem[] | null>(null);
 
   useEffect(() => {
     loadGoals();
   }, []);
+
+  useEffect(() => {
+    if (!selectedGoalId) {
+      setGap(null);
+      return;
+    }
+    fetch(`/api/goals/${selectedGoalId}/gap`)
+      .then((res) => res.json())
+      .then((json: ApiResponse<SkillGapItem[]>) => {
+        if (json.success) setGap(json.data);
+        else setGap(null);
+      })
+      .catch(() => setGap(null));
+  }, [selectedGoalId]);
 
   async function loadGoals(preferGoalId?: string) {
     setLoading(true);
@@ -93,7 +134,13 @@ export default function RoadmapPage() {
       const res = await fetch("/api/roadmaps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goalTitle, targetMonths }),
+        body: JSON.stringify({
+          goalTitle,
+          targetMonths,
+          subject: goalSubject.trim() || null,
+          targetOutcome: goalTarget.trim() || null,
+          deadline: goalDeadline || null,
+        }),
       });
       const json: ApiResponse<GoalWithRoadmap> = await res.json();
       if (!json.success) throw new Error(json.error);
@@ -189,15 +236,43 @@ export default function RoadmapPage() {
             Mục tiêu
           </label>
           <input value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} style={inputStyle} />
+          <div className="grid-form-2col" style={{ marginTop: 16 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>
+                Môn học
+              </label>
+              <input value={goalSubject} onChange={(e) => setGoalSubject(e.target.value)} placeholder="vd: Tin học" style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>
+                Thời gian (tháng)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={12}
+                value={targetMonths}
+                onChange={(e) => setTargetMonths(Number(e.target.value))}
+                style={inputStyle}
+              />
+            </div>
+          </div>
           <label style={{ display: "block", fontSize: 13, color: "var(--text-dim)", margin: "16px 0 6px" }}>
-            Thời gian (tháng)
+            Kết quả mong muốn (tùy chọn)
           </label>
           <input
-            type="number"
-            min={1}
-            max={12}
-            value={targetMonths}
-            onChange={(e) => setTargetMonths(Number(e.target.value))}
+            value={goalTarget}
+            onChange={(e) => setGoalTarget(e.target.value)}
+            placeholder="vd: IELTS 7.0, Codeforces 1800, giải HSG"
+            style={inputStyle}
+          />
+          <label style={{ display: "block", fontSize: 13, color: "var(--text-dim)", margin: "16px 0 6px" }}>
+            Hạn hoàn thành (tùy chọn)
+          </label>
+          <input
+            type="date"
+            value={goalDeadline}
+            onChange={(e) => setGoalDeadline(e.target.value)}
             style={inputStyle}
           />
           {createError && <p style={{ color: "var(--rose)", fontSize: 13, marginTop: 12 }}>{createError}</p>}
@@ -258,6 +333,50 @@ export default function RoadmapPage() {
           Lộ trình này chưa có kế hoạch chi tiết (có thể do AI xử lý lỗi lúc tạo).
         </p>
       )}
+
+      {/* --- Skill Gap: hiện tại vs mục tiêu theo từng topic ---
+          current từ LearningProgress THẬT (evidence), target 80%.
+          Topic chưa có dữ liệu ghi rõ "chưa đánh giá", không bịa số. */}
+      <div style={{ marginTop: 28 }}>
+        <h3 style={{ fontSize: 16, marginBottom: 4 }}>Khoảng cách năng lực</h3>
+        <p style={{ color: "var(--text-dim)", fontSize: 13, marginTop: 0, marginBottom: 14 }}>
+          {selectedGoal.targetOutcome
+            ? <>Mục tiêu: <strong style={{ color: "var(--text)" }}>{selectedGoal.targetOutcome}</strong> · </>
+            : ""}
+          So sánh mastery hiện tại với ngưỡng vững ({80}%) theo từng chủ đề trong lộ trình
+        </p>
+        {!gap || gap.length === 0 ? (
+          <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>
+            {!gap ? "Đang phân tích..." : "Chưa có chủ đề nào để phân tích."}
+          </p>
+        ) : (
+          <Panel>
+            {gap.slice(0, 8).map((g) => (
+              <div key={g.topic} style={{ marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 500 }}>{g.topic}</span>
+                  <span style={{ fontSize: 12, color: PRIORITY_COLOR[g.priority], fontWeight: 600, whiteSpace: "nowrap" }}>
+                    {g.hasData ? `Hiện tại ${g.current}% → mục tiêu ${g.target}% · ` : "Chưa đánh giá · "}
+                    {PRIORITY_LABEL[g.priority]}
+                  </span>
+                </div>
+                <div className="bar-track" style={{ height: 10 }}>
+                  <div
+                    className="bar-fill"
+                    style={{
+                      width: `${g.hasData ? (g.current ?? 0) : 0}%`,
+                      background: g.priority === "HIGH" ? "var(--rose)" : g.priority === "MEDIUM" ? "var(--amber)" : "var(--cyan)",
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+            {gap.length > 8 && (
+              <p style={{ color: "var(--text-dim)", fontSize: 12.5 }}>+ {gap.length - 8} chủ đề khác (đã sắp xếp theo gap giảm dần)</p>
+            )}
+          </Panel>
+        )}
+      </div>
 
       {/* --- Khu vực quản lý "Lộ trình của tôi" --- */}
       <div style={{ marginTop: 40 }}>

@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import Panel from "@/components/ui/Panel";
 import SkillBar from "@/components/ui/SkillBar";
 import StateMessage from "@/components/ui/StateMessage";
+import SafeMath from "@/components/math/SafeMath";
 import type { ApiResponse, GeneratedQuestion, SkillMasteryPoint } from "@/types";
 
 type Phase = "idle" | "loading" | "in_progress" | "finished" | "error";
@@ -149,7 +150,9 @@ export default function DiagnosticPage() {
             >
               {question.difficulty === "easy" ? "Dễ" : question.difficulty === "medium" ? "Trung bình" : "Khó"}
             </span>
-            <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 20, lineHeight: 1.5 }}>{question.text}</div>
+            <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 20, lineHeight: 1.6 }}>
+              <SafeMath text={question.text} />
+            </div>
 
             {question.options.map((opt, i) => {
               const isCorrectOpt = i === question.correctIndex;
@@ -184,7 +187,7 @@ export default function DiagnosticPage() {
                     cursor: selected !== null ? "default" : "pointer",
                   }}
                 >
-                  {opt}
+                  <SafeMath text={opt} />
                 </button>
               );
             })}

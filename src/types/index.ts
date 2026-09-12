@@ -73,6 +73,10 @@ export interface GoalWithRoadmap {
   targetMonths: number;
   status: RoadmapStatus;
   createdAt: string;
+  // Metadata mục tiêu (nullable — goal cũ không có vẫn hợp lệ).
+  subject: string | null;
+  targetOutcome: string | null;
+  deadline: string | null;
   progressPercent: number;
   plan: RoadmapPlan[] | null; // null nếu goal chưa từng generate được roadmap nào (hiếm, vd lỗi AI giữa chừng)
 }
@@ -100,6 +104,7 @@ export interface UserProfile {
   bio: string | null;
   image: string | null;
   coverImage: string | null;
+  language: string;
 }
 
 // --- LEARNING AGENT TYPES ---

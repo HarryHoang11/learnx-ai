@@ -7,6 +7,8 @@
 // từng bong bóng chat.
 // ================================================================
 
+import SafeMath from "@/components/math/SafeMath";
+
 interface ChatBubbleProps {
   role: "user" | "assistant";
   content: string;
@@ -35,7 +37,10 @@ export default function ChatBubble({ role, content, tag }: ChatBubbleProps) {
           {tag}
         </span>
       )}
-      {content}
+      {/* Tin nhắn AI đi qua SafeMath để công thức LaTeX (\(..\),
+          $$..$$) render thành công thức thật; tin nhắn user giữ text
+          thường để phản ánh đúng điều user đã gõ. */}
+      {isUser ? content : <SafeMath text={content} />}
     </div>
   );
 }

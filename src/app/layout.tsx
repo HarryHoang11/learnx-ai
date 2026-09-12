@@ -11,16 +11,20 @@
 import type { ReactNode } from "react";
 import { Space_Grotesk, Inter } from "next/font/google";
 import SessionProviderWrapper from "@/components/providers/SessionProviderWrapper";
+import "katex/dist/katex.min.css";
 import "./globals.css";
 
+// next/font: nạp thêm subset "vietnamese" (cả 2 family đều hỗ trợ) —
+// trước đây chỉ có "latin" nên chữ Việt có dấu rơi về font fallback
+// của hệ điều hành, gây vỡ nét và layout shift giữa các máy.
 const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
+  subsets: ["latin", "vietnamese"],
   weight: ["500", "600", "700"],
   variable: "--font-space-grotesk",
 });
 
 const inter = Inter({
-  subsets: ["latin"],
+  subsets: ["latin", "vietnamese"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-inter",
 });
@@ -45,7 +49,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     // suppressHydrationWarning chỉ tắt cảnh báo CHO ĐÚNG THẺ NÀY, không
     // ảnh hưởng tới việc phát hiện mismatch thật ở bất kỳ thẻ con nào.
     <html lang="vi" className={`${spaceGrotesk.variable} ${inter.variable}`} suppressHydrationWarning>
-      <body>
+      {/* suppressHydrationWarning Ở <body> chỉ tắt cảnh báo cho chính
+          attributes của thẻ body (React chỉ áp dụng 1 cấp, children vẫn
+          warn bình thường). Lý do duy nhất: extension trình duyệt
+          (Grammarly...) tự chèn data-new-gr-c-s-check-loaded /
+          data-gr-ext-installed vào body SAU khi HTML server đã tải —
+          đã audit toàn project, không có mismatch thật nào ở body.
+          Bug thật duy nhất đã tìm thấy (calendar anchor theo TZ) được
+          sửa bằng mounted-pattern, KHÔNG phải bằng suppress. */}
+      <body suppressHydrationWarning>
         <SessionProviderWrapper>{children}</SessionProviderWrapper>
       </body>
     </html>

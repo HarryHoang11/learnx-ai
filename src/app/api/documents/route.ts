@@ -21,6 +21,10 @@ interface DocumentSummary {
   summary: string | null;
   errorMessage: string | null;
   hasOriginalFile: boolean;
+  subject: string | null;
+  topic: string | null;
+  difficulty: string | null;
+  description: string | null;
   uploadedAt: string;
   updatedAt: string;
 }
@@ -41,6 +45,10 @@ interface DocumentRow {
   summary: string | null;
   errorMessage: string | null;
   hasOriginalFile: boolean;
+  subject: string | null;
+  topic: string | null;
+  difficulty: string | null;
+  description: string | null;
   uploadedAt: Date;
   updatedAt: Date;
 }
@@ -54,6 +62,7 @@ export async function GET(req: NextRequest) {
       SELECT
         "id", "fileName", "fileType", "status", "summary", "errorMessage",
         ("fileData" IS NOT NULL) AS "hasOriginalFile",
+        "subject", "topic", "difficulty", "description",
         "uploadedAt", "updatedAt"
       FROM "Document"
       WHERE "userId" = ${userId}
@@ -68,6 +77,10 @@ export async function GET(req: NextRequest) {
       summary: d.summary,
       errorMessage: d.status === "failed" ? d.errorMessage : null,
       hasOriginalFile: d.hasOriginalFile,
+      subject: d.subject,
+      topic: d.topic,
+      difficulty: d.difficulty,
+      description: d.description,
       uploadedAt: d.uploadedAt.toISOString(),
       updatedAt: d.updatedAt.toISOString(),
     }));
