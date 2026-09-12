@@ -18,11 +18,20 @@ import Panel from "@/components/ui/Panel";
 import SkillBar from "@/components/ui/SkillBar";
 import StateMessage from "@/components/ui/StateMessage";
 import SafeMath from "@/components/math/SafeMath";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { ApiResponse, GeneratedQuestion, SkillMasteryPoint } from "@/types";
 
 type Phase = "idle" | "loading" | "in_progress" | "finished" | "error";
 
+interface CompletionActivity {
+  recorded: boolean;
+  alreadyRecorded?: boolean;
+  xpEarned: number;
+  streak: { current: number; longest: number };
+}
+
 export default function DiagnosticPage() {
+  const { t } = useLanguage();
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle");
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
@@ -31,10 +40,12 @@ export default function DiagnosticPage() {
   const [answeredCount, setAnsweredCount] = useState(0);
   const [profile, setProfile] = useState<SkillMasteryPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [completion, setCompletion] = useState<CompletionActivity | null>(null);
 
   async function start() {
     setPhase("loading");
     setError(null);
+    setCompletion(null);
     try {
       const res = await fetch("/api/assessment/start", {
         method: "POST",
@@ -50,7 +61,7 @@ export default function DiagnosticPage() {
       setSelected(null);
       setPhase("in_progress");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể bắt đầu bài kiểm tra.");
+      setError(err instanceof Error ? err.message : t("diagnostic.startFail"));
       setPhase("error");
     }
   }
@@ -66,11 +77,14 @@ export default function DiagnosticPage() {
         body: JSON.stringify({ assessmentId, question, selectedIndex: index }),
       });
       const json: ApiResponse<
-        { done: true } | { done: false; isCorrect: boolean; nextQuestion: GeneratedQuestion }
+        { done: true; activity?: CompletionActivity } | { done: false; isCorrect: boolean; nextQuestion: GeneratedQuestion }
       > = await res.json();
       if (!json.success) throw new Error(json.error);
 
       setAnsweredCount((c) => c + 1);
+      if (json.data.done && json.data.activity) {
+        setCompletion(json.data.activity);
+      }
 
       // Đợi 700ms để học sinh kịp thấy màu đúng/sai trước khi chuyển câu —
       // giữ đúng cảm giác "thấy phản hồi" như bản demo HTML tĩnh trước đó.
@@ -83,7 +97,7 @@ export default function DiagnosticPage() {
         }
       }, 700);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể gửi câu trả lời.");
+      setError(err instanceof Error ? err.message : t("diagnostic.answerFail"));
       setPhase("error");
     }
   }
@@ -97,30 +111,30 @@ export default function DiagnosticPage() {
       setProfile(json.data.profile);
       setPhase("finished");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể tải kết quả.");
+      setError(err instanceof Error ? err.message : t("diagnostic.resultFail"));
       setPhase("error");
     }
   }
 
   return (
     <section style={{ maxWidth: 640, margin: "0 auto" }}>
-      <h2 style={{ fontSize: 20, marginBottom: 4 }}>Kiểm tra năng lực</h2>
+      <h2 style={{ fontSize: 20, marginBottom: 4 }}>{t("diagnostic.title")}</h2>
       <p style={{ color: "var(--text-dim)", fontSize: 13.5, marginBottom: 22 }}>
-        Độ khó sẽ thay đổi theo câu trả lời của bạn
+        {t("diagnostic.subtitle")}
       </p>
 
       {phase === "idle" && (
         <Panel style={{ textAlign: "center", padding: 40 }}>
           <p style={{ color: "var(--text-dim)", marginBottom: 20 }}>
-            Bài kiểm tra gồm 16 câu, AI sẽ tự điều chỉnh độ khó theo câu trả lời của bạn.
+            {t("diagnostic.intro")}
           </p>
           <button className="btn-primary" onClick={start}>
-            Bắt đầu kiểm tra
+            {t("diagnostic.start")}
           </button>
         </Panel>
       )}
 
-      {phase === "loading" && <StateMessage kind="loading" text="Đang xử lý..." />}
+      {phase === "loading" && <StateMessage kind="loading" text={t("diagnostic.loading")} />}
       {phase === "error" && error && <StateMessage kind="error" text={error} />}
 
       {phase === "in_progress" && question && (
@@ -148,7 +162,7 @@ export default function DiagnosticPage() {
                     : "var(--amber)",
               }}
             >
-              {question.difficulty === "easy" ? "Dễ" : question.difficulty === "medium" ? "Trung bình" : "Khó"}
+              {question.difficulty === "easy" ? t("diagnostic.easy") : question.difficulty === "medium" ? t("diagnostic.medium") : t("diagnostic.hard")}
             </span>
             <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 20, lineHeight: 1.6 }}>
               <SafeMath text={question.text} />
@@ -198,12 +212,30 @@ export default function DiagnosticPage() {
       {phase === "finished" && (
         <div>
           <div style={{ textAlign: "center", marginBottom: 20 }}>
-            <h2 style={{ fontSize: 22, marginBottom: 6 }}>Hồ sơ năng lực của bạn</h2>
-            <p style={{ color: "var(--text-dim)", fontSize: 14 }}>Dựa trên bài kiểm tra vừa hoàn thành</p>
+            <h2 style={{ fontSize: 22, marginBottom: 6 }}>{t("diagnostic.doneTitle")}</h2>
+            <p style={{ color: "var(--text-dim)", fontSize: 14 }}>{t("diagnostic.doneSubtitle")}</p>
           </div>
+          {completion && (
+            <Panel style={{ marginBottom: 16, textAlign: "center" }}>
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{t("diagnostic.completed")}</div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", fontSize: 13.5 }}>
+                {completion.recorded && (
+                  <span style={{ color: "var(--cyan)", fontWeight: 700 }}>
+                    {t("diagnostic.xpLine", { n: completion.xpEarned })}
+                  </span>
+                )}
+                <span style={{ color: "var(--text-dim)" }}>
+                  {t("diagnostic.streakLine", { n: completion.streak.current })}
+                </span>
+              </div>
+              <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 6 }}>
+                {completion.recorded ? t("diagnostic.activityRecorded") : t("diagnostic.activityRepeat")}
+              </div>
+            </Panel>
+          )}
           <Panel style={{ padding: 30 }}>
             {profile.length === 0 ? (
-              <p style={{ color: "var(--text-dim)" }}>Chưa có đủ dữ liệu để hiển thị hồ sơ.</p>
+              <p style={{ color: "var(--text-dim)" }}>{t("diagnostic.noProfile")}</p>
             ) : (
               profile.map((s) => (
                 <SkillBar key={`${s.subject}-${s.topic}`} name={`${s.subject} · ${s.topic}`} percent={s.masteryPercent} isWeak={s.isWeak} />
@@ -211,7 +243,7 @@ export default function DiagnosticPage() {
             )}
             <div style={{ textAlign: "center", marginTop: 20 }}>
               <button className="btn-primary" onClick={() => router.push("/roadmap")}>
-                Xem lộ trình học đề xuất
+                {t("diagnostic.viewRoadmap")}
               </button>
             </div>
           </Panel>

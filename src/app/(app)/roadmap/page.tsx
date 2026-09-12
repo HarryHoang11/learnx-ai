@@ -29,8 +29,8 @@ import StateMessage from "@/components/ui/StateMessage";
 import RoadmapCard from "@/components/roadmap/RoadmapCard";
 import RoadmapTaskDetail from "@/components/roadmap/RoadmapTaskDetail";
 import DeleteRoadmapDialog from "@/components/roadmap/DeleteRoadmapDialog";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { ApiResponse, GoalWithRoadmap, RoadmapPlan } from "@/types";
-
 interface SkillGapItem {
   topic: string;
   current: number | null;
@@ -40,11 +40,11 @@ interface SkillGapItem {
   priority: "HIGH" | "MEDIUM" | "LOW";
 }
 
-const PRIORITY_LABEL: Record<SkillGapItem["priority"], string> = {
-  HIGH: "Ưu tiên cao",
-  MEDIUM: "Ưu tiên vừa",
-  LOW: "Ưu tiên thấp",
-};
+const PRIORITY_LABEL = {
+  HIGH: "roadmap.priHIGH",
+  MEDIUM: "roadmap.priMEDIUM",
+  LOW: "roadmap.priLOW",
+} as const;
 
 const PRIORITY_COLOR: Record<SkillGapItem["priority"], string> = {
   HIGH: "var(--rose)",
@@ -55,6 +55,7 @@ const PRIORITY_COLOR: Record<SkillGapItem["priority"], string> = {
 const CREATE_NEW_VALUE = "__create_new__";
 
 export default function RoadmapPage() {
+  const { t } = useLanguage();
   const [goals, setGoals] = useState<GoalWithRoadmap[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -121,7 +122,7 @@ export default function RoadmapPage() {
         });
       }
     } catch {
-      setError("Không thể kết nối tới máy chủ.");
+      setError(t("common.connectionError"));
     } finally {
       setLoading(false);
     }
@@ -148,7 +149,7 @@ export default function RoadmapPage() {
       setShowCreateForm(false);
       await loadGoals(json.data.id);
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : "Không thể tạo lộ trình.");
+      setCreateError(err instanceof Error ? err.message : t("roadmap.createFail"));
     } finally {
       setCreating(false);
     }
@@ -166,7 +167,7 @@ export default function RoadmapPage() {
       if (!json.success) throw new Error(json.error);
       await loadGoals(goal.id);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Không thể cập nhật lộ trình.");
+      setActionError(err instanceof Error ? err.message : t("roadmap.updateFail"));
     }
   }
 
@@ -182,7 +183,7 @@ export default function RoadmapPage() {
       if (!json.success) throw new Error(json.error);
       await loadGoals(goal.id);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Không thể cập nhật lộ trình.");
+      setActionError(err instanceof Error ? err.message : t("roadmap.updateFail"));
     }
   }
 
@@ -199,13 +200,13 @@ export default function RoadmapPage() {
       setDeleteTarget(null);
       await loadGoals(wasSelected ? undefined : selectedGoalId ?? undefined);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Không thể xoá lộ trình.");
+      setActionError(err instanceof Error ? err.message : t("roadmap.deleteFail"));
     } finally {
       setDeleting(false);
     }
   }
 
-  if (loading) return <StateMessage kind="loading" text="Đang tải lộ trình..." />;
+  if (loading) return <StateMessage kind="loading" text={t("roadmap.loading")} />;
   if (error) return <StateMessage kind="error" text={error} />;
   if (!goals) return null;
 
@@ -223,29 +224,29 @@ export default function RoadmapPage() {
             onClick={() => setShowCreateForm(false)}
             style={{ marginBottom: 16, fontSize: 12.5, padding: "6px 12px" }}
           >
-            ← Quay lại danh sách lộ trình
+            {t("roadmap.back")}
           </button>
         )}
-        <h2 style={{ fontSize: 20, marginBottom: 6 }}>Đặt mục tiêu học tập</h2>
+        <h2 style={{ fontSize: 20, marginBottom: 6 }}>{t("roadmap.goalTitle")}</h2>
         <p style={{ color: "var(--text-dim)", fontSize: 13.5, marginBottom: 22 }}>
-          AI sẽ dựa trên mục tiêu này và hồ sơ năng lực hiện tại để xây lộ trình riêng cho bạn.
-          {goals.length > 0 && " Lộ trình cũ của bạn sẽ không bị mất."}
+          {t("roadmap.goalDesc")}
+          {goals.length > 0 && t("roadmap.goalKeep")}
         </p>
         <Panel>
           <label style={{ display: "block", fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>
-            Mục tiêu
+            {t("roadmap.goal")}
           </label>
           <input value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} style={inputStyle} />
           <div className="grid-form-2col" style={{ marginTop: 16 }}>
             <div>
               <label style={{ display: "block", fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>
-                Môn học
+                {t("roadmap.subject")}
               </label>
-              <input value={goalSubject} onChange={(e) => setGoalSubject(e.target.value)} placeholder="vd: Tin học" style={inputStyle} />
+              <input value={goalSubject} onChange={(e) => setGoalSubject(e.target.value)} placeholder={t("roadmap.subjectPh")} style={inputStyle} />
             </div>
             <div>
               <label style={{ display: "block", fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>
-                Thời gian (tháng)
+                {t("roadmap.months")}
               </label>
               <input
                 type="number"
@@ -258,16 +259,16 @@ export default function RoadmapPage() {
             </div>
           </div>
           <label style={{ display: "block", fontSize: 13, color: "var(--text-dim)", margin: "16px 0 6px" }}>
-            Kết quả mong muốn (tùy chọn)
+            {t("roadmap.target")}
           </label>
           <input
             value={goalTarget}
             onChange={(e) => setGoalTarget(e.target.value)}
-            placeholder="vd: IELTS 7.0, Codeforces 1800, giải HSG"
+            placeholder={t("roadmap.targetPh")}
             style={inputStyle}
           />
           <label style={{ display: "block", fontSize: 13, color: "var(--text-dim)", margin: "16px 0 6px" }}>
-            Hạn hoàn thành (tùy chọn)
+            {t("roadmap.deadline")}
           </label>
           <input
             type="date"
@@ -277,7 +278,7 @@ export default function RoadmapPage() {
           />
           {createError && <p style={{ color: "var(--rose)", fontSize: 13, marginTop: 12 }}>{createError}</p>}
           <button className="btn-primary" style={{ marginTop: 20 }} onClick={handleCreate} disabled={creating}>
-            {creating ? "AI đang xây lộ trình..." : "Tạo lộ trình"}
+            {creating ? t("roadmap.creating") : t("roadmap.create")}
           </button>
         </Panel>
       </section>
@@ -288,9 +289,9 @@ export default function RoadmapPage() {
 
   return (
     <section>
-      <h2 style={{ fontSize: 20 }}>Lộ trình học</h2>
+      <h2 style={{ fontSize: 20 }}>{t("roadmap.title")}</h2>
       <p style={{ color: "var(--text-dim)", fontSize: 13.5, marginTop: 6, marginBottom: 20 }}>
-        Lộ trình tự điều chỉnh dựa trên tốc độ tiến bộ của bạn
+        {t("roadmap.subtitle")}
       </p>
 
       {actionError && (
@@ -302,7 +303,7 @@ export default function RoadmapPage() {
       {/* --- Selector "Lộ trình hiện tại" --- */}
       <div style={{ marginBottom: 24, maxWidth: 420 }}>
         <label style={{ display: "block", fontSize: 12.5, color: "var(--text-dim)", marginBottom: 6 }}>
-          Lộ trình hiện tại
+          {t("roadmap.current")}
         </label>
         <select
           value={selectedGoal.id}
@@ -321,7 +322,7 @@ export default function RoadmapPage() {
               {g.title} — {g.progressPercent}%
             </option>
           ))}
-          <option value={CREATE_NEW_VALUE}>+ Tạo lộ trình mới</option>
+          <option value={CREATE_NEW_VALUE}>{t("roadmap.createNew")}</option>
         </select>
       </div>
 
@@ -330,7 +331,7 @@ export default function RoadmapPage() {
         <RoadmapTimeline plan={selectedGoal.plan} goalId={selectedGoal.id} />
       ) : (
         <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>
-          Lộ trình này chưa có kế hoạch chi tiết (có thể do AI xử lý lỗi lúc tạo).
+          {t("roadmap.noPlan")}
         </p>
       )}
 
@@ -338,16 +339,16 @@ export default function RoadmapPage() {
           current từ LearningProgress THẬT (evidence), target 80%.
           Topic chưa có dữ liệu ghi rõ "chưa đánh giá", không bịa số. */}
       <div style={{ marginTop: 28 }}>
-        <h3 style={{ fontSize: 16, marginBottom: 4 }}>Khoảng cách năng lực</h3>
+        <h3 style={{ fontSize: 16, marginBottom: 4 }}>{t("roadmap.gapTitle")}</h3>
         <p style={{ color: "var(--text-dim)", fontSize: 13, marginTop: 0, marginBottom: 14 }}>
           {selectedGoal.targetOutcome
-            ? <>Mục tiêu: <strong style={{ color: "var(--text)" }}>{selectedGoal.targetOutcome}</strong> · </>
+            ? <>{t("roadmap.gapGoal")} <strong style={{ color: "var(--text)" }}>{selectedGoal.targetOutcome}</strong> · </>
             : ""}
-          So sánh mastery hiện tại với ngưỡng vững ({80}%) theo từng chủ đề trong lộ trình
+          {t("roadmap.gapDesc", { n: 80 })}
         </p>
         {!gap || gap.length === 0 ? (
           <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>
-            {!gap ? "Đang phân tích..." : "Chưa có chủ đề nào để phân tích."}
+            {!gap ? t("roadmap.gapAnalyzing") : t("roadmap.gapEmpty")}
           </p>
         ) : (
           <Panel>
@@ -356,8 +357,8 @@ export default function RoadmapPage() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
                   <span style={{ fontSize: 13.5, fontWeight: 500 }}>{g.topic}</span>
                   <span style={{ fontSize: 12, color: PRIORITY_COLOR[g.priority], fontWeight: 600, whiteSpace: "nowrap" }}>
-                    {g.hasData ? `Hiện tại ${g.current}% → mục tiêu ${g.target}% · ` : "Chưa đánh giá · "}
-                    {PRIORITY_LABEL[g.priority]}
+                    {g.hasData ? t("roadmap.gapCurrent", { c: g.current ?? 0, t: g.target }) : t("roadmap.gapNoData")}
+                    {t(PRIORITY_LABEL[g.priority])}
                   </span>
                 </div>
                 <div className="bar-track" style={{ height: 10 }}>
@@ -372,7 +373,7 @@ export default function RoadmapPage() {
               </div>
             ))}
             {gap.length > 8 && (
-              <p style={{ color: "var(--text-dim)", fontSize: 12.5 }}>+ {gap.length - 8} chủ đề khác (đã sắp xếp theo gap giảm dần)</p>
+              <p style={{ color: "var(--text-dim)", fontSize: 12.5 }}>{t("roadmap.gapMore", { n: gap.length - 8 })}</p>
             )}
           </Panel>
         )}
@@ -381,9 +382,9 @@ export default function RoadmapPage() {
       {/* --- Khu vực quản lý "Lộ trình của tôi" --- */}
       <div style={{ marginTop: 40 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <h3 style={{ fontSize: 16 }}>Lộ trình của tôi</h3>
+          <h3 style={{ fontSize: 16 }}>{t("roadmap.mine")}</h3>
           <button className="btn-secondary" onClick={() => setShowCreateForm(true)} style={{ fontSize: 12.5, padding: "7px 14px" }}>
-            + Tạo lộ trình mới
+            {t("roadmap.createNew")}
           </button>
         </div>
 
@@ -420,6 +421,7 @@ export default function RoadmapPage() {
 // Bổ sung: bấm vào 1 topic để mở chi tiết (tài liệu + bài tập +
 // gợi ý + lên lịch) qua RoadmapTaskDetail.
 function RoadmapTimeline({ plan, goalId }: { plan: RoadmapPlan[]; goalId: string }) {
+  const { t } = useLanguage();
   const [openTopic, setOpenTopic] = useState<string | null>(null);
 
   return (
@@ -450,31 +452,31 @@ function RoadmapTimeline({ plan, goalId }: { plan: RoadmapPlan[]; goalId: string
           <div style={{ flex: 1, paddingBottom: 28 }}>
             <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>{m.label}</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {m.topics.map((t) => (
+              {m.topics.map((topic) => (
                 <button
-                  key={t.name}
-                  onClick={() => setOpenTopic((prev) => (prev === t.name ? null : t.name))}
-                  title="Bấm để xem tài liệu, bài tập và lên lịch"
+                  key={topic.name}
+                  onClick={() => setOpenTopic((prev) => (prev === topic.name ? null : topic.name))}
+                  title={t("roadmap.topicHint")}
                   style={{
                     fontSize: 13,
                     padding: "7px 12px",
                     borderRadius: 9,
-                    background: openTopic === t.name ? "var(--indigo-soft)" : "var(--panel-strong)",
+                    background: openTopic === topic.name ? "var(--indigo-soft)" : "var(--panel-strong)",
                     border: `1px solid ${
-                      t.status === "current" ? "var(--indigo)" : t.status === "done" ? "var(--cyan)" : "var(--border)"
+                      topic.status === "current" ? "var(--indigo)" : topic.status === "done" ? "var(--cyan)" : "var(--border)"
                     }`,
                     color:
-                      t.status === "current"
+                      topic.status === "current"
                         ? "var(--indigo)"
-                        : t.status === "done"
+                        : topic.status === "done"
                         ? "var(--cyan)"
-                        : t.status === "locked"
+                        : topic.status === "locked"
                         ? "var(--text-faint)"
                         : "var(--text)",
                     cursor: "pointer",
                   }}
                 >
-                  {t.name}
+                  {topic.name}
                 </button>
               ))}
             </div>

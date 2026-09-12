@@ -2,6 +2,7 @@
 // DUPLICATE DETECTION SERVICE
 // ================================================================
 // Uses embeddings and text similarity to detect duplicate documents
+// Separate checks for personal documents (Document) vs community documents (CommunityDocument)
 // ================================================================
 
 import { prisma } from "@/lib/db/prisma";
@@ -14,8 +15,79 @@ export interface DuplicateCheckResult {
   matchType: "exact" | "near" | "content" | "none";
 }
 
-// --- 1) EXACT DUPLICATE CHECK (file hash) ---
-export async function checkExactDuplicate(
+// --- PERSONAL DOCUMENT DUPLICATE CHECKS (Document table) ---
+
+// Exact duplicate check for personal documents (file hash + size)
+export async function checkExactPersonalDuplicate(
+  userId: string,
+  fileName: string,
+  fileSize: number
+): Promise<DuplicateCheckResult | null> {
+  const recentDuplicate = await prisma.$queryRaw<{ id: string; fileLength: number | null }[]>`
+    SELECT "id", octet_length("fileData") AS "fileLength"
+    FROM "Document"
+    WHERE "userId" = ${userId}
+      AND "fileName" = ${fileName}
+      AND "uploadedAt" >= ${new Date(Date.now() - 15_000)}
+    ORDER BY "uploadedAt" DESC
+    LIMIT 1
+  `;
+  
+  const dup = recentDuplicate[0];
+  if (dup && dup.fileLength === fileSize) {
+    return {
+      isDuplicate: true,
+      existingDocumentId: dup.id,
+      similarity: 1.0,
+      matchType: "exact",
+    };
+  }
+  
+  return null;
+}
+
+// Content similarity check for personal documents
+export async function detectDuplicatePersonalDocument(
+  userId: string,
+  text: string
+): Promise<DuplicateCheckResult> {
+  // First check user's own recent uploads
+  const recentDocs = await prisma.document.findMany({
+    where: {
+      userId,
+      status: "ready",
+      uploadedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, // Last 24h
+    },
+    select: { id: true, fileName: true, summary: true },
+    take: 10,
+  });
+
+  if (recentDocs.length === 0) {
+    return { isDuplicate: false, similarity: 0, matchType: "none" };
+  }
+
+  // Quick text similarity check first
+  for (const doc of recentDocs) {
+    if (!doc.summary) continue;
+    
+    const similarity = calculateTextSimilarity(text, doc.summary);
+    if (similarity > 0.9) {
+      return {
+        isDuplicate: true,
+        existingDocumentId: doc.id,
+        similarity,
+        matchType: "near",
+      };
+    }
+  }
+
+  return { isDuplicate: false, similarity: 0, matchType: "none" };
+}
+
+// --- COMMUNITY DOCUMENT DUPLICATE CHECKS (CommunityDocument table) ---
+
+// Exact duplicate check for community documents (file hash + size)
+export async function checkExactCommunityDuplicate(
   userId: string,
   fileName: string,
   fileSize: number
@@ -44,8 +116,8 @@ export async function checkExactDuplicate(
   return null;
 }
 
-// --- 2) CONTENT SIMILARITY CHECK (embeddings) ---
-export async function detectDuplicateDocument(
+// Content similarity check for community documents (user's own recent uploads)
+export async function detectDuplicateCommunityDocument(
   userId: string,
   text: string
 ): Promise<DuplicateCheckResult> {
@@ -85,46 +157,71 @@ export async function detectDuplicateDocument(
   return { isDuplicate: false, similarity: 0, matchType: "none" };
 }
 
-// --- 3) EMBEDDING-BASED SIMILARITY (using existing pgvector) ---
+// Cross-community duplicate check (check against OTHER users' community documents)
 export async function checkSemanticDuplicate(
   documentId: string,
   userId: string
 ): Promise<DuplicateCheckResult> {
   const document = await prisma.communityDocument.findUnique({
     where: { id: documentId },
-    select: { id: true, ownerId: true, summary: true, title: true },
+    select: { id: true, ownerId: true, summary: true, title: true, subjectId: true, topicId: true },
   });
 
   if (!document) return { isDuplicate: false, similarity: 0, matchType: "none" };
   if (document.ownerId !== userId) return { isDuplicate: false, similarity: 0, matchType: "none" };
 
-  // Need real text to embed — an empty query produces a meaningless vector.
   const queryText = (document.summary || document.title || "").trim();
   if (!queryText) return { isDuplicate: false, similarity: 0, matchType: "none" };
 
-  // Search for similar chunks in OTHER documents (never the document itself).
-  const similarChunks = await searchSimilarChunksAcrossDocuments(documentId, queryText, 5);
-
-  if (similarChunks.length === 0) {
-    return { isDuplicate: false, similarity: 0, matchType: "none" };
-  }
-
-  // The most similar chunk belongs to the most similar document.
-  const otherDoc = await prisma.communityDocument.findFirst({
-    where: { id: similarChunks[0].documentId },
-    select: { id: true, title: true },
+  // Search for duplicate candidates in community documents (excluding own)
+  const candidates = await prisma.communityDocument.findMany({
+    where: {
+      id: { not: documentId },
+      status: "READY",
+      ownerId: { not: userId }, // Only check OTHER users' documents
+      ...(document.subjectId ? { subjectId: document.subjectId } : {}),
+    },
+    select: { id: true, title: true, summary: true, ownerId: true },
+    take: 30,
   });
 
-  if (otherDoc) {
-    return {
-      isDuplicate: true,
-      existingDocumentId: otherDoc.id,
-      similarity: 0.85, // Estimated from embedding similarity
-      matchType: "content",
-    };
+  for (const candidate of candidates) {
+    const candText = (candidate.summary || candidate.title || "").trim();
+    if (!candText) continue;
+
+    const titleSim = calculateTextSimilarity(document.title, candidate.title);
+    if (titleSim >= 0.9) {
+      return {
+        isDuplicate: true,
+        existingDocumentId: candidate.id,
+        similarity: titleSim,
+        matchType: "near",
+      };
+    }
+
+    const contentSim = calculateTextSimilarity(queryText, candText);
+    if (contentSim >= 0.8) {
+      return {
+        isDuplicate: true,
+        existingDocumentId: candidate.id,
+        similarity: contentSim,
+        matchType: "content",
+      };
+    }
   }
 
   return { isDuplicate: false, similarity: 0, matchType: "none" };
+}
+
+// Persist duplicate relationship in CommunityDocument
+export async function markAsDuplicate(
+  documentId: string,
+  duplicateOfId: string
+): Promise<void> {
+  await prisma.communityDocument.update({
+    where: { id: documentId },
+    data: { duplicateOf: { connect: { id: duplicateOfId } } },
+  });
 }
 
 // --- 3) TEXT SIMILARITY HELPER ---

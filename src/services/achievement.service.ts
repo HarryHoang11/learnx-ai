@@ -6,7 +6,6 @@
 // ================================================================
 
 import { prisma } from "@/lib/db/prisma";
-import { recordLearningActivity } from "@/services/learning-activity.service";
 
 export interface AchievementDefinition {
   code: string;
@@ -48,7 +47,7 @@ export interface UnlockResult {
 }
 
 // --- ACHIEVEMENT DEFINITIONS ---
-const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
+export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
   // Learning achievements
   {
     code: "FIRST_LESSON",
@@ -379,7 +378,18 @@ export async function checkAndUnlockAchievements(userId: string, event: {
 }
 
 // --- 3) UNLOCK SPECIFIC ACHIEVEMENT ---
-async function unlockAchievement(userId: string, code: string): Promise<any> {
+// Returns the achievement with reward info, but does NOT record learning activity.
+// The caller (learning-activity.service) is responsible for recording the activity.
+async function unlockAchievement(userId: string, code: string): Promise<{
+  id: string;
+  code: string;
+  title: string;
+  description: string;
+  icon?: string | null;
+  category: string;
+  xpReward: number;
+  lxpReward: number;
+} | null> {
   const achievement = await prisma.achievement.findUnique({ where: { code } });
   if (!achievement) return null;
 
@@ -387,36 +397,55 @@ async function unlockAchievement(userId: string, code: string): Promise<any> {
   const existing = await prisma.userAchievement.findUnique({
     where: { userId_achievementId: { userId, achievementId: achievement.id } },
   });
-  if (existing) return existing;
+  if (existing) return existing as any;
 
   // Create user achievement
-  const userAchievement = await prisma.userAchievement.create({
+  await prisma.userAchievement.create({
     data: {
       userId,
       achievementId: achievement.id,
     },
   });
 
-  // Award XP and LXP
-  if (achievement.xpReward > 0 || achievement.lxpReward > 0) {
-    await recordLearningActivity({
-      userId,
-      type: "achievement_unlocked",
-      difficulty: "medium",
-      isFirstCompletion: true,
-      sourceId: achievement.id,
-      sourceType: "achievement",
-      metadata: { achievementCode: code },
-    });
-  }
-
-  return userAchievement;
+  // Return achievement with reward info for caller to record activity
+  return {
+    id: achievement.id,
+    code: achievement.code,
+    title: achievement.title,
+    description: achievement.description,
+    icon: achievement.icon,
+    category: achievement.category,
+    xpReward: achievement.xpReward,
+    lxpReward: achievement.lxpReward,
+  };
 }
 
-// --- 4) GET ACHIEVEMENT ID ---
-async function getAchievementId(code: string): Promise<string | null> {
+export async function getOrCreateAchievement(def: AchievementDefinition) {
+  return prisma.achievement.upsert({
+    where: { code: def.code },
+    update: {},
+    create: {
+      code: def.code,
+      title: def.title,
+      description: def.description,
+      icon: def.icon,
+      category: def.category,
+      xpReward: def.xpReward,
+      lxpReward: def.lxpReward,
+      metadata: { condition: def.condition },
+    },
+  });
+}
+
+// --- 4) GET ACHIEVEMENT ID (SELF-HEALING) ---
+export async function getAchievementId(code: string): Promise<string> {
+  const def = ACHIEVEMENT_DEFINITIONS.find((d) => d.code === code);
+  if (def) {
+    const ach = await getOrCreateAchievement(def);
+    return ach.id;
+  }
   const achievement = await prisma.achievement.findUnique({ where: { code } });
-  return achievement?.id || null;
+  return achievement?.id || "";
 }
 
 // --- 5) EVALUATE CONDITION ---

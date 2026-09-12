@@ -5,9 +5,14 @@
 // nhiều lần trong 1 danh sách (chat log) — tách component giúp trang
 // Tutor chỉ lo state/logic gọi API, không lẫn lộn với chi tiết style
 // từng bong bóng chat.
+//
+// Tin nhắn AI render qua MarkdownLite (HỆ THỐNG markdown duy nhất,
+// dùng chung với tóm tắt tài liệu — KHÔNG tạo renderer thứ hai):
+// headings/bold/italic/list/code/quote/table + công thức KaTeX.
+// Tin nhắn user giữ text thuần để phản ánh đúng điều đã gõ.
 // ================================================================
 
-import SafeMath from "@/components/math/SafeMath";
+import MarkdownLite from "@/components/documents/MarkdownLite";
 
 interface ChatBubbleProps {
   role: "user" | "assistant";
@@ -37,10 +42,9 @@ export default function ChatBubble({ role, content, tag }: ChatBubbleProps) {
           {tag}
         </span>
       )}
-      {/* Tin nhắn AI đi qua SafeMath để công thức LaTeX (\(..\),
-          $$..$$) render thành công thức thật; tin nhắn user giữ text
-          thường để phản ánh đúng điều user đã gõ. */}
-      {isUser ? content : <SafeMath text={content} />}
+      {/* Tin nhắn AI đi qua MarkdownLite (markdown + KaTeX); tin nhắn
+          user giữ text thường để phản ánh đúng điều user đã gõ. */}
+      {isUser ? content : <MarkdownLite content={content} />}
     </div>
   );
 }

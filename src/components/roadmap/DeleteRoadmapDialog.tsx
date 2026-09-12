@@ -3,6 +3,8 @@
 // ================================================================
 "use client";
 
+import { useLanguage } from "@/components/providers/LanguageProvider";
+
 interface DeleteRoadmapDialogProps {
   goalTitle: string;
   deleting: boolean;
@@ -11,11 +13,12 @@ interface DeleteRoadmapDialogProps {
 }
 
 export default function DeleteRoadmapDialog({ goalTitle, deleting, onCancel, onConfirm }: DeleteRoadmapDialogProps) {
+  const { t } = useLanguage();
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 14 }}>
-          Bạn có chắc muốn xóa lộ trình này?
+          {t("roadmap.delete.title")}
         </div>
 
         <div
@@ -27,18 +30,17 @@ export default function DeleteRoadmapDialog({ goalTitle, deleting, onCancel, onC
             marginBottom: 14,
           }}
         >
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>Lộ trình:</div>
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>{t("roadmap.delete.label")}</div>
           <div style={{ fontSize: 14, fontWeight: 500 }}>&quot;{goalTitle}&quot;</div>
         </div>
 
         <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6, marginBottom: 20 }}>
-          Tiến độ và các bản kế hoạch (roadmap) liên quan tới lộ trình này sẽ bị xoá vĩnh viễn.
-          Lịch sử làm bài/đánh giá năng lực của bạn ở các môn khác sẽ KHÔNG bị ảnh hưởng.
+          {t("roadmap.delete.desc")}
         </p>
 
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <button className="btn-secondary" onClick={onCancel} disabled={deleting}>
-            Hủy
+            {t("common.cancel")}
           </button>
           <button
             onClick={onConfirm}
@@ -55,7 +57,7 @@ export default function DeleteRoadmapDialog({ goalTitle, deleting, onCancel, onC
               opacity: deleting ? 0.7 : 1,
             }}
           >
-            {deleting ? "Đang xoá..." : "Xoá lộ trình"}
+            {deleting ? t("roadmap.delete.deleting") : t("roadmap.delete.confirm")}
           </button>
         </div>
       </div>

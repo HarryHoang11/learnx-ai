@@ -30,14 +30,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const hintLevel = (body.hintLevel ?? 0) as 0 | 1 | 2 | 3;
+    const hintLevel = Math.min(6, Math.max(0, Number(body.hintLevel ?? 0))) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
     const topic = (body.topic as string) ?? "Chưa xác định";
+    const language = body.language === "en" ? ("en" as const) : ("vi" as const);
 
     const result = await sendTutorMessage({
       userId,
       topic,
       userMessage: body.message,
       hintLevel,
+      language,
     });
 
     return NextResponse.json<ApiResponse<typeof result>>({ success: true, data: result });

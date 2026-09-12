@@ -19,6 +19,7 @@ import StateMessage from "@/components/ui/StateMessage";
 import EmptyState from "@/components/ui/EmptyState";
 import Skeleton from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { ApiResponse } from "@/types";
 
 interface MindNode {
@@ -62,6 +63,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 function MindMapPageInner() {
+  const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { push } = useToast();
@@ -100,7 +102,7 @@ function MindMapPageInner() {
           setList(json.data as MindMapRecord[]);
         }
       })
-      .catch(() => setError("Không thể kết nối tới máy chủ."))
+      .catch(() => setError(t("common.connectionError")))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -143,24 +145,24 @@ function MindMapPageInner() {
   function updateSelected() {
     if (!selected) return;
     if (editLabel.trim() === "") {
-      push("error", "Tên node không được để trống.");
+      push("error", t("mm.emptyName"));
       return;
     }
     markDirty(nodes.map((n) => (n.id === selected.id ? { ...n, label: editLabel.trim(), description: editDesc.trim() || undefined } : n)));
-    push("success", "Đã cập nhật node (nhớ bấm Lưu).");
+    push("success", t("mm.updated"));
   }
 
   function addChild() {
     if (!selected) return;
     const childId = `n-${Date.now()}`;
-    markDirty([...nodes, { id: childId, label: "Node mới", parentId: selected.id, type: "detail" }]);
+    markDirty([...nodes, { id: childId, label: t("mm.newNode"), parentId: selected.id, type: "detail" }]);
     setSelectedId(childId);
   }
 
   function deleteSelected() {
     if (!selected) return;
     if (selected.parentId === null) {
-      push("error", "Không thể xóa node gốc.");
+      push("error", t("mm.noDeleteRoot"));
       return;
     }
     // Xóa cả nhánh con (chống node mồ côi).
@@ -177,7 +179,7 @@ function MindMapPageInner() {
     }
     markDirty(nodes.filter((n) => !toDelete.has(n.id)));
     setSelectedId(null);
-    push("success", "Đã xóa node (nhớ bấm Lưu).");
+    push("success", t("mm.deleted"));
   }
 
   async function save() {
@@ -196,9 +198,9 @@ function MindMapPageInner() {
       }
       setRecord(json.data);
       setDirty(false);
-      push("success", "Đã lưu Mind Map.");
+      push("success", t("mm.saved"));
     } catch {
-      push("error", "Không thể lưu, thử lại sau.");
+      push("error", t("mm.saveFail"));
     } finally {
       setSaving(false);
     }
@@ -251,8 +253,11 @@ function MindMapPageInner() {
             margin: "5px 0",
             borderRadius: depth === 0 ? 14 : 10,
             background: isSelected ? "var(--indigo-soft)" : "var(--panel-strong)",
-            border: `1px solid ${isSelected ? "var(--indigo)" : isHit ? "var(--cyan)" : "var(--border)"}`,
-            borderLeft: `3px solid ${color}`,
+            borderWidth: 1,
+            borderStyle: "solid",
+            borderColor: isSelected ? "var(--indigo)" : isHit ? "var(--cyan)" : "var(--border)",
+            borderLeftWidth: 3,
+            borderLeftColor: color,
             fontSize: depth === 0 ? 15 : 13.5,
             fontWeight: depth === 0 ? 700 : 500,
             cursor: "pointer",
@@ -266,7 +271,7 @@ function MindMapPageInner() {
                 e.stopPropagation();
                 toggleCollapse(n.id);
               }}
-              aria-label={isCollapsed ? `Mở rộng ${n.label}` : `Thu gọn ${n.label}`}
+              aria-label={isCollapsed ? t("mm.expand", { n: n.label }) : t("mm.collapse", { n: n.label })}
               style={{
                 background: "var(--panel)",
                 border: "1px solid var(--border)",
@@ -316,9 +321,9 @@ function MindMapPageInner() {
         {(list?.length ?? 0) === 0 ? (
           <EmptyState
             icon="🧠"
-            title="Chưa có Mind Map nào"
-            description="Mở Thư viện → xem tóm tắt tài liệu → bấm “Tạo Mind Map” để AI vẽ sơ đồ từ nội dung bạn đã học."
-            actionLabel="Mở Thư viện"
+            title={t("mm.emptyTitle")}
+            description={t("mm.emptyDesc")}
+            actionLabel={t("mm.openLibrary")}
             onAction={() => router.push("/library")}
           />
         ) : (
@@ -328,13 +333,13 @@ function MindMapPageInner() {
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 14.5 }}>{m.title}</div>
                   <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 4 }}>
-                    {m.data?.nodes?.length ?? 0} nodes
+                    {t("mm.nodes", { n: m.data?.nodes?.length ?? 0 })}
                     {m.subject ? ` · ${m.subject}` : ""}
                     {m.topic ? ` · ${m.topic}` : ""}
                   </div>
                 </div>
                 <button className="btn-secondary" onClick={() => router.push(`/mindmap?id=${m.id}`)} style={{ flexShrink: 0 }}>
-                  Mở
+                  {t("mm.open")}
                 </button>
               </Panel>
             ))}
@@ -345,7 +350,7 @@ function MindMapPageInner() {
   }
 
   // --- Chi tiết 1 mind map ---
-  if (!record) return <StateMessage kind="error" text="Không tìm thấy Mind Map." />;
+  if (!record) return <StateMessage kind="error" text={t("mm.notFound")} />;
 
   return (
     <section className="page-enter">
@@ -353,24 +358,24 @@ function MindMapPageInner() {
         <div>
           <h2 className="page-title" style={{ marginBottom: 4 }}>{record.title}</h2>
           <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>
-            {nodes.length} nodes{dirty ? " · có thay đổi chưa lưu" : ""}
+            {t("mm.nodes", { n: nodes.length })}{dirty ? ` · ${t("mm.unsaved")}` : ""}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn-secondary" onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)))} aria-label="Thu nhỏ">
+          <button className="btn-secondary" onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)))} aria-label={t("mm.zoomOut")}>
             −
           </button>
-          <button className="btn-secondary" onClick={() => setZoom(1)} aria-label="Zoom về 100%">
+          <button className="btn-secondary" onClick={() => setZoom(1)} aria-label={t("mm.zoomReset")}>
             {Math.round(zoom * 100)}%
           </button>
-          <button className="btn-secondary" onClick={() => setZoom((z) => Math.min(1.6, +(z + 0.1).toFixed(2)))} aria-label="Phóng to">
+          <button className="btn-secondary" onClick={() => setZoom((z) => Math.min(1.6, +(z + 0.1).toFixed(2)))} aria-label={t("mm.zoomIn")}>
             +
           </button>
           <button className="btn-secondary" onClick={exportJSON}>
-            Export
+            {t("mm.export")}
           </button>
           <button className="btn-primary" onClick={save} disabled={saving || !dirty}>
-            {saving ? "Đang lưu..." : "Lưu"}
+            {saving ? t("mm.saving") : t("mm.save")}
           </button>
         </div>
       </div>
@@ -379,8 +384,8 @@ function MindMapPageInner() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Tìm node... (tự highlight ●)"
-          aria-label="Tìm node trong mind map"
+          placeholder={t("mm.searchPh")}
+          aria-label={t("mm.searchAria")}
           className="form-input"
         />
       </div>
@@ -390,7 +395,7 @@ function MindMapPageInner() {
           <div className="scroll-x-mobile">
             <div style={{ transform: `scale(${zoom})`, transformOrigin: "top left", minWidth: 280 }}>
               {roots.length === 0 ? (
-                <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>Mind map này chưa có node nào.</p>
+                <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>{t("mm.noNodes")}</p>
               ) : (
                 roots.map((r) => renderNode(r, 0, new Set()))
               )}
@@ -399,19 +404,19 @@ function MindMapPageInner() {
         </Panel>
 
         <Panel>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Chi tiết node</div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{t("mm.nodeDetail")}</div>
           {!selected ? (
-            <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>Bấm vào 1 node để xem và chỉnh sửa.</p>
+            <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>{t("mm.pickNode")}</p>
           ) : (
             <div>
-              <label className="form-label" htmlFor="mm-label">Tên node</label>
+              <label className="form-label" htmlFor="mm-label">{t("mm.nodeName")}</label>
               <input
                 id="mm-label"
                 className="form-input"
                 value={editLabel}
                 onChange={(e) => setEditLabel(e.target.value)}
               />
-              <label className="form-label" htmlFor="mm-desc">Mô tả</label>
+              <label className="form-label" htmlFor="mm-desc">{t("mm.nodeDesc")}</label>
               <textarea
                 id="mm-desc"
                 className="form-textarea"
@@ -421,13 +426,13 @@ function MindMapPageInner() {
               />
               <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                 <button className="btn-primary" onClick={updateSelected} style={{ fontSize: 12.5 }}>
-                  Cập nhật
+                  {t("mm.update")}
                 </button>
                 <button className="btn-secondary" onClick={addChild} style={{ fontSize: 12.5 }}>
-                  + Node con
+                  {t("mm.addChild")}
                 </button>
                 <button className="btn-secondary" onClick={deleteSelected} style={{ fontSize: 12.5 }}>
-                  Xóa
+                  {t("mm.delete")}
                 </button>
               </div>
               {selected.description && (
@@ -444,8 +449,9 @@ function MindMapPageInner() {
 }
 
 export default function MindMapPage() {
+  const { t } = useLanguage();
   return (
-    <Suspense fallback={<p className="state-msg">Đang tải...</p>}>
+    <Suspense fallback={<p className="state-msg">{t("mm.loading")}</p>}>
       <MindMapPageInner />
     </Suspense>
   );

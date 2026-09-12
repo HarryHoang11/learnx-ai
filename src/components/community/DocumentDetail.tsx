@@ -5,6 +5,8 @@
 "use client";
 
 import { useState } from "react";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import { localeFor, type I18nKey } from "@/lib/i18n/dictionary";
 import type { CommunityDocumentWithRelations } from "@/types";
 import MarkdownLite from "@/components/documents/MarkdownLite";
 import ReportModal from "@/components/community/ReportModal";
@@ -20,12 +22,12 @@ interface CommunityDocumentDetailProps {
   saved?: boolean;
 }
 
-const TRUST_LABELS: Record<string, string> = {
-  HIGH_QUALITY: "Chất lượng cao",
-  COMMUNITY_VERIFIED: "Đã xác minh",
-  NEW: "Mới",
-  NEEDS_REVIEW: "Cần xem xét",
-  LOW_QUALITY: "Chất lượng thấp",
+const TRUST_KEYS: Record<string, I18nKey> = {
+  HIGH_QUALITY: "com.trust.HIGH_QUALITY",
+  COMMUNITY_VERIFIED: "com.trust.COMMUNITY_VERIFIED",
+  NEW: "com.trust.NEW",
+  NEEDS_REVIEW: "com.trust.NEEDS_REVIEW",
+  LOW_QUALITY: "com.trust.LOW_QUALITY",
 };
 
 const TRUST_COLORS: Record<string, string> = {
@@ -47,11 +49,12 @@ export default function CommunityDocumentDetail({
   saved = false,
 }: CommunityDocumentDetailProps) {
   const [showReportModal, setShowReportModal] = useState(false);
+  const { t, lang } = useLanguage();
 
   const { trustLevel, qualityScore, averageRating, ratingCount, helpfulVotes, viewCount, downloadCount, saveCount, owner, subject, topic, tags, summary, aiQuality, aiEvaluatedAt } = document;
 
   const trustColor = TRUST_COLORS[trustLevel] || "var(--text-dim)";
-  const trustLabel = TRUST_LABELS[trustLevel] || trustLevel;
+  const trustLabel = TRUST_KEYS[trustLevel] ? t(TRUST_KEYS[trustLevel]) : trustLevel;
 
   const formatNumber = (num: number) => {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
@@ -82,7 +85,7 @@ export default function CommunityDocumentDetail({
                   color: TRUST_COLORS[trustLevel] || "var(--text-dim)",
                 }}
               >
-                {TRUST_LABELS[trustLevel] || trustLevel}
+                {TRUST_KEYS[trustLevel] ? t(TRUST_KEYS[trustLevel]) : trustLevel}
               </span>
               {document.qualityScore >= 0 && (
                 <span
@@ -119,7 +122,7 @@ export default function CommunityDocumentDetail({
                       "var(--amber)",
                   }}
                 >
-                  {document.difficulty === "easy" ? "Dễ" : document.difficulty === "medium" ? "Trung bình" : "Khó"}
+                  {document.difficulty === "easy" ? t("com.diff.easy") : document.difficulty === "medium" ? t("com.diff.medium") : t("com.diff.hard")}
                 </span>
               )}
               <span>{document.language?.toUpperCase() || "VI"}</span>
@@ -127,7 +130,7 @@ export default function CommunityDocumentDetail({
           </div>
           <button
             onClick={onClose}
-            aria-label="Đóng"
+            aria-label={t("common.close")}
             style={{
               background: "none",
               border: "none",
@@ -154,47 +157,47 @@ export default function CommunityDocumentDetail({
                   {document.averageRating > 0 ? document.averageRating.toFixed(1) : "—"}
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text-faint)" }}>
-                  {document.ratingCount} đánh giá
+                  {t("com.detail.reviews", { n: document.ratingCount })}
                 </div>
               </div>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--panel)", borderRadius: 8, border: "1px solid var(--border-soft)" }}>
               <span style={{ color: "var(--cyan)" }}>👁</span>
-              <div style={{ fontWeight: 600 }}>Lượt xem</div>
+              <div style={{ fontWeight: 600 }}>{t("com.detail.views")}</div>
               <div style={{ fontSize: 14, fontWeight: 600 }}>{formatNumber(document.viewCount)}</div>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--panel)", borderRadius: 8, border: "1px solid var(--border-soft)" }}>
               <span style={{ color: "var(--indigo)" }}>⬇</span>
-              <div style={{ fontWeight: 600 }}>Tải về</div>
+              <div style={{ fontWeight: 600 }}>{t("com.detail.downloads")}</div>
               <div style={{ fontSize: 14, fontWeight: 600 }}>{formatNumber(document.downloadCount)}</div>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--panel)", borderRadius: 8, border: "1px solid var(--border-soft)" }}>
               <span style={{ color: "var(--amber)" }}>💾</span>
-              <div style={{ fontWeight: 600 }}>Lưu</div>
+              <div style={{ fontWeight: 600 }}>{t("com.detail.saves")}</div>
               <div style={{ fontSize: 14, fontWeight: 600 }}>{formatNumber(document.saveCount)}</div>
             </div>
 
             {document.helpfulVotes > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--panel)", borderRadius: 8, border: "1px solid var(--border-soft)" }}>
                 <span style={{ color: "var(--green)" }}>👍</span>
-                <div style={{ fontWeight: 600 }}>Hữu ích</div>
+                <div style={{ fontWeight: 600 }}>{t("com.detail.helpful")}</div>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{formatNumber(document.helpfulVotes)}</div>
               </div>
             )}
 
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--panel)", borderRadius: 8, border: "1px solid var(--border-soft)" }}>
               <span style={{ color: "var(--cyan)" }}>⭐</span>
-              <div style={{ fontWeight: 600 }}>Chất lượng</div>
+              <div style={{ fontWeight: 600 }}>{t("com.detail.quality")}</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: "var(--cyan)" }}>{document.qualityScore.toFixed(0)}/100</div>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--panel)", borderRadius: 8, border: "1px solid var(--border-soft)" }}>
               <span style={{ color: TRUST_COLORS[trustLevel] }}>✓</span>
-              <div style={{ fontWeight: 600 }}>Độ tin cậy</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: TRUST_COLORS[trustLevel] }}>{TRUST_LABELS[trustLevel] || trustLevel}</div>
+              <div style={{ fontWeight: 600 }}>{t("com.detail.trust")}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: TRUST_COLORS[trustLevel] }}>{TRUST_KEYS[trustLevel] ? t(TRUST_KEYS[trustLevel]) : trustLevel}</div>
             </div>
           </div>
 
@@ -218,7 +221,7 @@ export default function CommunityDocumentDetail({
               ))}
               {tags.length > 8 && (
                 <span style={{ fontSize: 12, color: "var(--text-faint)" }}>
-                  +{tags.length - 8} tag khác
+                  {t("com.detail.moreTags", { n: tags.length - 8 })}
                 </span>
               )}
             </div>
@@ -229,10 +232,10 @@ export default function CommunityDocumentDetail({
             <div style={{ marginBottom: 20, padding: 16, background: "var(--indigo-soft)", borderRadius: 12, border: "1px solid var(--indigo)" }}>
               <div style={{ fontWeight: 600, marginBottom: 12, color: "var(--indigo)", display: "flex", alignItems: "center", gap: 8 }}>
                 <span>🤖</span>
-                Đánh giá chất lượng bởi AI
+                {t("com.detail.aiTitle")}
                 {aiEvaluatedAt && (
                   <span style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 400 }}>
-                    Đã đánh giá: {new Date(aiEvaluatedAt).toLocaleDateString("vi-VN")}
+                    {t("com.detail.aiAt")} {new Date(aiEvaluatedAt).toLocaleDateString(localeFor(lang))}
                   </span>
                 )}
               </div>
@@ -268,7 +271,7 @@ export default function CommunityDocumentDetail({
           {summary && (
             <div style={{ marginBottom: 24 }}>
               <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.5, color: "var(--cyan)", marginBottom: 12 }}>
-                TÓM TẮT AI
+                {t("com.detail.summary")}
               </div>
               <MarkdownLite content={summary} />
             </div>
@@ -281,21 +284,21 @@ export default function CommunityDocumentDetail({
               onClick={onSave}
               style={{ opacity: saved ? 0.7 : 1 }}
             >
-              {saved ? "✓ Đã lưu" : "💾 Lưu tài liệu"}
+              {saved ? t("com.card.saved") : t("com.detail.saveDoc")}
             </button>
             <button className="btn-secondary" onClick={onDownload}>
-              ⬇ Tải tài liệu
+              {t("com.detail.downloadDoc")}
             </button>
             <button
               className="btn-secondary"
               onClick={() => setShowReportModal(true)}
               style={{ borderColor: "var(--rose)", color: "var(--rose)" }}
             >
-              🚩 Báo cáo
+              {t("com.detail.report")}
             </button>
             {userRating && (
               <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
-                Bạn đã đánh giá: {"⭐".repeat(userRating)}
+                {t("com.detail.youRated")} {"⭐".repeat(userRating)}
               </span>
             )}
           </div>

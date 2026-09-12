@@ -14,8 +14,10 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import AuthCard from "@/components/auth/AuthCard";
 import OAuthButtons from "@/components/auth/OAuthButtons";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 
 export default function LoginPage() {
+  const { t } = useLanguage();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,7 +32,7 @@ export default function LoginPage() {
     const result = await signIn("credentials", { email, password, redirect: false });
 
     if (result?.error) {
-      setError("Email hoặc mật khẩu không đúng.");
+      setError(t("auth.badCredentials"));
       setLoading(false);
       return;
     }
@@ -38,12 +40,12 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthCard title="Đăng nhập" subtitle="Chào mừng bạn quay lại LearnX">
+    <AuthCard title={t("auth.loginTitle")} subtitle={t("auth.loginSubtitle")}>
       <OAuthButtons />
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0" }}>
         <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-        <span style={{ fontSize: 12, color: "var(--text-faint)" }}>hoặc</span>
+        <span style={{ fontSize: 12, color: "var(--text-faint)" }}>{t("auth.or")}</span>
         <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
       </div>
 
@@ -58,7 +60,7 @@ export default function LoginPage() {
         />
         <input
           type="password"
-          placeholder="Mật khẩu"
+          placeholder={t("auth.password")}
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -66,14 +68,14 @@ export default function LoginPage() {
         />
         {error && <p style={{ color: "var(--rose)", fontSize: 13 }}>{error}</p>}
         <button type="submit" className="btn-primary" disabled={loading} style={{ marginTop: 6 }}>
-          {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+          {loading ? t("auth.loggingIn") : t("auth.login")}
         </button>
       </form>
 
       <p style={{ fontSize: 13, color: "var(--text-dim)", textAlign: "center", marginTop: 18 }}>
-        Chưa có tài khoản?{" "}
+        {t("auth.noAccount")}{" "}
         <a href="/register" style={{ color: "var(--cyan)" }}>
-          Đăng ký
+          {t("auth.registerLink")}
         </a>
       </p>
     </AuthCard>

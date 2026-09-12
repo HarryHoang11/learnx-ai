@@ -44,7 +44,7 @@ export interface RoadmapPlan {
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
-  hintLevel?: 0 | 1 | 2 | 3 | 4 | 5; // 0 = chưa gợi ý, 1=🟢 2=🟡 3=🔴 4=🟣 5=🟤 (xem lib/ai/prompts.ts)
+  hintLevel?: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0..6 cấp độ Socratic (xem lib/ai/prompts.ts)
 }
 
 // Trạng thái 1 buổi học trong lịch — định nghĩa lại ở đây (thay vì

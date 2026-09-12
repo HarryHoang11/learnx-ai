@@ -9,6 +9,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 
 export interface ToastItem {
   id: number;
@@ -27,6 +28,7 @@ export function useToast(): ToastContextValue {
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useLanguage();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const idRef = useRef(1);
 
@@ -47,18 +49,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="toast-host" role="region" aria-label="Thông báo">
-        {toasts.map((t) => (
-          <div key={t.id} className={`toast toast--${t.kind} toast-enter`} role="status">
+      <div className="toast-host" role="region" aria-label={t("toast.region")}>
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast toast--${toast.kind} toast-enter`} role="status">
             <span aria-hidden="true">
-              {t.kind === "success" ? "✓" : t.kind === "error" ? "⚠" : "ℹ"}
+              {toast.kind === "success" ? "✓" : toast.kind === "error" ? "⚠" : "ℹ"}
             </span>
-            <span style={{ flex: 1 }}>{t.message}</span>
+            <span style={{ flex: 1 }}>{toast.message}</span>
             <button
               type="button"
               className="toast-close"
-              onClick={() => dismiss(t.id)}
-              aria-label="Đóng thông báo"
+              onClick={() => dismiss(toast.id)}
+              aria-label={t("toast.dismiss")}
             >
               ✕
             </button>

@@ -14,14 +14,16 @@
 import { useEffect, useState } from "react";
 import Panel from "@/components/ui/Panel";
 import { getLevelProgressDetails } from "@/lib/constants/xp";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import { localeFor } from "@/lib/i18n/dictionary";
 
 interface LevelProgressBarProps {
   lifetimeXP: number;
 }
 
-const formatNumber = (num: number) => num.toLocaleString("vi-VN");
-
 export default function LevelProgressBar({ lifetimeXP }: LevelProgressBarProps) {
+  const { t, lang } = useLanguage();
+  const format = (num: number) => num.toLocaleString(localeFor(lang));
   const d = getLevelProgressDetails(lifetimeXP);
   const [animatedPercent, setAnimatedPercent] = useState(0);
 
@@ -52,9 +54,9 @@ export default function LevelProgressBar({ lifetimeXP }: LevelProgressBarProps) 
         </div>
         <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>
           {d.isMaxLevel ? (
-            <>Đã đạt cấp tối đa</>
+            <>{t("level.maxed")}</>
           ) : (
-            <>{formatNumber(d.progressXP)} / {formatNumber(d.xpForNextLevel - d.xpForCurrentLevel)} XP · {d.progressPercent}%</>
+            <>{format(d.progressXP)} / {format(d.xpForNextLevel - d.xpForCurrentLevel)} XP · {d.progressPercent}%</>
           )}
         </div>
       </div>
@@ -65,7 +67,7 @@ export default function LevelProgressBar({ lifetimeXP }: LevelProgressBarProps) 
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={d.progressPercent}
-        aria-label={`Tiến độ Level ${d.level}`}
+        aria-label={t("level.progressAria", { n: d.level })}
       >
         <div
           className="bar-fill"
@@ -78,8 +80,8 @@ export default function LevelProgressBar({ lifetimeXP }: LevelProgressBarProps) 
       </div>
       <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 8 }}>
         {d.isMaxLevel
-          ? `Tổng ${formatNumber(d.currentXP)} XP — giữ vững phong độ!`
-          : `Còn ${formatNumber(d.remainingXP)} XP để lên Level ${d.level + 1}`}
+          ? t("level.maxedShort", { n: format(d.currentXP) })
+          : t("level.remainingShort", { n: format(d.remainingXP), m: d.level + 1 })}
       </div>
     </Panel>
   );

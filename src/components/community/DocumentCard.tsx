@@ -5,6 +5,8 @@
 "use client";
 
 import type { CommunityDocumentWithRelations } from "@/types";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import { localeFor, type I18nKey } from "@/lib/i18n/dictionary";
 
 interface CommunityDocumentCardProps {
   document: CommunityDocumentWithRelations;
@@ -22,6 +24,7 @@ export default function CommunityDocumentCard({
   saved = false,
 }: CommunityDocumentCardProps) {
   const { trustLevel, qualityScore, trustScore, viewCount, downloadCount, saveCount, helpfulVotes, ratingCount, averageRating, owner, subject, topic, tags, uploadedAt, publishedAt } = document;
+  const { t, lang } = useLanguage();
 
   const trustColors: Record<string, string> = {
     HIGH_QUALITY: "var(--cyan)",
@@ -31,12 +34,12 @@ export default function CommunityDocumentCard({
     LOW_QUALITY: "var(--text-dim)",
   };
 
-  const trustLabels: Record<string, string> = {
-    HIGH_QUALITY: "Chất lượng cao",
-    COMMUNITY_VERIFIED: "Đã xác minh",
-    NEW: "Mới",
-    NEEDS_REVIEW: "Cần xem xét",
-    LOW_QUALITY: "Chất lượng thấp",
+  const trustKeys: Record<string, I18nKey> = {
+    HIGH_QUALITY: "com.trust.HIGH_QUALITY",
+    COMMUNITY_VERIFIED: "com.trust.COMMUNITY_VERIFIED",
+    NEW: "com.trust.NEW",
+    NEEDS_REVIEW: "com.trust.NEEDS_REVIEW",
+    LOW_QUALITY: "com.trust.LOW_QUALITY",
   };
 
   const formatNumber = (num: number) => {
@@ -46,7 +49,7 @@ export default function CommunityDocumentCard({
   };
 
   const trustColor = trustColors[trustLevel] || "var(--text-dim)";
-  const trustLabel = trustLabels[trustLevel] || trustLevel;
+  const trustLabel = trustKeys[trustLevel] ? t(trustKeys[trustLevel]) : trustLevel;
 
   return (
     <div
@@ -122,7 +125,7 @@ export default function CommunityDocumentCard({
                 "var(--amber)",
             }}
           >
-            {document.difficulty === "easy" ? "Dễ" : document.difficulty === "medium" ? "Trung bình" : "Khó"}
+            {document.difficulty === "easy" ? t("com.diff.easy") : document.difficulty === "medium" ? t("com.diff.medium") : t("com.diff.hard")}
           </span>
         )}
       </div>
@@ -174,7 +177,7 @@ export default function CommunityDocumentCard({
           ))}
           {tags.length > 5 && (
             <span style={{ fontSize: 11, color: "var(--text-faint)" }}>
-              +{tags.length - 5} khác
+              {t("com.card.moreTags", { n: tags.length - 5 })}
             </span>
           )}
         </div>
@@ -191,12 +194,12 @@ export default function CommunityDocumentCard({
             </div>
           )}
           <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text)" }}>
-            {owner.name || owner.nickname || "Ẩn danh"}
+            {owner.name || owner.nickname || t("com.card.anonymous")}
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 12, color: "var(--text-faint)" }}>
-            {publishedAt ? new Date(publishedAt).toLocaleDateString("vi-VN") : new Date(uploadedAt).toLocaleDateString("vi-VN")}
+            {publishedAt ? new Date(publishedAt).toLocaleDateString(localeFor(lang)) : new Date(uploadedAt).toLocaleDateString(localeFor(lang))}
           </span>
         </div>
       </div>
@@ -222,7 +225,7 @@ export default function CommunityDocumentCard({
           onMouseEnter={(e) => { e.currentTarget.style.background = "var(--indigo-soft)"; e.currentTarget.style.borderColor = "var(--indigo)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "var(--panel-strong)"; e.currentTarget.style.borderColor = "var(--border)"; }}
         >
-          {saved ? "✓ Đã lưu" : "💾 Lưu"}
+          {saved ? t("com.card.saved") : t("com.card.save")}
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onDownload(); }}
@@ -243,7 +246,7 @@ export default function CommunityDocumentCard({
           onMouseEnter={(e) => { e.currentTarget.style.background = "var(--indigo-soft)"; e.currentTarget.style.borderColor = "var(--indigo)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "var(--panel-strong)"; e.currentTarget.style.borderColor = "var(--border)"; }}
         >
-          ⬇ Tải
+          {t("com.card.download")}
         </button>
       </div>
 

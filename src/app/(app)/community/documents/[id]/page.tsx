@@ -9,38 +9,13 @@ import { useParams, useRouter } from "next/navigation";
 import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
 import CommunityDocumentDetail from "@/components/community/DocumentDetail";
+import { useToast } from "@/components/ui/Toast";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { CommunityDocumentWithRelations } from "@/types";
 
-
-
-const REPORT_REASONS = [
-  { value: "WRONG_INFO", label: "Sai thông tin" },
-  { value: "SPAM", label: "Spam" },
-  { value: "DUPLICATE", label: "Trùng lặp" },
-  { value: "MISLEADING", label: "Gây hiểu lầm" },
-  { value: "INAPPROPRIATE", label: "Nội dung không phù hợp" },
-  { value: "COPYRIGHT", label: "Vi phạm bản quyền" },
-  { value: "WRONG_SUBJECT", label: "Sai môn học/chủ đề" },
-  { value: "OTHER", label: "Khác" },
-];
-
-const TRUST_LABELS: Record<string, string> = {
-  HIGH_QUALITY: "Chất lượng cao",
-  COMMUNITY_VERIFIED: "Đã xác minh",
-  NEW: "Mới",
-  NEEDS_REVIEW: "Cần xem xét",
-  LOW_QUALITY: "Chất lượng thấp",
-};
-
-const TRUST_COLORS: Record<string, string> = {
-  HIGH_QUALITY: "var(--cyan)",
-  COMMUNITY_VERIFIED: "var(--indigo)",
-  NEW: "var(--amber)",
-  NEEDS_REVIEW: "var(--rose)",
-  LOW_QUALITY: "var(--text-dim)",
-};
-
 export default function DocumentDetailPage() {
+  const { t } = useLanguage();
+  const { push } = useToast();
   const router = useRouter();
   const routeParams = useParams();
   const documentId = routeParams.id as string;
@@ -51,10 +26,6 @@ export default function DocumentDetailPage() {
   const [saved, setSaved] = useState(false);
   const [ratingLoading, setRatingLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [reporting, setReporting] = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [reportReason, setReportReason] = useState("");
-  const [reportDescription, setReportDescription] = useState("");
 
   useEffect(() => {
     loadDocument();
@@ -67,19 +38,19 @@ export default function DocumentDetailPage() {
       const res = await fetch(`/api/community/documents/${documentId}`);
       const json = await res.json();
       if (!json.success) {
-        setError(json.error || "Không tìm thấy tài liệu");
+        setError(json.error || t("com.doc.notFound"));
         return;
       }
       const doc = json.data;
       if (doc.visibility !== "COMMUNITY" && doc.ownerId !== await getCurrentUserId()) {
-        setError("Không có quyền truy cập tài liệu này");
+        setError(t("com.doc.noAccess"));
         return;
       }
       setDocument(doc);
       setUserRating(doc.userRating ?? null);
       setSaved(doc.userSave ?? false);
     } catch (err) {
-      setError("Không thể tải tài liệu");
+      setError(t("com.doc.loadFail"));
     } finally {
       setLoading(false);
     }
@@ -101,7 +72,7 @@ export default function DocumentDetailPage() {
     try {
       const userId = await getCurrentUserId();
       if (!userId) {
-        alert("Vui lòng đăng nhập để đánh giá");
+        push("error", t("com.doc.loginRate"));
         return;
       }
       const res = await fetch(`/api/community/documents/${document.id}/rate`, {
@@ -119,10 +90,10 @@ export default function DocumentDetailPage() {
           userRating: rating 
         } : null);
       } else {
-        alert("Không thể đánh giá: " + json.error);
+        push("error", t("com.doc.rateFail") + json.error);
       }
     } catch (err) {
-      alert("Không thể đánh giá: " + (err instanceof Error ? err.message : "Lỗi không xác định"));
+      push("error", t("com.doc.rateUnknown"));
     } finally {
       setRatingLoading(false);
     }
@@ -134,7 +105,7 @@ export default function DocumentDetailPage() {
     try {
       const userId = await getCurrentUserId();
       if (!userId) {
-        alert("Vui lòng đăng nhập để lưu tài liệu");
+        push("error", t("com.doc.loginSave"));
         return;
       }
       const res = await fetch(`/api/community/documents/${document.id}/save`, {
@@ -149,10 +120,10 @@ export default function DocumentDetailPage() {
           userSave: json.data.saved 
         } : null);
       } else {
-        alert("Không thể lưu/bỏ lưu: " + json.error);
+        push("error", t("com.doc.saveFail") + json.error);
       }
     } catch (err) {
-      alert("Không thể lưu/bỏ lưu: " + (err instanceof Error ? err.message : "Lỗi không xác định"));
+      push("error", t("com.doc.saveUnknown"));
     } finally {
       setSaving(false);
     }
@@ -163,7 +134,7 @@ export default function DocumentDetailPage() {
     try {
       const userId = await getCurrentUserId();
       if (!userId) {
-        alert("Vui lòng đăng nhập để tải tài liệu");
+        push("error", t("com.doc.loginDownload"));
         return;
       }
       await fetch(`/api/community/documents/${document.id}/download`, {
@@ -171,41 +142,37 @@ export default function DocumentDetailPage() {
       });
       window.open(`/api/community/documents/${document.id}/download`, "_blank");
     } catch (err) {
-      alert("Không thể tải tài liệu: " + (err instanceof Error ? err.message : "Lỗi không xác định"));
+      push("error", t("com.doc.downloadUnknown"));
     }
   };
 
-  const handleReport = async () => {
-    if (!reportReason) return;
-    setReporting(true);
+  // Dùng đúng reason/description modal trả về (trước đây bỏ qua args,
+  // đọc state chết luôn rỗng nên báo cáo không bao giờ gửi được).
+  const handleReport = async (reason: string, description: string) => {
+    if (!reason || !document) return;
     try {
       const userId = await getCurrentUserId();
       if (!userId) {
-        alert("Vui lòng đăng nhập để báo cáo");
+        push("error", t("com.doc.loginReport"));
         return;
       }
-      const res = await fetch(`/api/community/documents/${document?.id}/report`, {
+      const res = await fetch(`/api/community/documents/${document.id}/report`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: reportReason, description: reportDescription }),
+        body: JSON.stringify({ reason, description }),
       });
       const json = await res.json();
       if (json.success) {
-        alert("Đã gửi báo cáo. Cảm ơn bạn đã giúp cải thiện chất lượng cộng đồng!");
-        setShowReportModal(false);
-        setReportReason("");
-        setReportDescription("");
+        push("success", t("com.doc.reportThanks"));
       } else {
-        alert("Không thể báo cáo: " + json.error);
+        push("error", t("com.doc.reportFail") + json.error);
       }
     } catch (err) {
-      alert("Không thể báo cáo: " + (err instanceof Error ? err.message : "Lỗi không xác định"));
-    } finally {
-      setReporting(false);
+      push("error", t("com.doc.reportUnknown"));
     }
   };
 
-  if (loading) return <StateMessage kind="loading" text="Đang tải tài liệu..." />;
+  if (loading) return <StateMessage kind="loading" text={t("com.doc.loading")} />;
   if (error) return <StateMessage kind="error" text={error} />;
   if (!document) return null;
 

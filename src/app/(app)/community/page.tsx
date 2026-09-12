@@ -12,37 +12,51 @@ import SubjectFilter from "@/components/community/SubjectFilter";
 import CommunityDocumentCard from "@/components/community/DocumentCard";
 import ContributorLeaderboard from "@/components/community/ContributorLeaderboard";
 import { useToast } from "@/components/ui/Toast";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import type { I18nKey } from "@/lib/i18n/dictionary";
 import type { ApiResponse, SubjectWithTopics, BrowseFilters } from "@/types";
 import type { LeaderboardEntry } from "@/services/contribution.service";
 
-const SORT_OPTIONS = [
-  { value: "newest", label: "Mới nhất" },
-  { value: "quality", label: "Chất lượng cao" },
-  { value: "popular", label: "Phổ biến" },
-  { value: "rating", label: "Đánh giá cao" },
-  { value: "downloads", label: "Tải nhiều nhất" },
-];
+const SORT_KEYS = [
+  { value: "newest", labelKey: "com.sort.newest" },
+  { value: "quality", labelKey: "com.sort.quality" },
+  { value: "popular", labelKey: "com.sort.popular" },
+  { value: "rating", labelKey: "com.sort.rating" },
+  { value: "downloads", labelKey: "com.sort.downloads" },
+] as const;
 
-const TRUST_LEVELS = [
-  { value: "", label: "Tất cả" },
-  { value: "HIGH_QUALITY", label: "Chất lượng cao" },
-  { value: "COMMUNITY_VERIFIED", label: "Đã xác minh" },
-  { value: "NEW", label: "Mới" },
-  { value: "NEEDS_REVIEW", label: "Cần xem xét" },
-  { value: "LOW_QUALITY", label: "Chất lượng thấp" },
-];
+const TRUST_KEYS = [
+  { value: "", labelKey: "com.all" },
+  { value: "HIGH_QUALITY", labelKey: "com.trust.HIGH_QUALITY" },
+  { value: "COMMUNITY_VERIFIED", labelKey: "com.trust.COMMUNITY_VERIFIED" },
+  { value: "NEW", labelKey: "com.trust.NEW" },
+  { value: "NEEDS_REVIEW", labelKey: "com.trust.NEEDS_REVIEW" },
+  { value: "LOW_QUALITY", labelKey: "com.trust.LOW_QUALITY" },
+] as const;
+
+const DIFF_KEYS: Record<string, I18nKey> = {
+  easy: "com.diff.easy",
+  medium: "com.diff.medium",
+  hard: "com.diff.hard",
+};
 
 // Next.js yêu cầu mọi component dùng useSearchParams() phải nằm trong
 // <Suspense> (xem tutor/page.tsx) — tách Inner ra để bọc ở export mặc định.
 export default function CommunityPage() {
   return (
-    <Suspense fallback={<p className="state-msg">Đang tải...</p>}>
+    <Suspense fallback={<CommunityLoadingFallback />}>
       <CommunityPageInner />
     </Suspense>
   );
 }
 
+function CommunityLoadingFallback() {
+  const { t } = useLanguage();
+  return <p className="state-msg">{t("common.loading")}</p>;
+}
+
 function CommunityPageInner() {
+  const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { push } = useToast();
@@ -205,7 +219,7 @@ function CommunityPageInner() {
         else next.delete(docId);
         return next;
       });
-      push("success", saved ? "Đã lưu tài liệu." : "Đã bỏ lưu tài liệu.");
+      push("success", saved ? t("com.saved") : t("com.unsaved"));
     } catch {
       // Rollback khi lỗi — không để UI lệch với DB.
       setSavedIds((prev) => {
@@ -214,7 +228,7 @@ function CommunityPageInner() {
         else next.delete(docId);
         return next;
       });
-      push("error", "Không thể lưu tài liệu, thử lại sau.");
+      push("error", t("com.saveFail"));
     }
   }
 
@@ -224,7 +238,7 @@ function CommunityPageInner() {
       const res = await fetch(`/api/community/documents/${docId}/download`, { method: "POST" });
       if (!res.ok) {
         const json = await res.json().catch(() => null);
-        push("error", json?.error ?? "Không thể tải tài liệu.");
+        push("error", json?.error ?? t("com.downloadFail"));
         return;
       }
       const blob = await res.blob();
@@ -236,9 +250,9 @@ function CommunityPageInner() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      push("success", "Đang tải tài liệu.");
+      push("success", t("com.downloading"));
     } catch {
-      push("error", "Không thể tải tài liệu, thử lại sau.");
+      push("error", t("com.downloadFailRetry"));
     }
   }
 
@@ -259,10 +273,10 @@ function CommunityPageInner() {
           />
 
           <Panel style={{ marginTop: 16 }}>
-            <div style={{ fontWeight: 600, marginBottom: 12, fontSize: 14 }}>Bộ lọc khác</div>
+            <div style={{ fontWeight: 600, marginBottom: 12, fontSize: 14 }}>{t("com.otherFilters")}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
-                <label style={{ display: "block", fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Độ khó</label>
+                <label style={{ display: "block", fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>{t("com.difficulty")}</label>
                 <select
                   value={filters.difficulty}
                   onChange={(e) => setFilters(prev => ({ ...prev, difficulty: e.target.value, page: 1 }))}
@@ -276,15 +290,15 @@ function CommunityPageInner() {
                     fontSize: 13,
                   }}
                 >
-                  <option value="">Tất cả</option>
-                  <option value="easy">Dễ</option>
-                  <option value="medium">Trung bình</option>
-                  <option value="hard">Khó</option>
+                  <option value="">{t("com.all")}</option>
+                  <option value="easy">{t("com.diff.easy")}</option>
+                  <option value="medium">{t("com.diff.medium")}</option>
+                  <option value="hard">{t("com.diff.hard")}</option>
                 </select>
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Độ tin cậy</label>
+                <label style={{ display: "block", fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>{t("com.trust")}</label>
                 <select
                   value={filters.trustLevel}
                   onChange={(e) => setFilters(prev => ({ ...prev, trustLevel: e.target.value, page: 1 }))}
@@ -298,14 +312,14 @@ function CommunityPageInner() {
                     fontSize: 13,
                   }}
                 >
-                  {TRUST_LEVELS.map(t => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
+                  {TRUST_KEYS.map((o) => (
+                    <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Sắp xếp</label>
+                <label style={{ display: "block", fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>{t("com.sort")}</label>
                 <select
                   value={filters.sortBy}
                   onChange={(e) => setFilters(prev => ({ ...prev, sortBy: e.target.value, page: 1 }))}
@@ -319,8 +333,8 @@ function CommunityPageInner() {
                     fontSize: 13,
                   }}
                 >
-                  {SORT_OPTIONS.map(o => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
+                  {SORT_KEYS.map(o => (
+                    <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
                   ))}
                 </select>
               </div>
@@ -333,9 +347,9 @@ function CommunityPageInner() {
           {/* Header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div>
-              <h1 style={{ fontSize: 24, fontWeight: 600 }}>Cộng đồng Kiến thức</h1>
+              <h1 style={{ fontSize: 24, fontWeight: 600 }}>{t("com.title")}</h1>
               <p style={{ color: "var(--text-dim)", marginTop: 4 }}>
-                Khám phá, chia sẻ và học tập từ tài liệu cộng đồng
+                {t("com.subtitle")}
               </p>
             </div>
             <button
@@ -343,7 +357,7 @@ function CommunityPageInner() {
               onClick={() => router.push("/community/upload")}
               style={{ padding: "10px 18px", fontSize: 13.5 }}
             >
-              ⬆ Tải tài liệu
+              {t("com.upload")}
             </button>
           </div>
 
@@ -353,14 +367,14 @@ function CommunityPageInner() {
               <span style={{ color: "var(--cyan)" }}>📄</span>
               <div>
                 <div style={{ fontWeight: 600, fontSize: 16 }}>{documents.length + (totalDocs - documents.length > 0 ? ` / ${totalDocs}` : "")}</div>
-                <div style={{ fontSize: 11, color: "var(--text-faint)" }}>Tài liệu</div>
+                <div style={{ fontSize: 11, color: "var(--text-faint)" }}>{t("com.docs")}</div>
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--panel)", borderRadius: 8, border: "1px solid var(--border-soft)" }}>
               <span style={{ color: "var(--indigo)" }}>👥</span>
               <div>
                 <div style={{ fontWeight: 600, fontSize: 16 }}>{leaderboard.length > 0 ? leaderboard[0].contributionPoints : 0} CP</div>
-                <div style={{ fontSize: 11, color: "var(--text-faint)" }}>Top contributor</div>
+                <div style={{ fontSize: 11, color: "var(--text-faint)" }}>{t("com.topContrib")}</div>
               </div>
             </div>
           </div>
@@ -370,7 +384,7 @@ function CommunityPageInner() {
             <div style={{ flex: 1, minWidth: 200, position: "relative" }}>
               <input
                 type="text"
-                placeholder="🔍 Tìm kiếm tài liệu, chủ đề, tác giả..."
+                placeholder={t("com.searchPh")}
                 value={filters.search}
                 onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value, page: 1 }))}
                 style={{
@@ -389,7 +403,7 @@ function CommunityPageInner() {
 
           {hasFilters && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Bộ lọc:</span>
+              <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("com.filters")}</span>
               {filters.subjectId && subjects.find(s => s.id === filters.subjectId) && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", background: "var(--indigo-soft)", borderRadius: 99, fontSize: 12, color: "var(--indigo)" }}>
                   {subjects.find(s => s.id === filters.subjectId)?.icon} {subjects.find(s => s.id === filters.subjectId)?.name}
@@ -404,13 +418,13 @@ function CommunityPageInner() {
               )}
               {filters.difficulty && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", background: "var(--amber-soft)", borderRadius: 99, fontSize: 12, color: "var(--amber)" }}>
-                  {filters.difficulty === "easy" ? "Dễ" : filters.difficulty === "medium" ? "Trung bình" : "Khó"}
+                  {t(DIFF_KEYS[filters.difficulty] ?? "com.diff.medium")}
                   <button onClick={() => setFilters(p => ({ ...p, difficulty: "", page: 1 }))} style={{ marginLeft: 4, background: "none", border: "none", color: "inherit", cursor: "pointer", padding: 0, lineHeight: 1 }}>✕</button>
                 </span>
               )}
               {filters.trustLevel && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", background: "var(--rose-soft)", borderRadius: 99, fontSize: 12, color: "var(--rose)" }}>
-                  {TRUST_LEVELS.find(t => t.value === filters.trustLevel)?.label}
+                  {t(TRUST_KEYS.find((o) => o.value === filters.trustLevel)?.labelKey ?? "com.trust.NEW")}
                   <button onClick={() => setFilters(p => ({ ...p, trustLevel: "", page: 1 }))} style={{ marginLeft: 4, background: "none", border: "none", color: "inherit", cursor: "pointer", padding: 0, lineHeight: 1 }}>✕</button>
                 </span>
               )}
@@ -418,16 +432,16 @@ function CommunityPageInner() {
                 onClick={() => setFilters(p => ({ ...p, subjectId: "", topicId: "", difficulty: "", trustLevel: "", page: 1 }))}
                 style={{ padding: "4px 10px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 99, fontSize: 12, color: "var(--text-dim)", cursor: "pointer" }}
               >
-                Xóa tất cả bộ lọc
+                {t("com.clearFilters")}
               </button>
             </div>
           )}
 
           {/* Document Grid */}
-          {loading && <StateMessage kind="loading" text="Đang tải tài liệu..." />}
+          {loading && <StateMessage kind="loading" text={t("com.loading")} />}
           {error && <StateMessage kind="error" text={error} />}
           {!loading && !error && documents.length === 0 && (
-            <StateMessage kind="loading" text="Chưa có tài liệu nào phù hợp. Hãy thử bỏ bộ lọc hoặc tải tài liệu mới!" />
+            <StateMessage kind="loading" text={t("com.empty")} />
           )}
           {!loading && !error && documents.length > 0 && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 16 }}>
@@ -453,7 +467,7 @@ function CommunityPageInner() {
                 disabled={docLoading}
                 style={{ padding: "12px 24px", fontSize: 13.5 }}
               >
-                {docLoading ? "Đang tải..." : `Xem thêm (${documents.length}/${totalDocs})`}
+                {docLoading ? t("com.loadingMore") : t("com.loadMore", { a: documents.length, b: totalDocs })}
               </button>
             </div>
           )}
@@ -461,7 +475,7 @@ function CommunityPageInner() {
           {/* Leaderboard Sidebar on Desktop - could be moved to separate page */}
           {leaderboard.length > 0 && (
             <div style={{ marginTop: 32 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>🏆 Top Contributors</h2>
+              <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{t("com.topContributors")}</h2>
               <ContributorLeaderboard
                 leaderboard={leaderboard.slice(0, 5)}
                 period={leaderboardPeriod}
@@ -474,7 +488,7 @@ function CommunityPageInner() {
                   onClick={() => router.push("/community/leaderboard")}
                   style={{ padding: "8px 16px", fontSize: 12.5 }}
                 >
-                  Xem bảng xếp hạng đầy đủ →
+                  {t("com.fullLeaderboard")}
                 </button>
               </div>
             </div>

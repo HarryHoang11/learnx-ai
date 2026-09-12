@@ -11,6 +11,7 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 
 // SVG 4 màu chuẩn của logo Google ("G") — vẽ lại bằng path thay vì
 // dùng file ảnh, tránh phải quản lý thêm asset.
@@ -38,6 +39,7 @@ function GoogleIcon() {
 }
 
 export default function OAuthButtons() {
+  const { t } = useLanguage();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <button
@@ -52,7 +54,7 @@ export default function OAuthButtons() {
         }}
       >
         <GoogleIcon />
-        Đăng nhập với Google
+        {t("auth.google")}
       </button>
     </div>
   );

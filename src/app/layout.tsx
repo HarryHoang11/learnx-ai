@@ -11,6 +11,7 @@
 import type { ReactNode } from "react";
 import { Space_Grotesk, Inter } from "next/font/google";
 import SessionProviderWrapper from "@/components/providers/SessionProviderWrapper";
+import { LanguageProvider } from "@/components/providers/LanguageProvider";
 import "katex/dist/katex.min.css";
 import "./globals.css";
 
@@ -58,7 +59,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           Bug thật duy nhất đã tìm thấy (calendar anchor theo TZ) được
           sửa bằng mounted-pattern, KHÔNG phải bằng suppress. */}
       <body suppressHydrationWarning>
-        <SessionProviderWrapper>{children}</SessionProviderWrapper>
+        {/* LanguageProvider ở root (ngoài SessionProvider) để phủ TOÀN
+            app kể cả /login và /register — 1 provider duy nhất, không
+            lồng 2 tầng (xem (app)/layout.tsx). */}
+        <LanguageProvider>
+          <SessionProviderWrapper>{children}</SessionProviderWrapper>
+        </LanguageProvider>
       </body>
     </html>
   );

@@ -4,7 +4,7 @@
 
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
@@ -67,14 +67,22 @@ export default function CommunityUploadPage() {
   });
 
   const [selectedSubject, setSelectedSubject] = useState<any>(null);
+  const [loadingSubjects, setLoadingSubjects] = useState(true);
+
+  useEffect(() => {
+    loadSubjects();
+  }, []);
 
   async function loadSubjects() {
     try {
+      setLoadingSubjects(true);
       const res = await fetch("/api/community/subjects?includeTopics=true");
       const json = await res.json();
       if (json.success) setSubjects(json.data);
     } catch (err) {
       console.error("Failed to load subjects:", err);
+    } finally {
+      setLoadingSubjects(false);
     }
   }
 
@@ -292,9 +300,10 @@ export default function CommunityUploadPage() {
                   value={formData.subjectId}
                   onChange={e => { handleSubjectChange(e.target.value); handleInputChange({ target: { name: "subjectId", value: e.target.value } } as any); }}
                   style={{ width: "100%", padding: "10px 12px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", fontSize: 14 }}
+                  disabled={loadingSubjects}
                 >
-                  <option value="">Chọn môn học</option>
-                  {subjects.map(s => <option key={s.id} value={s.id}>{s.icon} {s.name}</option>)}
+                  <option value="">{loadingSubjects ? "Đang tải môn học..." : "Chọn môn học"}</option>
+                  {!loadingSubjects && subjects.map(s => <option key={s.id} value={s.id}>{s.icon} {s.name}</option>)}
                 </select>
               </div>
             </div>
@@ -351,18 +360,6 @@ export default function CommunityUploadPage() {
                   style={{ width: "100%", padding: "10px 12px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", fontSize: 14 }}
                 />
               </div>
-            </div>
-
-            <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Độ khó</label>
-              <select
-                name="difficulty"
-                value={formData.difficulty}
-                onChange={handleInputChange}
-                style={{ width: "100%", padding: "10px 12px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", fontSize: 14 }}
-              >
-                {DIFFICULTY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
             </div>
 
             <div>

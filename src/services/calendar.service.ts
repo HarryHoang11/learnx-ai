@@ -24,11 +24,8 @@ export interface StudySessionInput {
 const VIETNAM_TIMEZONE = 'Asia/Ho_Chi_Minh';
 
 // --- Helper: Get current date in Vietnam timezone as YYYY-MM-DD ---
-export function getTodayDateString(): string {
-  const now = new Date();
-  // Convert to Vietnam timezone
-  const vietnamTime = new Date(now.toLocaleString('en-US', { timeZone: VIETNAM_TIMEZONE }));
-  return vietnamTime.toISOString().slice(0, 10);
+export function getTodayDateString(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: VIETNAM_TIMEZONE }).format(now);
 }
 
 // --- Helper: Parse YYYY-MM-DD string to Date at START OF DAY in local timezone ---

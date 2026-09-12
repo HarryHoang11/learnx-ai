@@ -16,6 +16,8 @@ import SkillBar from "@/components/ui/SkillBar";
 import StateMessage from "@/components/ui/StateMessage";
 import LevelHero from "@/components/ui/LevelHero";
 import { getLevelProgressDetails } from "@/lib/constants/xp";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import { localeFor } from "@/lib/i18n/dictionary";
 import type { ApiResponse, SkillMasteryPoint } from "@/types";
 
 interface ProgressData {
@@ -46,6 +48,7 @@ interface StreakResponse {
 }
 
 export default function ProgressPage() {
+  const { t, lang } = useLanguage();
   const [progress, setProgress] = useState<ProgressData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +66,7 @@ export default function ProgressPage() {
         if (json.success) setProgress(json.data);
         else setError(json.error);
       })
-      .catch(() => setError("Không thể kết nối tới máy chủ."))
+      .catch(() => setError(t("common.connectionError")))
       .finally(() => setLoading(false));
 
     fetch("/api/analytics")
@@ -81,11 +84,11 @@ export default function ProgressPage() {
       .finally(() => setXpLoading(false));
   }, []);
 
-  if (loading) return <StateMessage kind="loading" text="Đang tải tiến độ..." />;
+  if (loading) return <StateMessage kind="loading" text={t("progress.loading")} />;
   if (error) return <StateMessage kind="error" text={error} />;
   if (!progress) return null;
 
-  const formatNumber = (num: number) => num.toLocaleString("vi-VN");
+  const formatNumber = (num: number) => num.toLocaleString(localeFor(lang));
 
   const xp = xpData?.progress;
   const streak = xpData?.streak;
@@ -96,12 +99,12 @@ export default function ProgressPage() {
 
   return (
     <section className="page-enter">
-      <h2 className="page-title">Tiến độ học tập</h2>
+      <h2 className="page-title">{t("progress.title")}</h2>
 
       {/* LEVEL HERO — vị trí nổi bật nhất, trên mọi stats */}
       {xpLoading ? (
         <Panel style={{ marginBottom: 24 }}>
-          <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>Đang tải cấp độ...</p>
+          <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>{t("progress.levelLoading")}</p>
         </Panel>
       ) : xp && levelDetails ? (
         <div className="enter enter--1">
@@ -110,7 +113,7 @@ export default function ProgressPage() {
       ) : (
         <Panel style={{ marginBottom: 24 }}>
           <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>
-            Chưa có dữ liệu cấp độ — hãy hoàn thành bài đầu tiên để bắt đầu tích XP.
+            {t("progress.noLevel")}
           </p>
         </Panel>
       )}
@@ -120,30 +123,30 @@ export default function ProgressPage() {
         <div className="grid-stats enter enter--2" style={{ marginBottom: 24 }}>
           <StatCard
             value={`${formatNumber(xp.lxpBalance)} LXP`}
-            label="LearnX Points"
+            label={t("progress.lxp")}
           />
-          <StatCard value={`🔥 ${streak.current}`} label={`${streak.longest} ngày dài nhất`} />
+          <StatCard value={`🔥 ${streak.current}`} label={t("common.longestDays", { n: streak.longest })} />
           <StatCard
             value={hasLearningData ? progress.totalAttempts : "—"}
-            label={hasLearningData ? "Bài đã làm" : "Chưa làm bài nào"}
+            label={hasLearningData ? t("progress.doneCount") : t("progress.noAttempts")}
           />
           <StatCard
             value={hasLearningData ? `${progress.accuracyPercent}%` : "—"}
-            label={hasLearningData ? "Độ chính xác" : "Làm bài để có thống kê"}
+            label={hasLearningData ? t("progress.accuracy") : t("progress.noAccuracy")}
           />
-          <StatCard value={progress.skillMap.length || "—"} label="Chủ đề đã theo dõi" />
-          <StatCard value={formatNumber(xp.lifetimeXP)} label="Tổng XP" />
-          <StatCard value={formatNumber(xp.lifetimeLXP)} label="Tổng LXP kiếm được" />
-          <StatCard value={`${streak.longest} ngày`} label="Streak dài nhất" />
+          <StatCard value={progress.skillMap.length || "—"} label={t("progress.topics")} />
+          <StatCard value={formatNumber(xp.lifetimeXP)} label={t("progress.totalXP")} />
+          <StatCard value={formatNumber(xp.lifetimeLXP)} label={t("progress.totalLXP")} />
+          <StatCard value={t("progress.days", { n: streak.longest })} label={t("progress.longestStreak")} />
         </div>
       )}
 
       <div className="grid-progress enter enter--3" style={{ marginTop: 20 }}>
         <Panel>
-          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 10 }}>Bản đồ năng lực</div>
+          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 10 }}>{t("progress.skillMap")}</div>
           {progress.skillMap.length === 0 ? (
             <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>
-              Chưa có dữ liệu — hãy làm bài Kiểm tra năng lực hoặc luyện tập để bắt đầu theo dõi.
+              {t("progress.skillEmpty")}
             </p>
           ) : (
             progress.skillMap.map((s) => (
@@ -153,9 +156,9 @@ export default function ProgressPage() {
         </Panel>
 
         <Panel>
-          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 10 }}>Nhận xét từ AI</div>
+          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 10 }}>{t("progress.aiTitle")}</div>
           {insightLoading ? (
-            <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>AI đang phân tích 7 ngày gần đây...</p>
+            <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>{t("progress.aiLoading")}</p>
           ) : (
             <div
               style={{

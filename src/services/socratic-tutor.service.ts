@@ -6,12 +6,13 @@
 // ================================================================
 
 import { prisma } from "@/lib/db/prisma";
+import { createHash } from "crypto";
 import { generateText, generateJSON } from "@/lib/ai/router";
 import { buildSocraticPrompt, buildTutorEvaluationPrompt } from "@/lib/ai/prompts";
-import { recordLearningActivity } from "@/services/learning-activity.service";
+import { getCurrentStreak, recordLearningActivity } from "@/services/learning-activity.service";
 import type { ChatMessage } from "@/types";
 
-export type HintLevel = 0 | 1 | 2 | 3 | 4 | 5;
+export type HintLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface TutorSessionData {
   id: string;
@@ -43,6 +44,20 @@ export interface TutorEvaluation {
   feedback: string;
   conceptsIdentified: string[];
   suggestedHintLevel: HintLevel;
+  // Kết quả ghi nhận hoạt động học (để UI hiện XP/streak từ server).
+  activity?: {
+    recorded: boolean;
+    alreadyRecorded?: boolean;
+    xpEarned: number;
+    streak: { current: number; longest: number };
+  };
+}
+
+// Hash ổn định câu hỏi+đáp án để dedup submit lặp lại (chống farm XP
+// bằng cách gửi đi gửi lại cùng 1 đáp án đúng).
+function evaluationSourceId(sessionId: string, question: string, userAnswer: string): string {
+  const normalized = `${question.trim().toLowerCase()}|${userAnswer.trim().toLowerCase()}`;
+  return `eval:${sessionId}:${createHash("sha256").update(normalized).digest("hex").slice(0, 16)}`;
 }
 
 // --- 1) CREATE TUTOR SESSION ---
@@ -198,6 +213,40 @@ export async function evaluateUserAnswer(params: {
       where: { id: session.id },
       data: { correctAnswers: { increment: 1 } },
     });
+
+    // Ghi nhận hoạt động học cho đáp án ĐÚNG — IDEMPOTENT theo
+    // (session, câu hỏi, đáp án): submit lặp lại cùng nội dung không
+    // tạo thêm XP/streak. Trước đây evaluate KHÔNG record gì nên streak
+    // không bao giờ cập nhật sau Tutor test (root cause Problem 4).
+    const sourceId = evaluationSourceId(session.id, params.question, params.userAnswer);
+    const existing = await prisma.xPTransaction.findFirst({
+      where: { userId: params.userId, sourceType: "tutor_evaluation", sourceId },
+      select: { id: true },
+    });
+    if (existing) {
+      const streak = await getCurrentStreak(params.userId);
+      evaluation.activity = {
+        recorded: false,
+        alreadyRecorded: true,
+        xpEarned: 0,
+        streak: { current: streak.current, longest: streak.longest },
+      };
+    } else {
+      const result = await recordLearningActivity({
+        userId: params.userId,
+        type: "tutor_session_completed",
+        difficulty: "medium",
+        scorePercent: 100,
+        isFirstCompletion: true,
+        sourceId,
+        sourceType: "tutor_evaluation",
+      });
+      evaluation.activity = {
+        recorded: true,
+        xpEarned: result.xpEarned,
+        streak: result.streakUpdated,
+      };
+    }
   } else {
     await prisma.tutorSession.update({
       where: { id: session.id },

@@ -15,6 +15,8 @@ import { Fragment, useEffect, useState, type CSSProperties, type FormEvent } fro
 import { useRouter } from "next/navigation";
 import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import { localeFor, type I18nKey } from "@/lib/i18n/dictionary";
 import type { ApiResponse } from "@/types";
 
 type View = "month" | "week" | "day";
@@ -44,13 +46,21 @@ interface GoalOption {
   title: string;
 }
 
-const VIEW_TABS: { key: View; label: string }[] = [
-  { key: "month", label: "Tháng" },
-  { key: "week", label: "Tuần" },
-  { key: "day", label: "Ngày" },
+const VIEW_KEYS: { key: View; labelKey: I18nKey }[] = [
+  { key: "month", labelKey: "calendar.view.month" },
+  { key: "week", labelKey: "calendar.view.week" },
+  { key: "day", labelKey: "calendar.view.day" },
 ];
 
-const WEEKDAY_LABELS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+const WEEKDAY_KEYS = [
+  "calendar.wd.0",
+  "calendar.wd.1",
+  "calendar.wd.2",
+  "calendar.wd.3",
+  "calendar.wd.4",
+  "calendar.wd.5",
+  "calendar.wd.6",
+] as const;
 
 // --- Helpers ngày local (tránh UTC shift, đúng convention calendar.service) ---
 function toDateStr(d: Date): string {
@@ -85,6 +95,7 @@ function minutesOfDay(iso: string): number {
 
 export default function CalendarPage() {
   const router = useRouter();
+  const { t, lang } = useLanguage();
   const [view, setView] = useState<View>("week");
   // anchor = null cho tới khi mount ở client. KHÔNG khởi tạo bằng
   // new Date() trong useState: giá trị đó chạy cả ở server (SSR) lẫn
@@ -129,7 +140,7 @@ export default function CalendarPage() {
         } else setError(json.error);
       }
     } catch {
-      setError("Không thể kết nối tới máy chủ.");
+      setError(t("common.connectionError"));
     }
   }
 
@@ -173,51 +184,53 @@ export default function CalendarPage() {
   const selected = selectedId ? sessions?.find((s) => s.id === selectedId) ?? null : null;
 
   // Tiêu đề ổn định giữa SSR và client: khi anchor còn null (chưa
-  // mount) thì hiện chữ tĩnh "Lịch học" ở cả hai phía — không bao giờ
-  // render ngày tháng khác nhau giữa server/client.
+  // mount) thì hiện chữ tĩnh ở cả hai phía — không bao giờ render ngày
+  // tháng khác nhau giữa server/client.
   const title = (() => {
-    if (anchor === null) return "Lịch học";
+    if (anchor === null) return t("calendar.title");
     const anchorDate = parseDateStr(anchor);
-    if (view === "month") return `Tháng ${anchorDate.getMonth() + 1}/${anchorDate.getFullYear()}`;
+    if (view === "month") return t("calendar.monthTitle", { m: anchorDate.getMonth() + 1, y: anchorDate.getFullYear() });
     if (view === "week") {
       const mon = mondayOf(anchor);
-      return `Tuần ${mon.slice(8, 10)}/${mon.slice(5, 7)} – ${addDays(mon, 6).slice(8, 10)}/${addDays(mon, 6).slice(5, 7)}`;
+      const a = `${mon.slice(8, 10)}/${mon.slice(5, 7)}`;
+      const end = addDays(mon, 6);
+      return t("calendar.weekTitle", { a, b: `${end.slice(8, 10)}/${end.slice(5, 7)}` });
     }
-    return `Ngày ${anchorDate.getDate()}/${anchorDate.getMonth() + 1}/${anchorDate.getFullYear()}`;
+    return t("calendar.dayTitle", { d: `${anchorDate.getDate()}/${anchorDate.getMonth() + 1}/${anchorDate.getFullYear()}` });
   })();
 
   return (
     <section>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
-        <h2 style={{ fontSize: 20 }}>Lịch học</h2>
+        <h2 style={{ fontSize: 20 }}>{t("calendar.title")}</h2>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <button className="btn-secondary" onClick={() => setShowForm((v) => !v)}>
-            {showForm ? "Đóng" : "+ Thêm buổi học"}
+            {showForm ? t("common.close") : t("calendar.addSession")}
           </button>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <button className="btn-secondary" onClick={() => shift(view === "month" ? -30 : view === "week" ? -7 : -1)} style={{ fontSize: 13, padding: "7px 12px" }}>
-              ← Trước
+              {t("calendar.prev")}
             </button>
             <span style={{ fontWeight: 500, minWidth: 150, textAlign: "center", fontSize: 13.5 }}>{title}</span>
             <button className="btn-secondary" onClick={() => shift(view === "month" ? 30 : view === "week" ? 7 : 1)} style={{ fontSize: 13, padding: "7px 12px" }}>
-              Sau →
+              {t("calendar.next")}
             </button>
             <button className="btn-secondary" onClick={goToToday} style={{ fontSize: 13, padding: "7px 12px" }}>
-              Hôm nay
+              {t("calendar.today")}
             </button>
           </div>
         </div>
       </div>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-        {VIEW_TABS.map((t) => (
+        {VIEW_KEYS.map((tab) => (
           <button
-            key={t.key}
-            onClick={() => setView(t.key)}
-            className={view === t.key ? "btn-primary" : "btn-secondary"}
+            key={tab.key}
+            onClick={() => setView(tab.key)}
+            className={view === tab.key ? "btn-primary" : "btn-secondary"}
             style={{ fontSize: 13 }}
           >
-            {t.label}
+            {t(tab.labelKey)}
           </button>
         ))}
       </div>
@@ -237,7 +250,7 @@ export default function CalendarPage() {
 
       {error && <StateMessage kind="error" text={error} />}
       {!error && sessions === null && monthGrid === null && (
-        <StateMessage kind="loading" text="Đang tải lịch..." />
+        <StateMessage kind="loading" text={t("calendar.loading")} />
       )}
 
       {view === "month" && monthGrid && (
@@ -275,15 +288,16 @@ export default function CalendarPage() {
 
 // --- Month view: lưới 42 ô + dots buổi học ---
 function MonthCalendarView({ days, onOpenDay }: { days: CalendarDayDto[]; onOpenDay: (dateStr: string) => void }) {
+  const { t } = useLanguage();
   const todayStr = toDateStr(new Date());
 
   return (
     <Panel>
       <div className="scroll-x-mobile">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, fontSize: 13, minWidth: 560 }}>
-          {WEEKDAY_LABELS.map((d) => (
-            <div key={d} style={{ textAlign: "center", color: "var(--text-dim)", fontWeight: 600, padding: "8px 0" }}>
-              {d}
+          {WEEKDAY_KEYS.map((k) => (
+            <div key={k} style={{ textAlign: "center", color: "var(--text-dim)", fontWeight: 600, padding: "8px 0" }}>
+              {t(k)}
             </div>
           ))}
           {days.map((day) => (
@@ -349,6 +363,8 @@ function WeekView({
   sessions: StudySessionDto[];
   onSelect: (id: string) => void;
 }) {
+  const { t, lang } = useLanguage();
+  const locale = localeFor(lang);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const todayStr = toDateStr(new Date());
 
@@ -358,7 +374,7 @@ function WeekView({
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(140px, 1fr))", gap: 8, minWidth: 700 }}>
           {days.map((d, i) => {
             const daySessions = sessions.filter((s) => toDateStr(new Date(s.startTime)) === d);
-            const label = d === todayStr ? "Hôm nay" : WEEKDAY_LABELS[i];
+            const label = d === todayStr ? t("calendar.todayLabel") : t(WEEKDAY_KEYS[i]);
             return (
               <div
                 key={d}
@@ -386,8 +402,8 @@ function WeekView({
                     >
                       <div style={{ fontWeight: 600 }}>{s.title}</div>
                       <div style={{ color: "var(--text-dim)", marginTop: 2 }}>
-                        {new Date(s.startTime).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} –{" "}
-                        {new Date(s.endTime).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                        {new Date(s.startTime).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })} –{" "}
+                        {new Date(s.endTime).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}
                       </div>
                     </button>
                   ))}
@@ -416,6 +432,8 @@ function DayView({
   onSelect: (id: string) => void;
   onCreateSlot: (start: string, end: string) => void;
 }) {
+  const { t, lang } = useLanguage();
+  const locale = localeFor(lang);
   const [nowMin, setNowMin] = useState(() => {
     const n = new Date();
     return n.getHours() * 60 + n.getMinutes();
@@ -454,7 +472,7 @@ function DayView({
               key={h}
               onClick={() => onCreateSlot(fmt(h * 60), fmt(Math.min(h * 60 + 60, (DAY_END_HOUR - 1) * 60 + 59)))}
               style={{ height: PX_PER_HOUR, borderTop: "1px solid var(--border-soft)", cursor: "pointer" }}
-              title="Bấm để tạo buổi học giờ này"
+              title={t("calendar.createSlotTitle")}
             />
           ))}
           {isToday && nowMin >= DAY_START_HOUR * 60 && nowMin < DAY_END_HOUR * 60 && (
@@ -501,8 +519,8 @@ function DayView({
                   {s.subject} — {s.title}
                 </div>
                 <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>
-                  {new Date(s.startTime).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} –{" "}
-                  {new Date(s.endTime).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                  {new Date(s.startTime).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })} –{" "}
+                  {new Date(s.endTime).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}
                 </div>
               </button>
             );
@@ -526,14 +544,16 @@ function SessionDetailModal({
   onOpenDay: (dateStr: string) => void;
 }) {
   const router = useRouter();
+  const { t, lang } = useLanguage();
+  const locale = localeFor(lang);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reschedDate, setReschedDate] = useState(() => toDateStr(new Date(session.startTime)));
   const [reschedStart, setReschedStart] = useState(() =>
-    new Date(session.startTime).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })
+    new Date(session.startTime).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false })
   );
   const [reschedEnd, setReschedEnd] = useState(() =>
-    new Date(session.endTime).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })
+    new Date(session.endTime).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false })
   );
 
   async function patch(body: Record<string, unknown>) {
@@ -552,7 +572,7 @@ function SessionDetailModal({
       }
       return true;
     } catch {
-      setError("Không thể kết nối tới máy chủ.");
+      setError(t("common.connectionError"));
       return false;
     } finally {
       setBusy(false);
@@ -566,36 +586,36 @@ function SessionDetailModal({
           <div>
             <div style={{ fontSize: 17, fontWeight: 700 }}>{session.subject} — {session.title}</div>
             <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 4 }}>
-              {new Date(session.startTime).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })} →{" "}
-              {new Date(session.endTime).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+              {new Date(session.startTime).toLocaleString(locale, { dateStyle: "short", timeStyle: "short" })} →{" "}
+              {new Date(session.endTime).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}
               {" · "}
-              {session.status === "COMPLETED" ? "Đã xong" : session.status === "IN_PROGRESS" ? "Đang học" : "Chờ học"}
+              {session.status === "COMPLETED" ? t("calendar.status.done") : session.status === "IN_PROGRESS" ? t("calendar.status.learning") : t("calendar.status.pending")}
             </div>
           </div>
-          <button onClick={onClose} aria-label="Đóng" style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 24, cursor: "pointer", lineHeight: 1 }}>
+          <button onClick={onClose} aria-label={t("common.close")} style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 24, cursor: "pointer", lineHeight: 1 }}>
             ×
           </button>
         </div>
 
-        {session.topic && <div style={{ fontSize: 13.5, marginBottom: 8 }}>Chủ đề: {session.topic}</div>}
+        {session.topic && <div style={{ fontSize: 13.5, marginBottom: 8 }}>{t("calendar.topic", { t: session.topic })}</div>}
         {session.description && (
           <div style={{ fontSize: 13.5, color: "var(--text-dim)", marginBottom: 8 }}>{session.description}</div>
         )}
         {session.learningGoalId && (
           <button className="btn-secondary" style={{ fontSize: 12.5, marginBottom: 12 }} onClick={() => router.push("/roadmap")}>
-            Thuộc lộ trình ↗
+            {t("calendar.inRoadmap")}
           </button>
         )}
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
           {session.status !== "IN_PROGRESS" && session.status !== "COMPLETED" && (
             <button className="btn-primary" disabled={busy} onClick={async () => { if (await patch({ status: "IN_PROGRESS" })) onChanged(); }} style={{ fontSize: 13 }}>
-              Bắt đầu học
+              {t("calendar.start")}
             </button>
           )}
           {session.status !== "COMPLETED" && (
             <button className="btn-secondary" disabled={busy} onClick={async () => { if (await patch({ status: "COMPLETED", progress: 100 })) onChanged(); }} style={{ fontSize: 13 }}>
-              Đánh dấu xong (+XP)
+              {t("calendar.completeXP")}
             </button>
           )}
           <button
@@ -604,14 +624,14 @@ function SessionDetailModal({
             onClick={() => onOpenDay(toDateStr(new Date(session.startTime)))}
             style={{ fontSize: 13 }}
           >
-            Xem trong ngày
+            {t("calendar.viewInDay")}
           </button>
           <button
             className="btn-secondary"
             disabled={busy}
             style={{ fontSize: 13, color: "var(--rose)" }}
             onClick={async () => {
-              if (!confirm("Xoá buổi học này?")) return;
+              if (!confirm(t("calendar.deleteConfirm"))) return;
               setBusy(true);
               try {
                 await fetch(`/api/calendar/${session.id}`, { method: "DELETE" });
@@ -621,12 +641,12 @@ function SessionDetailModal({
               }
             }}
           >
-            Xoá
+            {t("calendar.delete")}
           </button>
         </div>
 
         <div style={{ borderTop: "1px solid var(--border-soft)", paddingTop: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Dời lịch</div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t("calendar.reschedule")}</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <input type="date" value={reschedDate} onChange={(e) => setReschedDate(e.target.value)} style={inputStyle} />
             <input type="time" value={reschedStart} onChange={(e) => setReschedStart(e.target.value)} style={inputStyle} />
@@ -643,7 +663,7 @@ function SessionDetailModal({
                 if (ok) onChanged();
               }}
             >
-              Lưu lịch mới
+              {t("calendar.saveNew")}
             </button>
           </div>
         </div>
@@ -664,6 +684,7 @@ function CreateSessionForm({
   goals: GoalOption[];
   preset: { date?: string; startTime?: string; endTime?: string };
 }) {
+  const { t } = useLanguage();
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
   const [date, setDate] = useState(preset.date ?? "");
@@ -680,7 +701,7 @@ function CreateSessionForm({
     setError(null);
 
     if (!date) {
-      setError("Vui lòng chọn ngày.");
+      setError(t("calendar.form.pickDate"));
       setSubmitting(false);
       return;
     }
@@ -710,7 +731,7 @@ function CreateSessionForm({
       setSubject("");
       onCreated();
     } catch {
-      setError("Không thể tạo buổi học.");
+      setError(t("calendar.form.createFail"));
     } finally {
       setSubmitting(false);
     }
@@ -719,23 +740,23 @@ function CreateSessionForm({
   return (
     <Panel style={{ marginBottom: 4 }}>
       <form onSubmit={handleSubmit} className="grid-form-2col">
-        <input placeholder="Môn học (vd: Toán)" required value={subject} onChange={(e) => setSubject(e.target.value)} style={inputStyle} />
-        <input placeholder="Chủ đề (vd: Hàm số)" required value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} />
+        <input placeholder={t("calendar.form.subjectPh")} required value={subject} onChange={(e) => setSubject(e.target.value)} style={inputStyle} />
+        <input placeholder={t("calendar.form.topicPh")} required value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} />
         <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} style={inputStyle} />
         <div style={{ display: "flex", gap: 8 }}>
           <input type="time" required value={startTime} onChange={(e) => setStartTime(e.target.value)} style={inputStyle} />
           <input type="time" required value={endTime} onChange={(e) => setEndTime(e.target.value)} style={inputStyle} />
         </div>
-        <input placeholder="Mô tả (không bắt buộc)" value={description} onChange={(e) => setDescription(e.target.value)} style={{ ...inputStyle, gridColumn: "1 / -1" }} />
+        <input placeholder={t("calendar.form.descPh")} value={description} onChange={(e) => setDescription(e.target.value)} style={{ ...inputStyle, gridColumn: "1 / -1" }} />
         <select value={learningGoalId} onChange={(e) => setLearningGoalId(e.target.value)} style={{ ...inputStyle, gridColumn: "1 / -1" }}>
-          <option value="">Không gắn lộ trình (tùy chọn)</option>
+          <option value="">{t("calendar.form.noGoal")}</option>
           {goals.map((g) => (
             <option key={g.id} value={g.id}>{g.title}</option>
           ))}
         </select>
         {error && <p style={{ color: "var(--rose)", fontSize: 13, gridColumn: "1 / -1" }}>{error}</p>}
         <button type="submit" className="btn-primary" disabled={submitting} style={{ gridColumn: "1 / -1" }}>
-          {submitting ? "Đang tạo..." : "Tạo buổi học"}
+          {submitting ? t("calendar.form.creating") : t("calendar.form.create")}
         </button>
       </form>
     </Panel>

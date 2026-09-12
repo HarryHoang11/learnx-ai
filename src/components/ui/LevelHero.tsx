@@ -13,6 +13,8 @@
 
 import { useEffect, useState } from "react";
 import { getLevelProgressDetails } from "@/lib/constants/xp";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import { localeFor } from "@/lib/i18n/dictionary";
 
 interface LevelHeroProps {
   lifetimeXP: number;
@@ -24,18 +26,22 @@ interface LevelHeroProps {
   levelTitle?: string;
 }
 
-const formatNumber = (num: number) => num.toLocaleString("vi-VN");
+const formatNumber = (lang: "vi" | "en") => (num: number) => num.toLocaleString(localeFor(lang));
 
-function levelTitleFor(level: number): string {
-  if (level >= 50) return "Bậc thầy LearnX";
-  if (level >= 30) return "Chuyên gia";
-  if (level >= 20) return "Học viên nâng cao";
-  if (level >= 10) return "Học viên chăm chỉ";
-  if (level >= 5) return "Học viên tiến bộ";
-  return "Học viên mới";
+type LevelTitleKey = "level.title.50" | "level.title.30" | "level.title.20" | "level.title.10" | "level.title.5" | "level.title.1";
+
+function levelTitleKeyFor(level: number): LevelTitleKey {
+  if (level >= 50) return "level.title.50";
+  if (level >= 30) return "level.title.30";
+  if (level >= 20) return "level.title.20";
+  if (level >= 10) return "level.title.10";
+  if (level >= 5) return "level.title.5";
+  return "level.title.1";
 }
 
 export default function LevelHero({ lifetimeXP, recentGain, leveledUp, levelTitle }: LevelHeroProps) {
+  const { t, lang } = useLanguage();
+  const format = formatNumber(lang);
   const d = getLevelProgressDetails(lifetimeXP);
   const [animatedPercent, setAnimatedPercent] = useState(0);
 
@@ -60,12 +66,12 @@ export default function LevelHero({ lifetimeXP, recentGain, leveledUp, levelTitl
     return () => cancelAnimationFrame(raf);
   }, [d.progressPercent]);
 
-  const title = levelTitle ?? levelTitleFor(d.level);
+  const title = levelTitle ?? t(levelTitleKeyFor(d.level));
 
   return (
     <section
       className={`level-hero${leveledUp ? " level-hero--leveled" : ""}`}
-      aria-label={`Cấp độ ${d.level}, ${d.progressPercent}% tới cấp tiếp theo`}
+      aria-label={t("level.aria", { n: d.level, p: d.progressPercent })}
     >
       <div className="level-hero__glow" aria-hidden="true" />
       <div className="level-hero__row">
@@ -84,15 +90,15 @@ export default function LevelHero({ lifetimeXP, recentGain, leveledUp, levelTitl
             </div>
             <div className="level-hero__xp">
               {d.isMaxLevel ? (
-                <>{formatNumber(d.currentXP)} XP</>
+                <>{format(d.currentXP)} XP</>
               ) : (
                 <>
-                  {formatNumber(d.progressXP)} / {formatNumber(d.xpForNextLevel - d.xpForCurrentLevel)} XP
+                  {format(d.progressXP)} / {format(d.xpForNextLevel - d.xpForCurrentLevel)} XP
                 </>
               )}
               {typeof recentGain === "number" && recentGain > 0 && (
                 <span className="level-hero__gain" role="status">
-                  +{formatNumber(recentGain)} XP
+                  +{format(recentGain)} XP
                 </span>
               )}
             </div>
@@ -105,7 +111,7 @@ export default function LevelHero({ lifetimeXP, recentGain, leveledUp, levelTitl
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={d.progressPercent}
-            aria-label={`Tiến độ Level ${d.level}`}
+            aria-label={t("level.progressAria", { n: d.level })}
           >
             <div className="level-hero__fill" style={{ width: `${animatedPercent}%` }} />
           </div>
@@ -113,13 +119,13 @@ export default function LevelHero({ lifetimeXP, recentGain, leveledUp, levelTitl
           <div className="level-hero__bottom">
             {leveledUp ? (
               <span className="level-hero__levelup" role="status">
-                Level Up! Chúc mừng bạn 🎉
+                {t("level.up")}
               </span>
             ) : d.isMaxLevel ? (
-              <span>Tổng {formatNumber(d.currentXP)} XP — đã đạt cấp tối đa, giữ vững phong độ!</span>
+              <span>{t("level.maxedTotal", { n: format(d.currentXP) })}</span>
             ) : (
               <span>
-                Còn {formatNumber(d.remainingXP)} XP để đạt Level {d.level + 1}
+                {t("level.remaining", { n: format(d.remainingXP), m: d.level + 1 })}
               </span>
             )}
             <span className="level-hero__percent">{d.progressPercent}%</span>

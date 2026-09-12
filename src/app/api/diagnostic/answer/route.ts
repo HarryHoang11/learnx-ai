@@ -46,6 +46,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // IDEMPOTENT: phiên đã completed thì trả kết quả đã lưu, KHÔNG cập
+    // nhật counters, KHÔNG evaluate/record lại — chống farm XP/streak
+    // bằng cách submit lặp lại.
+    if (session.status === "completed") {
+      return NextResponse.json<ApiResponse<{ done: true; result: unknown }>>({
+        success: true,
+        data: { done: true, result: (session as { result?: unknown }).result ?? null },
+      });
+    }
+
     // Update session
     await updateDiagnosticSession({
       sessionId,

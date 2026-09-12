@@ -31,7 +31,8 @@ export async function sendTutorMessage(params: {
   userId: string;
   topic: string;
   userMessage: string;
-  hintLevel: 0 | 1 | 2 | 3;
+  hintLevel: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  language?: "vi" | "en";
 }): Promise<{ reply: string; conversationId: string }> {
   const conversation = await getOrCreateConversation(params.userId, params.topic);
   const history = (conversation.messages as unknown as ChatMessage[]) ?? [];
@@ -44,7 +45,11 @@ export async function sendTutorMessage(params: {
     { role: "user", content: params.userMessage, hintLevel: params.hintLevel },
   ];
 
-  const systemPrompt = buildSocraticPrompt(params.topic, params.hintLevel);
+  const systemPrompt = buildSocraticPrompt(
+    params.topic,
+    params.hintLevel,
+    params.language === "en" ? "en" : "vi"
+  );
 
   // Truyền vài lượt hội thoại gần nhất làm ngữ cảnh (không truyền cả
   // lịch sử để tránh vượt giới hạn token) — 6 tin nhắn gần nhất là đủ

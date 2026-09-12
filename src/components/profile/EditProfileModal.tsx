@@ -11,6 +11,7 @@
 "use client";
 
 import { useState } from "react";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { UserProfile } from "@/types";
 
 const BIO_MAX_LENGTH = 150;
@@ -22,6 +23,7 @@ interface EditProfileModalProps {
 }
 
 export default function EditProfileModal({ profile, onClose, onSaved }: EditProfileModalProps) {
+  const { t } = useLanguage();
   const [name, setName] = useState(profile.name ?? "");
   const [nickname, setNickname] = useState(profile.nickname ?? "");
   const [bio, setBio] = useState(profile.bio ?? "");
@@ -32,7 +34,7 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
     setError(null);
 
     if (name.trim().length === 0) {
-      setError("Họ và tên không được để trống.");
+      setError(t("profile.nameRequired"));
       return;
     }
 
@@ -52,7 +54,7 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
 
       onSaved(json.data);
     } catch {
-      setError("Không thể kết nối tới máy chủ, thử lại sau.");
+      setError(t("common.connectionError"));
     } finally {
       setSaving(false);
     }
@@ -64,10 +66,10 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
     // thẻ con để tránh đóng nhầm khi user chỉ đang bấm vào input.
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ fontSize: 18, marginBottom: 18 }}>Chỉnh sửa trang cá nhân</h3>
+        <h3 style={{ fontSize: 18, marginBottom: 18 }}>{t("profile.editTitle")}</h3>
 
         <label className="form-label" htmlFor="edit-name">
-          Họ và tên
+          {t("profile.name")}
         </label>
         <input
           id="edit-name"
@@ -75,11 +77,11 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
           value={name}
           onChange={(e) => setName(e.target.value)}
           disabled={saving}
-          placeholder="Nguyễn Văn A"
+          placeholder={t("profile.namePh")}
         />
 
         <label className="form-label" htmlFor="edit-nickname">
-          Biệt danh
+          {t("profile.nickname")}
         </label>
         <input
           id="edit-nickname"
@@ -91,7 +93,7 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
         />
 
         <label className="form-label" htmlFor="edit-email">
-          Email
+          {t("profile.email")}
         </label>
         {/* Email hiển thị read-only — không cho sửa trực tiếp ở đây vì
             đổi email liên quan tới xác thực lại tài khoản (emailVerified),
@@ -99,7 +101,7 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
         <input id="edit-email" className="form-input" value={profile.email} disabled readOnly />
 
         <label className="form-label" htmlFor="edit-bio">
-          Tiểu sử
+          {t("profile.bio")}
           <span className="form-label-counter">
             {bio.length}/{BIO_MAX_LENGTH}
           </span>
@@ -111,7 +113,7 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
           maxLength={BIO_MAX_LENGTH}
           onChange={(e) => setBio(e.target.value)}
           disabled={saving}
-          placeholder="Vài dòng giới thiệu về bản thân..."
+          placeholder={t("profile.bioPh")}
           rows={3}
         />
 
@@ -119,10 +121,10 @@ export default function EditProfileModal({ profile, onClose, onSaved }: EditProf
 
         <div style={{ display: "flex", gap: 10, marginTop: 22, justifyContent: "flex-end" }}>
           <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>
-            Hủy
+            {t("common.cancel")}
           </button>
           <button type="button" className="btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? "Đang lưu..." : "Lưu"}
+            {saving ? t("profile.saving") : t("common.save")}
           </button>
         </div>
       </div>

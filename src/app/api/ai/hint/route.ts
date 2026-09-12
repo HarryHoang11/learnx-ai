@@ -15,9 +15,12 @@ import { AIOverloadedError } from "@/lib/ai/router";
 import type { ApiResponse } from "@/types";
 
 const HINT_LABELS: Record<number, string> = {
-  1: "🟢 Gợi ý",
-  2: "🟡 Hướng dẫn",
-  3: "🔴 Lời giải",
+  1: "💡 Manh mối khái niệm",
+  2: "🔍 Gợi ý mạnh",
+  3: "🧩 Suy luận từng phần",
+  4: "🎯 Dẫn dắt sát lời giải",
+  5: "📖 Giải thích chi tiết",
+  6: "📝 Lời giải hoàn chỉnh",
 };
 
 export async function POST(req: NextRequest) {
@@ -25,16 +28,17 @@ export async function POST(req: NextRequest) {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
     const body = await req.json();
-    const hintLevel = Number(body.hintLevel) as 1 | 2 | 3;
+    const hintLevel = Number(body.hintLevel) as 1 | 2 | 3 | 4 | 5 | 6;
 
-    if (![1, 2, 3].includes(hintLevel)) {
+    if (![1, 2, 3, 4, 5, 6].includes(hintLevel)) {
       return NextResponse.json<ApiResponse<never>>(
-        { success: false, error: "hintLevel phải là 1, 2 hoặc 3." },
+        { success: false, error: "hintLevel phải từ 1 đến 6." },
         { status: 400 }
       );
     }
 
     const topic = (body.topic as string) ?? "Chưa xác định";
+    const language = body.language === "en" ? ("en" as const) : ("vi" as const);
 
     // userMessage tự sinh dựa theo nút học sinh vừa bấm, để service
     // tutor.service.ts vẫn lưu lại đúng ngữ cảnh "học sinh đã yêu cầu
@@ -44,6 +48,7 @@ export async function POST(req: NextRequest) {
       topic,
       userMessage: `(Học sinh bấm nút: ${HINT_LABELS[hintLevel]})`,
       hintLevel,
+      language,
     });
 
     return NextResponse.json<ApiResponse<typeof result>>({ success: true, data: result });

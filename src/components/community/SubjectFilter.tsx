@@ -5,6 +5,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { SubjectWithTopics } from "@/types";
 import SubjectTopicItem from "@/components/community/SubjectTopicItem";
 
@@ -25,6 +26,7 @@ function SubjectFilter({
   onTopicChange,
   onClear,
 }: SubjectFilterProps) {
+  const { t } = useLanguage();
   const [expandedSubjectId, setExpandedSubjectId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,7 +53,7 @@ function SubjectFilter({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid var(--border-soft)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 18 }}>📚</span>
-          <span style={{ fontWeight: 600, fontSize: 15 }}>Môn học & Chủ đề</span>
+          <span style={{ fontWeight: 600, fontSize: 15 }}>{t("com.filterTitle")}</span>
         </div>
         {hasSelection && (
           <button
@@ -70,7 +72,7 @@ function SubjectFilter({
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--rose-soft)"; e.currentTarget.style.borderColor = "var(--rose)"; e.currentTarget.style.color = "var(--rose)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "var(--panel-strong)"; e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-dim)"; }}
           >
-            ✕ Xóa bộ lọc
+            {t("com.clearFilter")}
           </button>
         )}
       </div>
@@ -126,7 +128,7 @@ function SubjectFilter({
                     color: "#0a0e16",
                     fontWeight: 700,
                   }}>
-                    Đã chọn
+                    {t("com.selected")}
                   </span>
                 )}
               </button>

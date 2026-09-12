@@ -20,22 +20,24 @@
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import Avatar from "@/components/ui/Avatar";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 
 const SIZE = 56;
 
 export default function FloatingAIButton() {
   const { data: session, status } = useSession();
+  const { t } = useLanguage();
 
   if (status === "loading") return null;
 
-  const name = session?.user?.name ?? session?.user?.email ?? "AI Gia sư";
+  const name = session?.user?.name ?? session?.user?.email ?? t("nav.tutor");
   const image = session?.user?.image;
 
   return (
     <Link
       href="/tutor"
-      aria-label="Mở AI Gia sư"
-      title="AI Gia sư"
+      aria-label={t("tutor.openChat")}
+      title={t("nav.tutor")}
       style={{
         position: "fixed",
         right: 22,

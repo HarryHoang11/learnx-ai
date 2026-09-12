@@ -8,9 +8,11 @@ import { useEffect, useState } from "react";
 import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
 import ContributorLeaderboard from "@/components/community/ContributorLeaderboard";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { LeaderboardEntry } from "@/services/contribution.service";
 
 export default function LeaderboardPage() {
+  const { t } = useLanguage();
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,9 +50,9 @@ export default function LeaderboardPage() {
       const res = await fetch(`/api/community/leaderboard?${params.toString()}`);
       const json = await res.json();
       if (json.success) setLeaderboard(json.data);
-      else setError(json.error || "Không thể tải bảng xếp hạng");
+      else setError(json.error || t("com.clb.loadFail"));
     } catch (err) {
-      setError("Không thể kết nối tới máy chủ");
+      setError(t("common.connectionError"));
     } finally {
       setLbLoading(false);
       setLoading(false);
@@ -70,8 +72,8 @@ export default function LeaderboardPage() {
   return (
     <section style={{ maxWidth: 900, margin: "0 auto" }}>
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 600, marginBottom: 8 }}>🏆 Bảng xếp hạng Người đóng góp</h1>
-        <p style={{ color: "var(--text-dim)", fontSize: 15 }}>Xếp hạng theo điểm đóng góp (CP) cho cộng đồng</p>
+        <h1 style={{ fontSize: 28, fontWeight: 600, marginBottom: 8 }}>🏆 {t("com.clb.title")}</h1>
+        <p style={{ color: "var(--text-dim)", fontSize: 15 }}>{t("com.clb.subtitle")}</p>
       </div>
 
       <Panel style={{ marginBottom: 24 }}>
@@ -109,7 +111,7 @@ export default function LeaderboardPage() {
                 }}
               >
                 {["weekly", "monthly", "alltime"].indexOf(p) === 0 ? "📅" : ["monthly", "alltime"].indexOf(p) === 0 ? "📆" : "🏆"} {" "}
-                {period === "weekly" ? "Tuần này" : period === "monthly" ? "Tháng này" : "Tất cả"}
+                {p === "weekly" ? t("com.clb.periodNow.weekly") : p === "monthly" ? t("com.clb.periodNow.monthly") : t("com.clb.periodNow.alltime")}
               </button>
             ))}
           </div>
@@ -128,7 +130,7 @@ export default function LeaderboardPage() {
                 minWidth: 200,
               }}
             >
-              <option value="">Tất cả môn học</option>
+              <option value="">{t("com.clb.allSubjects")}</option>
               {subjects.map(s => <option key={s.id} value={s.id}>{s.icon} {s.name}</option>)}
             </select>
 
@@ -152,7 +154,7 @@ export default function LeaderboardPage() {
         </div>
       </Panel>
 
-      {loading && <StateMessage kind="loading" text="Đang tải bảng xếp hạng..." />}
+      {loading && <StateMessage kind="loading" text={t("com.clb.loading")} />}
       {error && <StateMessage kind="error" text={error} />}
 
       {!loading && !error && (

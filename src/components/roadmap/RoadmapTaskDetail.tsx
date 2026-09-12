@@ -9,6 +9,8 @@ import { useEffect, useState } from "react";
 import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
 import ExerciseSolver from "@/components/exercise/ExerciseSolver";
+import { useToast } from "@/components/ui/Toast";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { ApiResponse } from "@/types";
 
 interface LinkedResource {
@@ -53,6 +55,8 @@ interface Recommendation {
 }
 
 export default function RoadmapTaskDetail({ goalId, topic }: { goalId: string; topic: string }) {
+  const { t } = useLanguage();
+  const { push } = useToast();
   const [links, setLinks] = useState<RoadmapLink[]>([]);
   const [rec, setRec] = useState<Recommendation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,7 +91,7 @@ export default function RoadmapTaskDetail({ goalId, topic }: { goalId: string; t
         exercises: exJson.success ? exJson.data.exercises : [],
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể tải chi tiết task.");
+      setError(err instanceof Error ? err.message : t("roadmap.task.loadFail"));
     } finally {
       setLoading(false);
     }
@@ -105,20 +109,20 @@ export default function RoadmapTaskDetail({ goalId, topic }: { goalId: string; t
       body: JSON.stringify({ topic, ...body }),
     });
     const json: ApiResponse<unknown> = await res.json();
-    if (!json.success) alert(json.error);
+    if (!json.success) push("error", json.error);
     else await load();
   }
 
   async function unlinkIt(linkId: string) {
     const res = await fetch(`/api/roadmaps/${goalId}/resources?linkId=${linkId}`, { method: "DELETE" });
     const json: ApiResponse<unknown> = await res.json();
-    if (!json.success) alert(json.error);
+    if (!json.success) push("error", json.error);
     else await load();
   }
 
   async function schedule() {
     if (!schedDate) {
-      setSchedMsg("Chọn ngày học.");
+      setSchedMsg(t("roadmap.task.pickDate"));
       return;
     }
     setSchedMsg(null);
@@ -136,13 +140,13 @@ export default function RoadmapTaskDetail({ goalId, topic }: { goalId: string; t
         }),
       });
       const json: ApiResponse<unknown> = await res.json();
-      setSchedMsg(json.success ? "✓ Đã lên lịch — xem ở trang Lịch học." : json.error);
+      setSchedMsg(json.success ? t("roadmap.task.scheduled") : json.error);
     } catch {
-      setSchedMsg("Không thể lên lịch.");
+      setSchedMsg(t("roadmap.task.scheduleFail"));
     }
   }
 
-  if (loading) return <StateMessage kind="loading" text="Đang tải chi tiết task..." />;
+  if (loading) return <StateMessage kind="loading" text={t("common.loading")} />;
   if (error) return <StateMessage kind="error" text={error} />;
 
   const linkedIds = new Set([
@@ -155,8 +159,8 @@ export default function RoadmapTaskDetail({ goalId, topic }: { goalId: string; t
       {rec && (
         <Panel>
           <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 8 }}>
-            Gợi ý học tập
-            {rec.mastery !== null ? ` (mastery hiện tại ${rec.mastery}%)` : " (chưa có dữ liệu mastery)"}
+            {t("roadmap.task.suggest")}
+            {rec.mastery !== null ? t("roadmap.task.mastery", { n: rec.mastery }) : t("roadmap.task.noMastery")}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {rec.steps.map((s) => (
@@ -170,24 +174,24 @@ export default function RoadmapTaskDetail({ goalId, topic }: { goalId: string; t
       )}
 
       <Panel>
-        <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 8 }}>📖 Tài liệu ({links.filter((l) => l.resource).length})</div>
+        <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 8 }}>{t("roadmap.task.resources", { n: links.filter((l) => l.resource).length })}</div>
         {links.filter((l) => l.resource).length === 0 && (
-          <p style={{ fontSize: 12.5, color: "var(--text-dim)" }}>Chưa gắn tài liệu nào.</p>
+          <p style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{t("roadmap.task.noResources")}</p>
         )}
         {links.filter((l) => l.resource).map((l) => (
           <div key={l.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "6px 0", borderTop: "1px solid var(--border-soft)", fontSize: 13 }}>
             <span>
               {l.resource!.title}
               {l.resource!.url && (
-                <> — <a href={l.resource!.url} target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}>mở</a></>
+                <> — <a href={l.resource!.url} target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}>{t("roadmap.task.open")}</a></>
               )}
             </span>
-            <button className="btn-secondary" style={{ fontSize: 11.5 }} onClick={() => unlinkIt(l.id)}>Gỡ</button>
+            <button className="btn-secondary" style={{ fontSize: 11.5 }} onClick={() => unlinkIt(l.id)}>{t("roadmap.task.unlink")}</button>
           </div>
         ))}
         {candidates && candidates.resources.filter((r) => !linkedIds.has(r.id)).length > 0 && (
           <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Gắn thêm từ catalog:</div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>{t("roadmap.task.attachMore")}</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {candidates.resources.filter((r) => !linkedIds.has(r.id)).slice(0, 5).map((r) => (
                 <button key={r.id} className="btn-secondary" style={{ fontSize: 11.5 }} onClick={() => linkIt({ resourceId: r.id, kind: "LEARN" })}>
@@ -200,9 +204,9 @@ export default function RoadmapTaskDetail({ goalId, topic }: { goalId: string; t
       </Panel>
 
       <Panel>
-        <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 8 }}>🧪 Luyện tập ({links.filter((l) => l.exercise).length})</div>
+        <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 8 }}>{t("roadmap.task.exercises", { n: links.filter((l) => l.exercise).length })}</div>
         {links.filter((l) => l.exercise).length === 0 && (
-          <p style={{ fontSize: 12.5, color: "var(--text-dim)" }}>Chưa gắn bài tập nào.</p>
+          <p style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{t("roadmap.task.noExercises")}</p>
         )}
         {links.filter((l) => l.exercise).map((l) => (
           <div key={l.id} style={{ padding: "6px 0", borderTop: "1px solid var(--border-soft)" }}>
@@ -210,9 +214,9 @@ export default function RoadmapTaskDetail({ goalId, topic }: { goalId: string; t
               <span>{l.exercise!.title} <span style={{ color: "var(--text-faint)" }}>({l.exercise!.difficulty})</span></span>
               <span style={{ display: "flex", gap: 6 }}>
                 <button className="btn-secondary" style={{ fontSize: 11.5 }} onClick={() => setSolveId(solveId === l.exercise!.id ? null : l.exercise!.id)}>
-                  {solveId === l.exercise!.id ? "Đóng" : "Làm ngay"}
+                  {solveId === l.exercise!.id ? t("roadmap.task.closeSolve") : t("roadmap.task.solveNow")}
                 </button>
-                <button className="btn-secondary" style={{ fontSize: 11.5 }} onClick={() => unlinkIt(l.id)}>Gỡ</button>
+                <button className="btn-secondary" style={{ fontSize: 11.5 }} onClick={() => unlinkIt(l.id)}>{t("roadmap.task.unlink")}</button>
               </span>
             </div>
             {solveId === l.exercise!.id && (
@@ -224,7 +228,7 @@ export default function RoadmapTaskDetail({ goalId, topic }: { goalId: string; t
         ))}
         {candidates && candidates.exercises.filter((e) => !linkedIds.has(e.id)).length > 0 && (
           <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Gắn thêm từ ngân hàng:</div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>{t("roadmap.task.attachBank")}</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {candidates.exercises.filter((e) => !linkedIds.has(e.id)).slice(0, 5).map((e) => (
                 <button key={e.id} className="btn-secondary" style={{ fontSize: 11.5 }} onClick={() => linkIt({ exerciseId: e.id, kind: "PRACTICE" })}>
@@ -237,12 +241,12 @@ export default function RoadmapTaskDetail({ goalId, topic }: { goalId: string; t
       </Panel>
 
       <Panel>
-        <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 8 }}>🗓 Lên lịch học task này</div>
+        <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 8 }}>{t("roadmap.task.schedule")}</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input type="date" value={schedDate} onChange={(e) => setSchedDate(e.target.value)} style={miniInput} />
           <input type="time" value={schedStart} onChange={(e) => setSchedStart(e.target.value)} style={miniInput} />
           <input type="time" value={schedEnd} onChange={(e) => setSchedEnd(e.target.value)} style={miniInput} />
-          <button className="btn-primary" style={{ fontSize: 12.5 }} onClick={schedule}>Lên lịch</button>
+          <button className="btn-primary" style={{ fontSize: 12.5 }} onClick={schedule}>{t("roadmap.task.doSchedule")}</button>
         </div>
         {schedMsg && <p style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 8 }}>{schedMsg}</p>}
       </Panel>

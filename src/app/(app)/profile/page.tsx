@@ -15,6 +15,7 @@ import StateMessage from "@/components/ui/StateMessage";
 import LevelProgressBar from "@/components/ui/LevelProgressBar";
 import ProfileHeader from "@/components/profile/ProfileHeader";
 import EditProfileModal from "@/components/profile/EditProfileModal";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { ApiResponse, UserProfile } from "@/types";
 
 interface StreakResponse {
@@ -33,6 +34,7 @@ export default function ProfilePage() {
   // src/auth.ts) — đây là mắt xích còn thiếu trước đây khiến avatar ở
   // Topbar/FloatingAIButton không đổi theo khi đổi avatar ở trang này.
   const { update: updateSession } = useSession();
+  const { t } = useLanguage();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [lifetimeXP, setLifetimeXP] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,7 +48,7 @@ export default function ProfilePage() {
         if (json.success) setProfile(json.data);
         else setError(json.error);
       })
-      .catch(() => setError("Không thể kết nối tới máy chủ."))
+      .catch(() => setError(t("common.connectionError")))
       .finally(() => setLoading(false));
 
     // Tái dùng API streak sẵn có (không đổi contract) chỉ để lấy
@@ -61,7 +63,7 @@ export default function ProfilePage() {
       .catch(() => {});
   }, []);
 
-  if (loading) return <StateMessage kind="loading" text="Đang tải hồ sơ..." />;
+  if (loading) return <StateMessage kind="loading" text={t("profile.loading")} />;
   if (error) return <StateMessage kind="error" text={error} />;
   if (!profile) return null;
 
@@ -90,7 +92,7 @@ export default function ProfilePage() {
         <div className="profile-info-header">
           <div>
             <h2 style={{ fontSize: 21, marginBottom: 2 }}>
-              {profile.name ?? "Chưa đặt tên"}
+              {profile.name ?? t("profile.noName")}
               {profile.nickname && (
                 <span style={{ color: "var(--text-dim)", fontWeight: 500, fontSize: 16 }}> ({profile.nickname})</span>
               )}
@@ -99,12 +101,12 @@ export default function ProfilePage() {
           </div>
 
           <button type="button" className="btn-secondary" onClick={() => setIsEditing(true)}>
-            Chỉnh sửa trang cá nhân
+            {t("profile.edit")}
           </button>
         </div>
 
         <p style={{ marginTop: 16, fontSize: 14.5, lineHeight: 1.6, color: profile.bio ? "var(--text)" : "var(--text-faint)" }}>
-          {profile.bio || "Chưa có tiểu sử — bấm \"Chỉnh sửa trang cá nhân\" để thêm vài dòng giới thiệu về bạn."}
+          {profile.bio || t("profile.noBio")}
         </p>
       </Panel>
 

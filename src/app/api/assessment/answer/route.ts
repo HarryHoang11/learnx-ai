@@ -16,11 +16,19 @@ import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { pickNextDifficulty, updateMastery } from "@/services/assessment.service";
 import { generateQuizQuestion } from "@/services/quiz.service";
+import { getCurrentStreak, recordLearningActivity } from "@/services/learning-activity.service";
 import type { ApiResponse, GeneratedQuestion } from "@/types";
 
 // Số câu tối đa cho 1 phiên kiểm tra — khớp với "15-20 câu" trong mô
 // tả gốc, đặt 16 làm mặc định MVP để demo không quá dài dòng.
 const MAX_QUESTIONS_PER_ASSESSMENT = 16;
+
+interface CompletionActivity {
+  recorded: boolean;
+  alreadyRecorded?: boolean;
+  xpEarned: number;
+  streak: { current: number; longest: number };
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -53,6 +61,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // IDEMPOTENT: phiên đã completed thì trả done ngay, KHÔNG tạo thêm
+    // Attempt/mastery/XP — chống farm bằng cách submit lặp lại.
+    if (assessment.status === "completed") {
+      const streak = await getCurrentStreak(userId);
+      const activity: CompletionActivity = {
+        recorded: false,
+        alreadyRecorded: true,
+        xpEarned: 0,
+        streak: { current: streak.current, longest: streak.longest },
+      };
+      return NextResponse.json<ApiResponse<{ done: true; activity: CompletionActivity }>>({
+        success: true,
+        data: { done: true, activity },
+      });
+    }
+
     const isCorrect = selectedIndex === question.correctIndex;
 
     // Lưu Attempt GẮN VỚI assessmentId (khác quiz luyện tập thường,
@@ -78,16 +102,32 @@ export async function POST(req: NextRequest) {
 
     const answeredCount = await prisma.attempt.count({ where: { assessmentId } });
 
-    // Đủ số câu -> đóng phiên assessment, báo frontend chuyển sang
+    // Đủ số câu -> đóng phiên assessment, ghi nhận hoạt động học MỘT
+    // LẦN duy nhất (ngay tại transition sang completed — lần gọi sau
+    // rơi vào nhánh idempotent ở trên), rồi báo frontend chuyển sang
     // màn hình kết quả (gọi tiếp /api/assessment/result).
     if (answeredCount >= MAX_QUESTIONS_PER_ASSESSMENT) {
       await prisma.assessment.update({
         where: { id: assessmentId },
         data: { status: "completed", completedAt: new Date() },
       });
-      return NextResponse.json<ApiResponse<{ done: true }>>({
+      const activityResult = await recordLearningActivity({
+        userId,
+        type: "diagnostic_completed",
+        difficulty: "medium",
+        scorePercent: 0,
+        isFirstCompletion: true,
+        sourceId: assessmentId,
+        sourceType: "diagnostic",
+      });
+      const activity: CompletionActivity = {
+        recorded: true,
+        xpEarned: activityResult.xpEarned,
+        streak: activityResult.streakUpdated,
+      };
+      return NextResponse.json<ApiResponse<{ done: true; activity: CompletionActivity }>>({
         success: true,
-        data: { done: true },
+        data: { done: true, activity },
       });
     }
 

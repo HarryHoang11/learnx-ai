@@ -28,30 +28,33 @@ import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
 import DocumentCard from "@/components/documents/DocumentCard";
 import DocumentDetailModal, { type LibraryDocument } from "@/components/documents/DocumentDetailModal";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import type { I18nKey } from "@/lib/i18n/dictionary";
 import type { ApiResponse } from "@/types";
 
-// Khớp Phase 2 (môn học) + chuẩn difficulty easy/medium/hard dùng chung
-// toàn project (type Difficulty, form upload cộng đồng).
-const SUBJECT_OPTIONS = [
-  "Toán",
-  "Vật lý",
-  "Hóa học",
-  "Sinh học",
-  "Tin học",
-  "Tiếng Anh",
-  "Ngữ văn",
-  "Lịch sử",
-  "Địa lý",
-  "Khác",
+// Value lưu DB luôn là tên tiếng Việt chuẩn (nội dung user, không
+// dịch); label hiển thị theo ngôn ngữ UI.
+const SUBJECTS: { value: string; labelKey: I18nKey }[] = [
+  { value: "Toán", labelKey: "library.subjects.math" },
+  { value: "Vật lý", labelKey: "library.subjects.physics" },
+  { value: "Hóa học", labelKey: "library.subjects.chemistry" },
+  { value: "Sinh học", labelKey: "library.subjects.biology" },
+  { value: "Tin học", labelKey: "library.subjects.cs" },
+  { value: "Tiếng Anh", labelKey: "library.subjects.english" },
+  { value: "Ngữ văn", labelKey: "library.subjects.literature" },
+  { value: "Lịch sử", labelKey: "library.subjects.history" },
+  { value: "Địa lý", labelKey: "library.subjects.geography" },
+  { value: "Khác", labelKey: "library.subjects.other" },
 ];
 
-const DIFFICULTY_OPTIONS = [
-  { value: "easy", label: "Dễ" },
-  { value: "medium", label: "Trung bình" },
-  { value: "hard", label: "Khó" },
-];
+const DIFFICULTY_KEYS = [
+  { value: "easy", labelKey: "doc.difficulty.easy" },
+  { value: "medium", labelKey: "doc.difficulty.medium" },
+  { value: "hard", labelKey: "doc.difficulty.hard" },
+] as const;
 
 export default function LibraryPage() {
+  const { t } = useLanguage();
   const [docs, setDocs] = useState<LibraryDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +93,7 @@ export default function LibraryPage() {
         setError(json.error);
       }
     } catch {
-      setError("Không thể kết nối tới máy chủ.");
+      setError(t("common.connectionError"));
     } finally {
       setLoading(false);
     }
@@ -124,7 +127,7 @@ export default function LibraryPage() {
   async function handleUpload() {
     if (!pendingFile || uploading) return;
     if (!metaSubject) {
-      setUploadError("Vui lòng chọn môn học cho tài liệu.");
+      setUploadError(t("library.needSubject"));
       return;
     }
 
@@ -134,7 +137,7 @@ export default function LibraryPage() {
     // nhận bytes + validate + trích xuất text — label phản ánh đúng để
     // user không tưởng app treo với file lớn. Sau đó poll trạng thái
     // "processing" (chunk + embedding + tóm tắt AI) cho tới ready/failed.
-    setUploadStage("Đang tải lên & kiểm tra file...");
+    setUploadStage(t("library.stageUpload"));
     try {
       const formData = new FormData();
       formData.append("file", pendingFile);
@@ -147,11 +150,11 @@ export default function LibraryPage() {
       const json: ApiResponse<{ documentId: string }> = await res.json();
       if (!json.success) throw new Error(json.error);
 
-      setUploadStage("Đang trích xuất & phân tích nội dung...");
+      setUploadStage(t("library.stageExtract"));
       await loadDocs();
       ensurePolling();
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Không thể upload tài liệu.");
+      setUploadError(err instanceof Error ? err.message : t("library.uploadFail"));
     } finally {
       setUploading(false);
       setUploadStage(null);
@@ -171,7 +174,7 @@ export default function LibraryPage() {
       await loadDocs();
       ensurePolling();
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Không thể thử lại, vui lòng thử lại sau.");
+      setUploadError(err instanceof Error ? err.message : t("library.retryFail"));
     } finally {
       setRetryingId(null);
     }
@@ -181,7 +184,7 @@ export default function LibraryPage() {
 
   return (
     <section>
-      <h2 style={{ fontSize: 20, marginBottom: 18 }}>Thư viện tài liệu</h2>
+      <h2 style={{ fontSize: 20, marginBottom: 18 }}>{t("library.title")}</h2>
 
       <label
         style={{
@@ -199,7 +202,7 @@ export default function LibraryPage() {
         {/* Chỉ nhận đúng định dạng pipeline hỗ trợ (.txt/.md/.pdf/
             .docx/.pptx) — trước đây label mời cả "ảnh" nhưng ảnh luôn
             fail extraction, gây hiểu nhầm "upload lỗi". */}
-        {uploading ? (uploadStage ?? "Đang tải lên...") : "⇧ Chọn PDF, Word, PowerPoint hoặc Text — LearnX sẽ tự tạo tóm tắt"}
+        {uploading ? (uploadStage ?? t("library.uploading")) : t("library.dropHint")}
         <input
           ref={fileInputRef}
           type="file"
@@ -219,11 +222,11 @@ export default function LibraryPage() {
             {pendingFile.name}
           </div>
           <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 12 }}>
-            {(pendingFile.size / 1024).toFixed(0)} KB — khai báo thông tin để LearnX gợi ý đúng
+            {(pendingFile.size / 1024).toFixed(0)} {t("library.metaHint")}
           </div>
           <div className="grid-form-2col" style={{ marginBottom: 10 }}>
             <div>
-              <label className="form-label" htmlFor="doc-subject">Môn học *</label>
+              <label className="form-label" htmlFor="doc-subject">{t("library.subject")}</label>
               <select
                 id="doc-subject"
                 className="form-input"
@@ -231,55 +234,55 @@ export default function LibraryPage() {
                 onChange={(e) => setMetaSubject(e.target.value)}
                 required
               >
-                <option value="">— Chọn môn —</option>
-                {SUBJECT_OPTIONS.map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                <option value="">{t("library.pickSubject")}</option>
+                {SUBJECTS.map((s) => (
+                  <option key={s.value} value={s.value}>{t(s.labelKey)}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="form-label" htmlFor="doc-difficulty">Độ khó</label>
+              <label className="form-label" htmlFor="doc-difficulty">{t("library.difficulty")}</label>
               <select
                 id="doc-difficulty"
                 className="form-input"
                 value={metaDifficulty}
                 onChange={(e) => setMetaDifficulty(e.target.value)}
               >
-                {DIFFICULTY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
+                {DIFFICULTY_KEYS.map((o) => (
+                  <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
                 ))}
               </select>
             </div>
           </div>
           <div style={{ marginBottom: 10 }}>
-            <label className="form-label" htmlFor="doc-topic">Chủ đề (tùy chọn)</label>
+            <label className="form-label" htmlFor="doc-topic">{t("library.topic")}</label>
             <input
               id="doc-topic"
               className="form-input"
               value={metaTopic}
               onChange={(e) => setMetaTopic(e.target.value)}
-              placeholder="vd: Phương trình bậc hai"
+              placeholder={t("library.topicPh")}
               maxLength={120}
             />
           </div>
           <div style={{ marginBottom: 14 }}>
-            <label className="form-label" htmlFor="doc-desc">Mô tả (tùy chọn)</label>
+            <label className="form-label" htmlFor="doc-desc">{t("library.description")}</label>
             <textarea
               id="doc-desc"
               className="form-textarea"
               value={metaDescription}
               onChange={(e) => setMetaDescription(e.target.value)}
-              placeholder="Nội dung chính của tài liệu..."
+              placeholder={t("library.descriptionPh")}
               rows={2}
               maxLength={500}
             />
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" className="btn-primary" onClick={handleUpload}>
-              Tải lên
+              {t("library.upload")}
             </button>
             <button type="button" className="btn-secondary" onClick={cancelPending}>
-              Hủy
+              {t("common.cancel")}
             </button>
           </div>
         </Panel>
@@ -291,13 +294,13 @@ export default function LibraryPage() {
         </div>
       )}
 
-      {loading && <StateMessage kind="loading" text="Đang tải danh sách tài liệu..." />}
+      {loading && <StateMessage kind="loading" text={t("library.loading")} />}
       {error && <StateMessage kind="error" text={error} />}
 
       {!loading && !error && (
         <Panel>
           {docs.length === 0 ? (
-            <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>Chưa có tài liệu nào — hãy upload ở trên.</p>
+            <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>{t("library.empty")}</p>
           ) : (
             docs.map((d) => (
               <DocumentCard

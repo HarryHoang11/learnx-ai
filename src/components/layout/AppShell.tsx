@@ -12,13 +12,33 @@
 
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import FloatingAIButton from "@/components/tutor/FloatingAIButton";
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Khóa body scroll trên mobile khi mở drawer và đóng bằng phím ESC
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMobileNavOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [mobileNavOpen]);
 
   return (
     <div className="app-shell">
@@ -27,7 +47,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
       {/* Overlay mờ phía sau drawer trên mobile — bấm vào để đóng lại,
           giống UX modal/drawer chuẩn. Chỉ hiển thị khi mobileNavOpen
           (điều khiển bằng class, xem globals.css ".sidebar-overlay"). */}
-      {mobileNavOpen && <div className="sidebar-overlay" onClick={() => setMobileNavOpen(false)} />}
+      {mobileNavOpen && (
+        <div
+          className="sidebar-overlay"
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
       <main className="main-content">
         <Topbar onMenuClick={() => setMobileNavOpen((v) => !v)} />

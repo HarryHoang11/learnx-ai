@@ -10,6 +10,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 
 interface PasswordInputProps {
   id?: string;
@@ -41,7 +42,9 @@ export default function PasswordInput({
   minLength,
   autoComplete,
 }: PasswordInputProps) {
+  const { t } = useLanguage();
   const [visible, setVisible] = useState(false);
+  const label = visible ? t("auth.hidePassword") : t("auth.showPassword");
 
   return (
     <div style={{ position: "relative" }}>
@@ -59,8 +62,8 @@ export default function PasswordInput({
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-        title={visible ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+        aria-label={label}
+        title={label}
         style={{
           position: "absolute",
           right: 6,

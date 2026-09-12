@@ -13,6 +13,8 @@ import { useState } from "react";
 import { downloadSummaryAsMarkdown } from "@/lib/documents/downloadSummary";
 import { describeDocumentError } from "@/lib/documents/docErrors";
 import { useToast } from "@/components/ui/Toast";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import { localeFor } from "@/lib/i18n/dictionary";
 import type { LibraryDocument } from "./DocumentDetailModal";
 
 interface DocumentCardProps {
@@ -50,6 +52,7 @@ const FORMATS = [
 type Format = typeof FORMATS[number]['value'];
 
 export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: DocumentCardProps) {
+  const { t, lang } = useLanguage();
   const [showFormatModal, setShowFormatModal] = useState(false);
   const { push } = useToast();
 
@@ -78,7 +81,7 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Download failed:', err);
-      push("error", err instanceof Error ? err.message : 'Không thể tải file, thử lại sau');
+      push("error", err instanceof Error ? err.message : t("doc.downloadFail"));
     }
   }
 
@@ -125,7 +128,7 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
           )}
           {doc.difficulty && (
             <span style={{ fontSize: 11.5, background: "var(--cyan-soft)", color: "var(--cyan)", padding: "3px 9px", borderRadius: 99 }}>
-              {doc.difficulty === "easy" ? "Dễ" : doc.difficulty === "hard" ? "Khó" : "Trung bình"}
+              {doc.difficulty === "easy" ? t("doc.difficulty.easy") : doc.difficulty === "hard" ? t("doc.difficulty.hard") : t("doc.difficulty.medium")}
             </span>
           )}
         </div>
@@ -136,7 +139,7 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
 
       {doc.status === "ready" && doc.summary && (
         <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>
-          <span style={{ color: "var(--text-faint)" }}>Tóm tắt: </span>
+          <span style={{ color: "var(--text-faint)" }}>{t("doc.summaryLabel")} </span>
           {previewText(doc.summary)}
         </div>
       )}
@@ -144,7 +147,7 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
       {doc.status === "ready" && (
         <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
           <button className="btn-secondary" onClick={onOpenSummary} style={{ fontSize: 12.5, padding: "7px 14px" }}>
-            Xem tóm tắt
+            {t("doc.viewSummary")}
           </button>
           {doc.summary && (
             <button
@@ -152,7 +155,7 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
               onClick={() => setShowFormatModal(true)}
               style={{ fontSize: 12.5, padding: "7px 14px" }}
             >
-              Tải xuống
+              {t("doc.download")}
             </button>
           )}
         </div>
@@ -170,7 +173,7 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
             disabled={retrying}
             style={{ fontSize: 12.5, padding: "7px 14px", opacity: retrying ? 0.6 : 1, marginTop: 8 }}
           >
-            {retrying ? "Đang thử lại..." : "Thử lại"}
+            {retrying ? t("doc.retrying") : t("doc.retry")}
           </button>
         </div>
       )}
@@ -180,7 +183,7 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
         <div className="modal-overlay" onClick={() => setShowFormatModal(false)} style={{ zIndex: 200 }}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 360 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <div style={{ fontWeight: 600, fontSize: 15 }}>Chọn định dạng tải xuống</div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>{t("doc.pickFormat")}</div>
               <button 
                 onClick={() => setShowFormatModal(false)} 
                 style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 20, cursor: "pointer", lineHeight: 1 }}
@@ -224,7 +227,8 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
 }
 
 function FailedCause({ errorMessage }: { errorMessage: string | null }) {
-  const { userMessage, suggestion } = describeDocumentError(errorMessage);
+  const { t, lang } = useLanguage();
+  const { userMessage, suggestion } = describeDocumentError(errorMessage, lang);
   return (
     <div
       role="alert"
@@ -237,26 +241,27 @@ function FailedCause({ errorMessage }: { errorMessage: string | null }) {
         padding: "9px 12px",
       }}
     >
-      <div style={{ fontWeight: 600, color: "var(--rose)" }}>Không thể xử lý: {userMessage}</div>
-      <div style={{ color: "var(--text-dim)", marginTop: 2 }}>Gợi ý: {suggestion}</div>
+      <div style={{ fontWeight: 600, color: "var(--rose)" }}>{t("doc.failTitle")} {userMessage}</div>
+      <div style={{ color: "var(--text-dim)", marginTop: 2 }}>{t("doc.failHint")} {suggestion}</div>
     </div>
   );
 }
 
 function StatusLine({ status }: { status: string }) {
+  const { t } = useLanguage();
   if (status === "processing") {
     return (
       <div style={{ fontSize: 12.5, color: "var(--cyan)", display: "flex", alignItems: "center", gap: 6 }}>
         <span className="spinner-dot" aria-hidden />
-        Đang phân tích tài liệu...
+        {t("doc.processing")}
       </div>
     );
   }
   if (status === "ready") {
-    return <div style={{ fontSize: 12.5, color: "var(--success, #4ade80)" }}>✓ Đã xử lý</div>;
+    return <div style={{ fontSize: 12.5, color: "var(--success, #4ade80)" }}>{t("doc.ready")}</div>;
   }
   if (status === "failed") {
-    return <div style={{ fontSize: 12.5, color: "var(--danger, #f87171)" }}>✕ Không thể xử lý tài liệu</div>;
+    return <div style={{ fontSize: 12.5, color: "var(--danger, #f87171)" }}>{t("doc.failed")}</div>;
   }
   return <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{status}</div>;
 }

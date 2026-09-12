@@ -7,6 +7,12 @@
 
 import { prisma } from "@/lib/db/prisma";
 import type { ApiResponse } from "@/types";
+import {
+  checkExactCommunityDuplicate,
+  detectDuplicateCommunityDocument,
+  checkSemanticDuplicate,
+  markAsDuplicate,
+} from "./duplicate-detection.service";
 
 export interface GetDocumentsParams {
   userId: string;
@@ -115,17 +121,22 @@ export async function uploadCommunityDocument(params: CreateDocumentParams): Pro
       return { success: false, error: "Đã đạt giới hạn tải lên hàng ngày (20 tài liệu)." };
     }
 
-    // Check for duplicate (same fileName + fileSize by same user in last 24h)
-    const recentDuplicate = await prisma.communityDocument.findFirst({
-      where: {
-        ownerId: userId,
-        fileName,
-        fileSize,
-        uploadedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-      },
-    });
-    if (recentDuplicate) {
-      return { success: true, data: { isDuplicate: true, documentId: recentDuplicate.id } };
+    // Check for exact duplicate (same fileName + fileSize by same user in last 15s - double submit protection)
+    const exactDuplicate = await checkExactCommunityDuplicate(userId, fileName, fileSize);
+    if (exactDuplicate) {
+      return { success: true, data: { isDuplicate: true, documentId: exactDuplicate.existingDocumentId, matchType: "exact" } };
+    }
+
+    // Extract text for content similarity check
+    const { extractTextFromBuffer } = await import("@/lib/documents/extractText");
+    const { text } = await extractTextFromBuffer(fileData, fileType);
+
+    // Check for content similarity against user's own recent uploads
+    if (text.trim()) {
+      const contentDuplicate = await detectDuplicateCommunityDocument(userId, text);
+      if (contentDuplicate.isDuplicate) {
+        return { success: true, data: { isDuplicate: true, documentId: contentDuplicate.existingDocumentId, matchType: contentDuplicate.matchType } };
+      }
     }
 
     const document = await prisma.communityDocument.create({
@@ -149,7 +160,7 @@ export async function uploadCommunityDocument(params: CreateDocumentParams): Pro
       },
     });
 
-    // Process document asynchronously
+    // Process document asynchronously (will do semantic duplicate check after processing)
     processDocument(document.id).catch((err) =>
       console.error(`[CommunityDocument] Processing failed for ${document.id}:`, err)
     );
@@ -165,9 +176,10 @@ async function processDocument(documentId: string): Promise<void> {
   try {
     const document = await prisma.communityDocument.findUnique({
       where: { id: documentId },
-      select: { fileData: true, mimeType: true, fileType: true },
+      select: { fileData: true, mimeType: true, fileType: true, ownerId: true, visibility: true },
     });
     if (!document?.fileData) return;
+    const userId = document.ownerId;
 
     // Single entry point that selects the extractor by fileType
     // (see extractText.ts) — do NOT branch on mimeType here.
@@ -204,7 +216,7 @@ async function processDocument(documentId: string): Promise<void> {
     const qualityScore = Object.values(qualityResult).reduce((sum, v) => sum + (Number(v) || 0), 0) / 8;
 
     // Update document with results
-    await prisma.communityDocument.update({
+    const updatedDoc = await prisma.communityDocument.update({
       where: { id: documentId },
       data: {
         summary: summaryResult,
@@ -215,6 +227,17 @@ async function processDocument(documentId: string): Promise<void> {
         qualityEvaluatedAt: new Date(),
       },
     });
+
+    // Check for semantic duplicates against OTHER users' community documents
+    // Only check if visibility is COMMUNITY (not PRIVATE)
+    if (updatedDoc.visibility === "COMMUNITY") {
+      const semanticDuplicate = await checkSemanticDuplicate(documentId, userId);
+      if (semanticDuplicate.isDuplicate) {
+        // Mark this document as a duplicate of the existing one
+        await markAsDuplicate(documentId, semanticDuplicate.existingDocumentId!);
+        console.log(`[processDocument] Document ${documentId} marked as duplicate of ${semanticDuplicate.existingDocumentId} (matchType: ${semanticDuplicate.matchType}, similarity: ${semanticDuplicate.similarity})`);
+      }
+    }
   } catch (err) {
     console.error("[processDocument] Error:", err);
     await prisma.communityDocument.update({

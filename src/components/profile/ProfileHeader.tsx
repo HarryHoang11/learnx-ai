@@ -21,6 +21,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { UserProfile } from "@/types";
 
 interface ProfileHeaderProps {
@@ -35,6 +36,7 @@ interface ProfileHeaderProps {
 type PhotoKind = "avatar" | "cover";
 
 export default function ProfileHeader({ profile, onPhotoUpdated }: ProfileHeaderProps) {
+  const { t } = useLanguage();
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
@@ -88,7 +90,7 @@ export default function ProfileHeader({ profile, onPhotoUpdated }: ProfileHeader
 
       onPhotoUpdated(kind === "avatar" ? { image: json.data.image } : { coverImage: json.data.coverImage });
     } catch {
-      setError("Không thể kết nối tới máy chủ, thử lại sau.");
+      setError(t("common.connectionError"));
       if (kind === "avatar") setPreviewAvatar(null);
       else setPreviewCover(null);
     } finally {
@@ -118,8 +120,8 @@ export default function ProfileHeader({ profile, onPhotoUpdated }: ProfileHeader
           className="photo-edit-btn photo-edit-btn--cover"
           onClick={() => coverInputRef.current?.click()}
           disabled={uploadingCover}
-          aria-label="Đổi ảnh bìa"
-          title="Đổi ảnh bìa"
+          aria-label={t("profile.changeCover")}
+          title={t("profile.changeCover")}
         >
           📷
         </button>
@@ -160,8 +162,8 @@ export default function ProfileHeader({ profile, onPhotoUpdated }: ProfileHeader
               className="photo-edit-btn photo-edit-btn--avatar"
               onClick={() => avatarInputRef.current?.click()}
               disabled={uploadingAvatar}
-              aria-label="Đổi ảnh đại diện"
-              title="Đổi ảnh đại diện"
+              aria-label={t("profile.changeAvatar")}
+              title={t("profile.changeAvatar")}
             >
               📷
             </button>

@@ -18,9 +18,11 @@ import { useRouter } from "next/navigation";
 import AuthCard from "@/components/auth/AuthCard";
 import OAuthButtons from "@/components/auth/OAuthButtons";
 import PasswordInput from "@/components/auth/PasswordInput";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { ApiResponse } from "@/types";
 
 export default function RegisterPage() {
+  const { t } = useLanguage();
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -36,7 +38,7 @@ export default function RegisterPage() {
     // Validate KHỚP mật khẩu ở CLIENT trước, không cần gọi API mới biết
     // sai — phản hồi tức thì, đỡ tốn 1 round-trip network vô ích.
     if (password !== confirmPassword) {
-      setError("Mật khẩu xác nhận không khớp.");
+      setError(t("auth.passwordMismatch"));
       return;
     }
 
@@ -65,25 +67,25 @@ export default function RegisterPage() {
       }
       router.push("/dashboard");
     } catch {
-      setError("Không thể kết nối tới máy chủ.");
+      setError(t("common.connectionError"));
       setLoading(false);
     }
   }
 
   return (
-    <AuthCard title="Tạo tài khoản" subtitle="Bắt đầu hành trình học cùng LearnX AI">
+    <AuthCard title={t("auth.registerTitle")} subtitle={t("auth.registerSubtitle")}>
       <OAuthButtons />
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0" }}>
         <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-        <span style={{ fontSize: 12, color: "var(--text-faint)" }}>hoặc</span>
+        <span style={{ fontSize: 12, color: "var(--text-faint)" }}>{t("auth.or")}</span>
         <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <input
           type="text"
-          placeholder="Tên hiển thị"
+          placeholder={t("auth.displayName")}
           required
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -98,7 +100,7 @@ export default function RegisterPage() {
           style={inputStyle}
         />
         <PasswordInput
-          placeholder="Mật khẩu (tối thiểu 8 ký tự)"
+          placeholder={t("auth.passwordMin")}
           required
           minLength={8}
           autoComplete="new-password"
@@ -106,7 +108,7 @@ export default function RegisterPage() {
           onChange={setPassword}
         />
         <PasswordInput
-          placeholder="Xác nhận mật khẩu"
+          placeholder={t("auth.confirmPassword")}
           required
           minLength={8}
           autoComplete="new-password"
@@ -115,14 +117,14 @@ export default function RegisterPage() {
         />
         {error && <p style={{ color: "var(--rose)", fontSize: 13 }}>{error}</p>}
         <button type="submit" className="btn-primary" disabled={loading} style={{ marginTop: 6 }}>
-          {loading ? "Đang tạo tài khoản..." : "Đăng ký"}
+          {loading ? t("auth.creating") : t("auth.register")}
         </button>
       </form>
 
       <p style={{ fontSize: 13, color: "var(--text-dim)", textAlign: "center", marginTop: 18 }}>
-        Đã có tài khoản?{" "}
+        {t("auth.haveAccount")}{" "}
         <a href="/login" style={{ color: "var(--cyan)" }}>
-          Đăng nhập
+          {t("auth.loginLink")}
         </a>
       </p>
     </AuthCard>

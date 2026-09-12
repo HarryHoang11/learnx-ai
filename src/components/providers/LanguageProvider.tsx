@@ -10,7 +10,7 @@
 
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   LANGUAGE_STORAGE_KEY,
   normalizeLanguage,
@@ -22,13 +22,13 @@ import type { ApiResponse, UserProfile } from "@/types";
 
 interface LanguageContextValue {
   lang: Language;
-  t: (key: I18nKey) => string;
+  t: (key: I18nKey, params?: Record<string, string | number>) => string;
   setLang: (lang: Language) => void;
 }
 
 const LanguageContext = createContext<LanguageContextValue>({
   lang: "vi",
-  t: (key) => translate("vi", key),
+  t: (key, params) => translate("vi", key, params),
   setLang: () => {},
 });
 
@@ -38,6 +38,10 @@ export function useLanguage(): LanguageContextValue {
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Language>("vi");
+  // t() ổn định identity + luôn đọc lang mới nhất qua ref — an toàn khi
+  // dùng trong useEffect/useCallback rỗng, không stale closure.
+  const langRef = useRef<Language>(lang);
+  langRef.current = lang;
 
   // Khởi tạo 1 lần sau mount: DB (nếu đăng nhập) thắng localStorage.
   useEffect(() => {
@@ -87,10 +91,12 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     }).catch(() => {});
   }, []);
 
-  const value = useMemo<LanguageContextValue>(
-    () => ({ lang, t: (key) => translate(lang, key), setLang }),
-    [lang, setLang]
+  const t = useCallback<LanguageContextValue["t"]>(
+    (key, params) => translate(langRef.current, key, params),
+    []
   );
+
+  const value = useMemo<LanguageContextValue>(() => ({ lang, t, setLang }), [lang, t, setLang]);
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }

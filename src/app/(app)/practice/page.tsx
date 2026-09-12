@@ -8,7 +8,9 @@ import { useEffect, useState } from "react";
 import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
 import ExerciseSolver from "@/components/exercise/ExerciseSolver";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { ApiResponse } from "@/types";
+import type { I18nKey } from "@/lib/i18n/dictionary";
 
 interface ExerciseItem {
   id: string;
@@ -28,9 +30,14 @@ interface ListData {
   totalPages: number;
 }
 
-const DIFF_LABEL: Record<string, string> = { easy: "Dễ", medium: "Trung bình", hard: "Khó" };
+const DIFF_KEYS: Record<string, I18nKey> = {
+  easy: "practice.diff.easy",
+  medium: "practice.diff.medium",
+  hard: "practice.diff.hard",
+};
 
 export default function PracticePage() {
+  const { t } = useLanguage();
   const [data, setData] = useState<ListData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +62,7 @@ export default function PracticePage() {
       if (json.success) setData(json.data);
       else setError(json.error);
     } catch {
-      setError("Không thể kết nối tới máy chủ.");
+      setError(t("common.connectionError"));
     } finally {
       setLoading(false);
     }
@@ -69,13 +76,13 @@ export default function PracticePage() {
   return (
     <section>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, flexWrap: "wrap", gap: 10 }}>
-        <h2 style={{ fontSize: 20, margin: 0 }}>Luyện tập 🧪</h2>
+        <h2 style={{ fontSize: 20, margin: 0 }}>{t("practice.title")}</h2>
         <button className="btn-secondary" style={{ fontSize: 13 }} onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Đóng" : "+ Đóng góp bài tập"}
+          {showForm ? t("common.close") : t("practice.contribute")}
         </button>
       </div>
       <p style={{ color: "var(--text-dim)", fontSize: 13.5, marginTop: 0, marginBottom: 18 }}>
-        Làm đúng lần đầu được cộng XP — nộp lại không farm thêm.
+        {t("practice.subtitle")}
       </p>
 
       {showForm && <CreateExerciseForm onCreated={() => { setShowForm(false); load(); }} />}
@@ -88,25 +95,25 @@ export default function PracticePage() {
           }}
           style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
         >
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm đề bài..." style={inputStyle} />
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Môn" style={{ ...inputStyle, maxWidth: 140 }} />
-          <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Chủ đề" style={{ ...inputStyle, maxWidth: 160 }} />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("practice.searchPh")} style={inputStyle} />
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={t("practice.subjectPh")} style={{ ...inputStyle, maxWidth: 140 }} />
+          <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder={t("practice.topicPh")} style={{ ...inputStyle, maxWidth: 160 }} />
           <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} style={{ ...inputStyle, maxWidth: 140 }}>
-            <option value="">Mọi độ khó</option>
-            <option value="easy">Dễ</option>
-            <option value="medium">Trung bình</option>
-            <option value="hard">Khó</option>
+            <option value="">{t("practice.allDiff")}</option>
+            <option value="easy">{t("practice.diff.easy")}</option>
+            <option value="medium">{t("practice.diff.medium")}</option>
+            <option value="hard">{t("practice.diff.hard")}</option>
           </select>
-          <button type="submit" className="btn-primary" style={{ fontSize: 13 }}>Lọc</button>
+          <button type="submit" className="btn-primary" style={{ fontSize: 13 }}>{t("practice.filter")}</button>
         </form>
       </Panel>
 
-      {loading && <StateMessage kind="loading" text="Đang tải bài tập..." />}
+      {loading && <StateMessage kind="loading" text={t("practice.loading")} />}
       {error && <StateMessage kind="error" text={error} />}
       {!loading && !error && data && data.exercises.length === 0 && (
         <Panel>
           <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>
-            Chưa có bài tập nào phù hợp — hãy nới bộ lọc hoặc đóng góp bài đầu tiên!
+            {t("practice.empty")}
           </p>
         </Panel>
       )}
@@ -117,13 +124,13 @@ export default function PracticePage() {
             <Panel key={e.id}>
               <div style={{ fontWeight: 600, fontSize: 14.5 }}>{e.title}</div>
               <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 6 }}>
-                {e.subject} · {e.topic} · {DIFF_LABEL[e.difficulty] ?? e.difficulty} · {e._count.attempts} lượt nộp
+                {e.subject} · {e.topic} · {t(DIFF_KEYS[e.difficulty] ?? "practice.diff.medium")} · {t("practice.attempts", { n: e._count.attempts })}
               </div>
               <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 4 }}>
-                Bởi {e.author?.name || e.author?.nickname || "Ẩn danh"}
+                {t("practice.by", { n: e.author?.name || e.author?.nickname || t("practice.anonymous") })}
               </div>
               <button className="btn-primary" style={{ fontSize: 12.5, marginTop: 12 }} onClick={() => setSolveId(e.id)}>
-                Làm bài
+                {t("practice.solve")}
               </button>
             </Panel>
           ))}
@@ -134,7 +141,7 @@ export default function PracticePage() {
         <div className="modal-overlay" onClick={() => setSolveId(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button onClick={() => setSolveId(null)} aria-label="Đóng" style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 24, cursor: "pointer", lineHeight: 1 }}>
+              <button onClick={() => setSolveId(null)} aria-label={t("common.close")} style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 24, cursor: "pointer", lineHeight: 1 }}>
                 ×
               </button>
             </div>
@@ -158,6 +165,7 @@ const inputStyle = {
 } as const;
 
 function CreateExerciseForm({ onCreated }: { onCreated: () => void }) {
+  const { t } = useLanguage();
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
   const [topic, setTopic] = useState("");
@@ -184,7 +192,7 @@ function CreateExerciseForm({ onCreated }: { onCreated: () => void }) {
       }
       onCreated();
     } catch {
-      setError("Không thể tạo bài tập.");
+      setError(t("practice.form.createFail"));
     } finally {
       setSubmitting(false);
     }
@@ -193,21 +201,21 @@ function CreateExerciseForm({ onCreated }: { onCreated: () => void }) {
   return (
     <Panel style={{ marginBottom: 16 }}>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <input placeholder="Tiêu đề bài tập *" required value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} />
+        <input placeholder={t("practice.form.title")} required value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input placeholder="Môn *" required value={subject} onChange={(e) => setSubject(e.target.value)} style={{ ...inputStyle }} />
-          <input placeholder="Chủ đề *" required value={topic} onChange={(e) => setTopic(e.target.value)} style={{ ...inputStyle }} />
+          <input placeholder={t("practice.form.subject")} required value={subject} onChange={(e) => setSubject(e.target.value)} style={{ ...inputStyle }} />
+          <input placeholder={t("practice.form.topic")} required value={topic} onChange={(e) => setTopic(e.target.value)} style={{ ...inputStyle }} />
           <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} style={{ ...inputStyle }}>
-            <option value="easy">Dễ</option>
-            <option value="medium">Trung bình</option>
-            <option value="hard">Khó</option>
+            <option value="easy">{t("practice.diff.easy")}</option>
+            <option value="medium">{t("practice.diff.medium")}</option>
+            <option value="hard">{t("practice.diff.hard")}</option>
           </select>
         </div>
-        <textarea placeholder="Đề bài *" required value={statement} onChange={(e) => setStatement(e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical" as const }} />
-        <input placeholder="Đáp án mẫu để chấm tự động (tùy chọn — bỏ trống = bài tự luận)" value={expectedOutput} onChange={(e) => setExpectedOutput(e.target.value)} style={inputStyle} />
+        <textarea placeholder={t("practice.form.statement")} required value={statement} onChange={(e) => setStatement(e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical" as const }} />
+        <input placeholder={t("practice.form.expected")} value={expectedOutput} onChange={(e) => setExpectedOutput(e.target.value)} style={inputStyle} />
         {error && <p style={{ color: "var(--rose)", fontSize: 13 }}>{error}</p>}
         <button type="submit" className="btn-primary" disabled={submitting} style={{ fontSize: 13.5 }}>
-          {submitting ? "Đang tạo..." : "Đóng góp bài tập"}
+          {submitting ? t("practice.form.creating") : t("practice.form.create")}
         </button>
       </form>
     </Panel>

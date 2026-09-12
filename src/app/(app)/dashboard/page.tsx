@@ -20,6 +20,8 @@ import LevelProgressBar from "@/components/ui/LevelProgressBar";
 import TodaySchedule from "@/components/calendar/TodaySchedule";
 import { getLevelProgressDetails } from "@/lib/constants/xp";
 import { useCountUp } from "@/lib/hooks/useCountUp";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import { hasKey, localeFor, type I18nKey } from "@/lib/i18n/dictionary";
 import type { ApiResponse, GoalWithRoadmap, SkillMasteryPoint } from "@/types";
 
 interface ProgressData {
@@ -55,36 +57,16 @@ interface ReviewDueResponse {
   stats: { due: number; overdue: number; upcoming: number; total: number };
 }
 
-// Nhãn tiếng Việt cho reason của XP transaction (fallback: prettify).
-const REASON_LABELS: Record<string, string> = {
-  lesson_complete: "Hoàn thành bài học",
-  exercise_easy: "Giải bài tập dễ",
-  exercise_medium: "Giải bài tập trung bình",
-  exercise_hard: "Giải bài tập khó",
-  quiz_complete: "Hoàn thành quiz",
-  quiz_80_percent: "Quiz đạt ≥ 80%",
-  daily_challenge: "Thử thách ngày",
-  daily_mission: "Nhiệm vụ ngày",
-  weekly_mission: "Nhiệm vụ tuần",
-  mastery_milestone: "Cột mốc thành thạo",
-  achievement_unlocked: "Mở khóa thành tựu",
-  tutor_session_completed: "Buổi học với AI Gia sư",
-  mindmap_created: "Tạo mind map",
-  document_analyzed: "Phân tích tài liệu",
-  reflection_completed: "Viết phản chiếu",
-  task_completed: "Hoàn thành task",
-  diagnostic_completed: "Hoàn thành kiểm tra năng lực",
-  roadmap_completed: "Hoàn thành lộ trình",
-  review_completed: "Ôn tập",
-  study_session_completed: "Hoàn thành buổi học",
-};
-
-function reasonLabel(reason: string): string {
-  return REASON_LABELS[reason] ?? reason.replace(/_/g, " ");
+// Nhãn XP reason theo ngôn ngữ UI — key `xp.reason.*` trong dictionary,
+// reason lạ fallback prettify (không crash khi backend thêm type mới).
+function reasonLabel(t: (key: I18nKey) => string, reason: string): string {
+  const key = `xp.reason.${reason}`;
+  return hasKey(key) ? t(key) : reason.replace(/_/g, " ");
 }
 
 export default function HomePage() {
   const router = useRouter();
+  const { t, lang } = useLanguage();
   const [askValue, setAskValue] = useState("");
   const [progress, setProgress] = useState<ProgressData | null>(null);
   const [xpData, setXpData] = useState<StreakResponse | null>(null);
@@ -101,7 +83,7 @@ export default function HomePage() {
         if (json.success) setProgress(json.data);
         else setError(json.error);
       })
-      .catch(() => setError("Không thể kết nối tới máy chủ."))
+      .catch(() => setError(t("common.connectionError")))
       .finally(() => setLoading(false));
 
     fetch("/api/streak")
@@ -141,7 +123,18 @@ export default function HomePage() {
     .filter((s) => s.isWeak)
     .sort((a, b) => a.masteryPercent - b.masteryPercent)[0];
 
-  const formatNumber = (num: number) => num.toLocaleString("vi-VN");
+  const formatNumber = (num: number) => num.toLocaleString(localeFor(lang));
+
+  // Lời chào theo giờ trình duyệt — tính SAU mount (useEffect) để SSR
+  // và client render cùng fallback, tránh hydration mismatch khi giờ
+  // server khác giờ trình duyệt (cùng class bug với calendar anchor).
+  const [greetingKey, setGreetingKey] = useState<
+    "dashboard.greeting.morning" | "dashboard.greeting.afternoon" | "dashboard.greeting.evening"
+  >("dashboard.greeting.evening");
+  useEffect(() => {
+    const h = new Date().getHours();
+    setGreetingKey(h < 11 ? "dashboard.greeting.morning" : h < 18 ? "dashboard.greeting.afternoon" : "dashboard.greeting.evening");
+  }, []);
 
   const xp = xpData?.progress;
   const streak = xpData?.streak;
@@ -158,9 +151,9 @@ export default function HomePage() {
   return (
     <section className="page-enter">
       <div style={{ marginBottom: 8 }}>
-        <h1 style={{ fontSize: 27, fontWeight: 600 }}>Chào buổi tối 👋</h1>
+        <h1 style={{ fontSize: 27, fontWeight: 600 }}>{t(greetingKey)}</h1>
         <p style={{ color: "var(--text-dim)", fontSize: 14.5, marginTop: 6 }}>
-          Hôm nay bạn muốn học gì tiếp theo?
+          {t("dashboard.subtitle")}
         </p>
 
         <div
@@ -180,8 +173,8 @@ export default function HomePage() {
             value={askValue}
             onChange={(e) => setAskValue(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && goToTutor()}
-            placeholder="Hỏi LearnX AI, ví dụ: giải thích quy hoạch động..."
-            aria-label="Hỏi LearnX AI"
+            placeholder={t("dashboard.askPlaceholder")}
+            aria-label={t("dashboard.askAria")}
             style={{
               flex: 1,
               background: "transparent",
@@ -192,7 +185,7 @@ export default function HomePage() {
             }}
           />
           <button className="btn-primary" onClick={goToTutor}>
-            Hỏi
+            {t("common.ask")}
           </button>
         </div>
       </div>
@@ -210,18 +203,18 @@ export default function HomePage() {
           {/* XP / Level / LXP Stats */}
           <div className="grid-stats enter enter--1" style={{ marginBottom: 20 }}>
             <StatCard
-              value={`Level ${levelDetails?.level ?? xp.level}`}
-              label={`XP: ${formatNumber(animatedXP)}`}
+              value={t("common.level", { n: levelDetails?.level ?? xp.level })}
+              label={t("common.xpLabel", { n: formatNumber(animatedXP) })}
             />
             <StatCard
               value={`${levelDetails?.progressPercent ?? xp.levelProgress.percent}%`}
-              label={`Tới Level ${(levelDetails?.level ?? xp.level) + 1}`}
+              label={t("common.toLevel", { n: (levelDetails?.level ?? xp.level) + 1 })}
             />
             <StatCard
               value={`${formatNumber(xp.lxpBalance)} LXP`}
-              label="LearnX Points"
+              label={t("dashboard.lxpLabel")}
             />
-            <StatCard value={`🔥 ${streak.current}`} label={`${streak.longest} ngày dài nhất`} />
+            <StatCard value={`🔥 ${streak.current}`} label={t("common.longestDays", { n: streak.longest })} />
           </div>
 
           {/* XP Progress Bar — dùng component chung, cùng 1 công thức */}
@@ -234,14 +227,14 @@ export default function HomePage() {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <Panel>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>📚 Ôn tập đến hạn</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{t("dashboard.reviewDue")}</div>
                 {reviewDue ? (
                   reviewDue.stats.due > 0 ? (
                     <div style={{ fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.6 }}>
                       <span style={{ color: "var(--amber)", fontWeight: 700 }}>{reviewDue.stats.due}</span>{" "}
-                      chủ đề cần ôn hôm nay
+                      {t("dashboard.reviewDueLine", { n: reviewDue.stats.due })}
                       {reviewDue.stats.overdue > 0 && (
-                        <> (quá hạn {reviewDue.stats.overdue})</>
+                        <> {t("dashboard.reviewOverdue", { n: reviewDue.stats.overdue })}</>
                       )}
                       <ul style={{ margin: "8px 0 12px", paddingLeft: 18 }}>
                         {reviewDue.reviews.slice(0, 3).map((r) => (
@@ -251,12 +244,12 @@ export default function HomePage() {
                         ))}
                       </ul>
                       <button className="btn-secondary" onClick={() => router.push("/practice")} style={{ fontSize: 12.5 }}>
-                        Luyện tập ngay
+                        {t("common.practiceNow")}
                       </button>
                     </div>
                   ) : (
                     <div style={{ fontSize: 13.5, color: "var(--text-dim)" }}>
-                      Hôm nay không có gì đến hạn ôn. 🎉
+                      {t("dashboard.reviewEmpty")}
                     </div>
                   )
                 ) : (
@@ -265,28 +258,28 @@ export default function HomePage() {
               </Panel>
 
               <Panel>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>▶ Học tiếp</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{t("dashboard.continue")}</div>
                 {goals === null ? (
                   <Skeleton height={40} />
                 ) : continueGoal ? (
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 14 }}>{continueGoal.title}</div>
                     <div style={{ fontSize: 12.5, color: "var(--text-dim)", margin: "4px 0 10px" }}>
-                      Tiến độ {continueGoal.progressPercent}%
+                      {t("common.progressPercent", { n: continueGoal.progressPercent })}
                     </div>
                     <div className="bar-track" style={{ marginBottom: 12 }}>
                       <div className="bar-fill" style={{ width: `${continueGoal.progressPercent}%` }} />
                     </div>
                     <button className="btn-primary" onClick={() => router.push("/roadmap")} style={{ fontSize: 12.5 }}>
-                      Tiếp tục lộ trình
+                      {t("common.continueRoadmap")}
                     </button>
                   </div>
                 ) : (
                   <div style={{ fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.6 }}>
-                    Chưa có lộ trình nào đang học.
+                    {t("dashboard.noActiveGoal")}
                     <div style={{ marginTop: 10 }}>
                       <button className="btn-secondary" onClick={() => router.push("/roadmap")} style={{ fontSize: 12.5 }}>
-                        Tạo lộ trình
+                        {t("common.createRoadmap")}
                       </button>
                     </div>
                   </div>
@@ -298,43 +291,43 @@ export default function HomePage() {
           {/* Skill overview + Recent activity */}
           <div className="grid-progress enter enter--3" style={{ marginBottom: 20 }}>
             <Panel>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>🧠 Tổng quan năng lực</div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{t("dashboard.skillOverview")}</div>
               {(progress.skillMap.length === 0) ? (
                 <div style={{ fontSize: 13.5, color: "var(--text-dim)", lineHeight: 1.6 }}>
-                  Chưa có dữ liệu — làm bài{" "}
-                  <a href="/diagnostic" style={{ color: "var(--cyan)" }}>Kiểm tra năng lực</a>{" "}
-                  để LearnX vẽ bản đồ năng lực của bạn.
+                  {t("dashboard.skillEmptyA")}{" "}
+                  <a href="/diagnostic" style={{ color: "var(--cyan)" }}>{t("common.assessment")}</a>{" "}
+                  {t("dashboard.skillEmptyB")}
                 </div>
               ) : (
                 <div style={{ display: "flex", gap: 10 }}>
                   <div style={{ flex: 1, textAlign: "center", padding: "10px 6px", background: "var(--cyan-soft)", borderRadius: 10 }}>
                     <div style={{ fontSize: 20, fontWeight: 700, color: "var(--cyan)" }}>{mastered}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>Vững</div>
+                    <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>{t("dashboard.skillMastered")}</div>
                   </div>
                   <div style={{ flex: 1, textAlign: "center", padding: "10px 6px", background: "var(--indigo-soft)", borderRadius: 10 }}>
                     <div style={{ fontSize: 20, fontWeight: 700, color: "var(--indigo)" }}>{learningCount}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>Đang học</div>
+                    <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>{t("dashboard.skillLearning")}</div>
                   </div>
                   <div style={{ flex: 1, textAlign: "center", padding: "10px 6px", background: "var(--amber-soft)", borderRadius: 10 }}>
                     <div style={{ fontSize: 20, fontWeight: 700, color: "var(--amber)" }}>{weakCount}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>Cần củng cố</div>
+                    <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>{t("dashboard.skillWeak")}</div>
                   </div>
                 </div>
               )}
             </Panel>
 
             <Panel>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>🕘 Hoạt động gần đây</div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{t("dashboard.recentActivity")}</div>
               {recentXP.length === 0 ? (
                 <div style={{ fontSize: 13.5, color: "var(--text-dim)" }}>
-                  Chưa có hoạt động nào — hoàn thành bài đầu tiên để bắt đầu.
+                  {t("dashboard.activityEmpty")}
                 </div>
               ) : (
                 <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-                  {recentXP.map((t) => (
-                    <li key={t.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13 }}>
-                      <span style={{ color: "var(--text-dim)" }}>{reasonLabel(t.reason)}</span>
-                      <span style={{ color: "var(--cyan)", fontWeight: 600, whiteSpace: "nowrap" }}>+{t.amount} XP</span>
+                  {recentXP.map((tx) => (
+                    <li key={tx.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13 }}>
+                      <span style={{ color: "var(--text-dim)" }}>{reasonLabel(t, tx.reason)}</span>
+                      <span style={{ color: "var(--cyan)", fontWeight: 600, whiteSpace: "nowrap" }}>+{tx.amount} XP</span>
                     </li>
                   ))}
                 </ul>
@@ -344,27 +337,27 @@ export default function HomePage() {
 
           {weakest ? (
             <>
-              <div style={{ fontSize: 15, fontWeight: 600, margin: "30px 0 14px" }}>LearnX đề xuất</div>
+              <div style={{ fontSize: 15, fontWeight: 600, margin: "30px 0 14px" }}>{t("dashboard.suggestTitle")}</div>
               <Panel style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 14.5 }}>
-                    Ôn lại {weakest.subject} — {weakest.topic}
+                    {t("dashboard.suggestLine", { subject: weakest.subject, topic: weakest.topic })}
                   </div>
                   <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 3 }}>
-                    Bạn đang ở mức {weakest.masteryPercent}% chủ đề này — nên ôn trước khi sang bài mới
+                    {t("dashboard.suggestDetail", { n: weakest.masteryPercent })}
                   </div>
                 </div>
                 <button className="btn-primary" onClick={() => router.push("/roadmap")}>
-                  Xem lộ trình
+                  {t("common.viewRoadmap")}
                 </button>
               </Panel>
             </>
           ) : (
             <EmptyState
               icon="🧭"
-              title="Chưa có dữ liệu năng lực"
-              description="Làm bài Kiểm tra năng lực trước để LearnX hiểu bạn đang mạnh/yếu ở đâu."
-              actionLabel="Kiểm tra năng lực"
+              title={t("dashboard.noSkillTitle")}
+              description={t("dashboard.noSkillDesc")}
+              actionLabel={t("common.assessment")}
               onAction={() => router.push("/diagnostic")}
             />
           )}

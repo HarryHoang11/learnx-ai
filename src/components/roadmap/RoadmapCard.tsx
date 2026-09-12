@@ -4,6 +4,7 @@
 "use client";
 
 import { useState, useRef, useEffect, type ReactNode } from "react";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { GoalWithRoadmap } from "@/types";
 
 interface RoadmapCardProps {
@@ -23,6 +24,7 @@ export default function RoadmapCard({
   onReactivate,
   onDelete,
 }: RoadmapCardProps) {
+  const { t } = useLanguage();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -64,7 +66,7 @@ export default function RoadmapCard({
         <div ref={menuRef} style={{ position: "relative" }} onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => setMenuOpen((v) => !v)}
-            aria-label="Tuỳ chọn lộ trình"
+            aria-label={t("roadmap.card.menu")}
             style={{
               background: "none",
               border: "none",
@@ -100,7 +102,7 @@ export default function RoadmapCard({
                     onMarkCompleted();
                   }}
                 >
-                  Đánh dấu hoàn thành
+                  {t("roadmap.card.complete")}
                 </MenuItem>
               ) : (
                 <MenuItem
@@ -109,7 +111,7 @@ export default function RoadmapCard({
                     onReactivate();
                   }}
                 >
-                  Mở lại (tiếp tục học)
+                  {t("roadmap.card.reopen")}
                 </MenuItem>
               )}
               <MenuItem
@@ -119,7 +121,7 @@ export default function RoadmapCard({
                 }}
                 danger
               >
-                Xoá lộ trình
+                {t("roadmap.card.delete")}
               </MenuItem>
             </div>
           )}
@@ -127,7 +129,7 @@ export default function RoadmapCard({
       </div>
 
       <div style={{ fontSize: 12.5, color: isCompleted ? "var(--cyan)" : "var(--text-dim)" }}>
-        {isCompleted ? "✓ Đã hoàn thành" : goal.progressPercent > 0 ? "Đang học" : "Chưa bắt đầu"}
+        {isCompleted ? t("roadmap.card.done") : goal.progressPercent > 0 ? t("roadmap.card.learning") : t("roadmap.card.notStarted")}
       </div>
 
       <div>
@@ -142,7 +144,7 @@ export default function RoadmapCard({
           />
         </div>
         <div style={{ fontSize: 11.5, color: "var(--text-faint)", marginTop: 5 }}>
-          Tiến độ: {goal.progressPercent}%
+          {t("roadmap.card.progress", { n: goal.progressPercent })}
         </div>
       </div>
 
@@ -154,7 +156,7 @@ export default function RoadmapCard({
         }}
         style={{ fontSize: 12.5, padding: "7px 14px", alignSelf: "flex-start" }}
       >
-        {isCompleted ? "Xem lại" : goal.progressPercent > 0 ? "Tiếp tục" : "Bắt đầu"}
+        {isCompleted ? t("roadmap.card.review") : goal.progressPercent > 0 ? t("roadmap.card.continue") : t("roadmap.card.start")}
       </button>
     </div>
   );

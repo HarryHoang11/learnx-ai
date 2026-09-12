@@ -15,6 +15,7 @@ import {
   getLevelProgress,
   type ActivityType 
 } from "@/lib/constants/xp";
+import { checkAndUnlockAchievements, type UnlockResult } from "./achievement.service";
 
 export interface LearningActivityInput {
   userId: string;
@@ -37,13 +38,16 @@ export interface ActivityResult {
   previousLevel: number;
 }
 
+export const APP_TIMEZONE = 'Asia/Ho_Chi_Minh';
+
+export function getTodayDateString(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIMEZONE }).format(now);
+}
+
 function getUserLocalDate(): Date {
-  const now = new Date();
-  const offset = now.getTimezoneOffset();
-  const localTime = now.getTime() - (offset * 60 * 1000);
-  const localDate = new Date(localTime);
-  localDate.setHours(0, 0, 0, 0);
-  return localDate;
+  const dateStr = getTodayDateString();
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 }
 
 function getDateString(date: Date): string {
@@ -159,34 +163,6 @@ async function checkAndUpdateDailyChallenge(tx: any, userId: string, activityTyp
   });
 }
 
-async function checkAchievements(tx: any, userId: string, activityType: ActivityType, date: Date) {
-  const streak = await tx.streak.findUnique({ where: { userId } });
-  if (!streak) return;
-
-  const achievements: { code: string; condition: boolean }[] = [
-    { code: 'first_lesson', condition: activityType === 'lesson_complete' },
-    { code: 'first_quiz', condition: activityType === 'quiz_complete' },
-    { code: 'first_exercise', condition: activityType.startsWith('exercise_') },
-    { code: 'streak_3', condition: streak.currentStreak >= 3 },
-    { code: 'streak_7', condition: streak.currentStreak >= 7 },
-    { code: 'streak_30', condition: streak.currentStreak >= 30 },
-  ];
-
-  for (const ach of achievements) {
-    if (!ach.condition) continue;
-    
-    const existing = await tx.achievement.findUnique({
-      where: { userId_code: { userId, code: ach.code } },
-    });
-    
-    if (!existing) {
-      await tx.achievement.create({
-        data: { userId, code: ach.code },
-      });
-    }
-  }
-}
-
 async function checkLevelUpRewards(tx: any, userId: string, oldLevel: number, newLevel: number) {
   const milestoneLevels = [5, 10, 20, 30, 50, 100];
   
@@ -232,14 +208,21 @@ export async function recordLearningActivity(input: LearningActivityInput): Prom
   const xpEarned = calculateXP({ activityType: type, difficulty, scorePercent, isFirstCompletion });
   const lxpEarned = calculateLXP(type, difficulty);
 
-  return await prisma.$transaction(async (tx) => {
+  // Variables to capture transaction results
+  let isNewLearningDay = false;
+  let streakResult = { current: 0, longest: 0 };
+  let leveledUp = false;
+  let newLevel: number | undefined;
+  let oldLevel = 0;
+
+  await prisma.$transaction(async (tx) => {
     const learningDay = await tx.learningDay.upsert({
       where: { userId_date: { userId, date } },
       create: { userId, date, xpEarned: 0, lxpEarned: 0 },
       update: {},
     });
 
-    const isNewLearningDay = learningDay.xpEarned === 0 && learningDay.lxpEarned === 0;
+    isNewLearningDay = learningDay.xpEarned === 0 && learningDay.lxpEarned === 0;
 
     await tx.learningDay.update({
       where: { id: learningDay.id },
@@ -281,29 +264,53 @@ export async function recordLearningActivity(input: LearningActivityInput): Prom
       select: { lifetimeXP: true, level: true },
     });
 
-    const oldLevel = user.level;
-    const newLevel = calculateLevel(user.lifetimeXP);
-    const leveledUp = newLevel > oldLevel;
+    oldLevel = user.level;
+    newLevel = calculateLevel(user.lifetimeXP);
+    leveledUp = newLevel > oldLevel;
 
     if (leveledUp) {
       await tx.user.update({ where: { id: userId }, data: { level: newLevel } });
       await checkLevelUpRewards(tx, userId, oldLevel, newLevel);
     }
 
-    const streakResult = await updateStreak(tx, userId, date, isNewLearningDay);
+    streakResult = await updateStreak(tx, userId, date, isNewLearningDay);
     await checkAndUpdateDailyChallenge(tx, userId, type, date);
-    await checkAchievements(tx, userId, type, date);
-
-    return {
-      xpEarned,
-      lxpEarned,
-      learningDayCreated: isNewLearningDay,
-      streakUpdated: streakResult,
-      leveledUp,
-      newLevel: leveledUp ? newLevel : undefined,
-      previousLevel: oldLevel,
-    };
   });
+
+  // Check and unlock achievements AFTER the main transaction commits
+  // This avoids circular dependency with achievement.service.ts
+  if (type !== 'achievement_unlocked') {
+    try {
+      const unlockedAchievements = await checkAndUnlockAchievements(userId, { type, data: input.metadata });
+      // Record achievement unlock activities for each unlocked achievement
+      for (const unlocked of unlockedAchievements) {
+        if (unlocked.achievement) {
+          await recordLearningActivity({
+            userId,
+            type: 'achievement_unlocked',
+            difficulty: 'medium',
+            isFirstCompletion: true,
+            sourceId: unlocked.achievement.code,
+            sourceType: 'achievement',
+            metadata: { achievementCode: unlocked.achievement.code },
+          });
+        }
+      }
+    } catch (err) {
+      // Log but don't fail the main activity if achievement check fails
+      console.error('[learning-activity] Achievement check failed:', err);
+    }
+  }
+
+  return {
+    xpEarned,
+    lxpEarned,
+    learningDayCreated: isNewLearningDay,
+    streakUpdated: streakResult,
+    leveledUp,
+    newLevel: leveledUp ? newLevel : undefined,
+    previousLevel: oldLevel,
+  };
 }
 
 export async function getCurrentStreak(userId: string) {

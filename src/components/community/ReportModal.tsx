@@ -5,6 +5,8 @@
 "use client";
 
 import { useState } from "react";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import type { I18nKey } from "@/lib/i18n/dictionary";
 
 interface ReportModalProps {
   isOpen: boolean;
@@ -13,16 +15,27 @@ interface ReportModalProps {
   disabled?: boolean;
 }
 
-const REPORT_REASONS = [
-  { value: "WRONG_INFO", label: "Sai thông tin" },
-  { value: "SPAM", label: "Spam" },
-  { value: "DUPLICATE", label: "Trùng lặp" },
-  { value: "MISLEADING", label: "Gây hiểu lầm" },
-  { value: "INAPPROPRIATE", label: "Nội dung không phù hợp" },
-  { value: "COPYRIGHT", label: "Vi phạm bản quyền" },
-  { value: "WRONG_SUBJECT", label: "Sai môn học/chủ đề" },
-  { value: "OTHER", label: "Khác" },
-];
+const REPORT_REASON_KEYS = [
+  "com.report.r.WRONG_INFO",
+  "com.report.r.SPAM",
+  "com.report.r.DUPLICATE",
+  "com.report.r.MISLEADING",
+  "com.report.r.INAPPROPRIATE",
+  "com.report.r.COPYRIGHT",
+  "com.report.r.WRONG_SUBJECT",
+  "com.report.r.OTHER",
+] as const;
+
+const REASON_VALUES = [
+  "WRONG_INFO",
+  "SPAM",
+  "DUPLICATE",
+  "MISLEADING",
+  "INAPPROPRIATE",
+  "COPYRIGHT",
+  "WRONG_SUBJECT",
+  "OTHER",
+] as const;
 
 export default function ReportModal({
   isOpen,
@@ -32,6 +45,12 @@ export default function ReportModal({
 }: ReportModalProps) {
   const [reportReason, setReportReason] = useState("");
   const [reportDescription, setReportDescription] = useState("");
+  const { t } = useLanguage();
+
+  const reasonLabel = (value: string): string => {
+    const idx = REASON_VALUES.indexOf(value as (typeof REASON_VALUES)[number]);
+    return idx >= 0 ? t(REPORT_REASON_KEYS[idx] as I18nKey) : value;
+  };
 
   const handleSubmit = () => {
     if (!reportReason) return;
@@ -47,11 +66,11 @@ export default function ReportModal({
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 300 }}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontWeight: 600, fontSize: 16 }}>Báo cáo tài liệu</div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 24, cursor: "pointer", lineHeight: 1, padding: 4 }}>×</button>
+          <div style={{ fontWeight: 600, fontSize: 16 }}>{t("com.report.title")}</div>
+          <button onClick={onClose} aria-label={t("common.close")} style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 24, cursor: "pointer", lineHeight: 1, padding: 4 }}>×</button>
         </div>
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 8 }}>Lý do báo cáo</label>
+          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 8 }}>{t("com.report.reason")}</label>
           <select
             value={reportReason}
             onChange={(e) => setReportReason(e.target.value)}
@@ -65,14 +84,14 @@ export default function ReportModal({
               fontSize: 14,
             }}
           >
-            <option value="">Chọn lý do</option>
-            {REPORT_REASONS.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
+            <option value="">{t("com.report.pickReason")}</option>
+            {REASON_VALUES.map((v, i) => (
+              <option key={v} value={v}>{t(REPORT_REASON_KEYS[i])}</option>
             ))}
           </select>
         </div>
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 8 }}>Mô tả chi tiết (tùy chọn)</label>
+          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 8 }}>{t("com.report.descLabel")}</label>
           <textarea
             value={reportDescription}
             onChange={(e) => setReportDescription(e.target.value)}
@@ -88,18 +107,18 @@ export default function ReportModal({
               fontFamily: "inherit",
               resize: "vertical",
             }}
-            placeholder="Mô tả chi tiết vấn đề..."
+            placeholder={t("com.report.details")}
           />
         </div>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button className="btn-secondary" onClick={onClose}>Hủy</button>
+          <button className="btn-secondary" onClick={onClose}>{t("com.report.cancel")}</button>
           <button
             className="btn-secondary"
             onClick={handleSubmit}
             style={{ background: "var(--rose)", borderColor: "var(--rose)", color: "#0a0e16" }}
             disabled={!reportReason || disabled}
           >
-            Gửi báo cáo
+            {t("com.report.submit")}
           </button>
         </div>
       </div>

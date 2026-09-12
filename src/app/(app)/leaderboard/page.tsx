@@ -7,6 +7,8 @@
 import { useEffect, useState } from "react";
 import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import { localeFor, type I18nKey } from "@/lib/i18n/dictionary";
 import type { ApiResponse } from "@/types";
 
 type Scope = "global" | "friends" | "subject" | "contributor";
@@ -36,16 +38,16 @@ interface ContributorEntry {
   rank: number;
 }
 
-const formatNumber = (num: number) => num.toLocaleString("vi-VN");
-
-const TABS: { key: Scope; label: string }[] = [
-  { key: "global", label: "Toàn hệ thống" },
-  { key: "friends", label: "Bạn bè" },
-  { key: "subject", label: "Theo môn" },
-  { key: "contributor", label: "Đóng góp" },
+const TABS: { key: Scope; labelKey: I18nKey }[] = [
+  { key: "global", labelKey: "lb.tab.global" },
+  { key: "friends", labelKey: "lb.tab.friends" },
+  { key: "subject", labelKey: "lb.tab.subject" },
+  { key: "contributor", labelKey: "lb.tab.contributor" },
 ];
 
 export default function LeaderboardPage() {
+  const { t, lang } = useLanguage();
+  const formatNumber = (num: number) => num.toLocaleString(localeFor(lang));
   const [scope, setScope] = useState<Scope>("global");
   const [entries, setEntries] = useState<XpEntry[]>([]);
   const [contributors, setContributors] = useState<ContributorEntry[]>([]);
@@ -88,7 +90,7 @@ export default function LeaderboardPage() {
         }
       }
     } catch {
-      setError("Không thể kết nối tới máy chủ.");
+      setError(t("common.connectionError"));
     } finally {
       setLoading(false);
     }
@@ -101,16 +103,16 @@ export default function LeaderboardPage() {
 
   return (
     <section>
-      <h2 style={{ fontSize: 20, marginBottom: 4 }}>Bảng xếp hạng 🏆</h2>
+      <h2 style={{ fontSize: 20, marginBottom: 4 }}>{t("lb.title")}</h2>
       <p style={{ color: "var(--text-dim)", fontSize: 13.5, marginTop: 0, marginBottom: 18 }}>
-        Mọi điểm số lấy từ dữ liệu học tập thật — mở trang hay bấm nút không cộng điểm.
-        {myRank !== null && scope === "global" && <> Hạng của bạn: <strong>#{myRank}</strong>.</>}
+        {t("lb.subtitle")}
+        {myRank !== null && scope === "global" && <> {t("lb.myRank")} <strong>#{myRank}</strong>.</>}
       </p>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-        {TABS.map((t) => (
-          <button key={t.key} onClick={() => setScope(t.key)} className={scope === t.key ? "btn-primary" : "btn-secondary"} style={{ fontSize: 13 }}>
-            {t.label}
+        {TABS.map((tab) => (
+          <button key={tab.key} onClick={() => setScope(tab.key)} className={scope === tab.key ? "btn-primary" : "btn-secondary"} style={{ fontSize: 13 }}>
+            {t(tab.labelKey)}
           </button>
         ))}
       </div>
@@ -126,18 +128,18 @@ export default function LeaderboardPage() {
           <input
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            placeholder="Nhập tên môn (vd: Toán)"
+            placeholder={t("lb.subjectPh")}
             style={{ flex: 1, background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 10, padding: "9px 12px", color: "var(--text)", fontSize: 13.5, outline: "none" }}
           />
-          <button type="submit" className="btn-secondary" style={{ fontSize: 13 }}>Xem</button>
+          <button type="submit" className="btn-secondary" style={{ fontSize: 13 }}>{t("lb.view")}</button>
         </form>
       )}
 
-      {loading && <StateMessage kind="loading" text="Đang tải bảng xếp hạng..." />}
+      {loading && <StateMessage kind="loading" text={t("lb.loading")} />}
       {error && <StateMessage kind="error" text={error} />}
 
       {!loading && !error && scope !== "contributor" && entries.length === 0 && (
-        <Panel><p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>Chưa có dữ liệu xếp hạng.</p></Panel>
+        <Panel><p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>{t("lb.empty")}</p></Panel>
       )}
 
       {!loading && !error && scope !== "contributor" && entries.length > 0 && (
@@ -147,10 +149,10 @@ export default function LeaderboardPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ width: 30, fontWeight: 700, color: e.rank <= 3 ? "var(--amber)" : "var(--text-dim)" }}>#{e.rank}</span>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{e.name || e.nickname || "Ẩn danh"}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{e.name || e.nickname || t("lb.anonymous")}</div>
                   <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
                     Lv.{e.level}
-                    {e.avgMastery !== undefined && <> · Mastery TB {e.avgMastery}% ({e.topicCount} chủ đề)</>}
+                    {e.avgMastery !== undefined && <> · {t("lb.masteryAvg", { n: e.avgMastery, m: e.topicCount ?? 0 })}</>}
                   </div>
                 </div>
               </div>
@@ -161,7 +163,7 @@ export default function LeaderboardPage() {
       )}
 
       {!loading && !error && scope === "contributor" && contributors.length === 0 && (
-        <Panel><p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>Chưa có dữ liệu đóng góp.</p></Panel>
+        <Panel><p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>{t("lb.emptyContrib")}</p></Panel>
       )}
 
       {!loading && !error && scope === "contributor" && contributors.length > 0 && (
@@ -171,9 +173,9 @@ export default function LeaderboardPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ width: 30, fontWeight: 700, color: e.rank <= 3 ? "var(--amber)" : "var(--text-dim)" }}>#{e.rank}</span>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{e.name || e.nickname || "Ẩn danh"}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{e.name || e.nickname || t("lb.anonymous")}</div>
                   <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-                    {e.totalUploads} tài liệu · Chất lượng {Math.round(e.avgQuality)}
+                    {t("lb.uploads", { n: e.totalUploads })} · {t("lb.quality", { n: Math.round(e.avgQuality) })}
                   </div>
                 </div>
               </div>

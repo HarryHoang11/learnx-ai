@@ -7,6 +7,9 @@
 import { useEffect, useState } from "react";
 import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
+import { useToast } from "@/components/ui/Toast";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import { localeFor, type I18nKey } from "@/lib/i18n/dictionary";
 import type { ApiResponse } from "@/types";
 
 interface Resource {
@@ -34,26 +37,33 @@ interface ListData {
   totalPages: number;
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  ARTICLE: "Bài viết",
-  VIDEO: "Video",
-  DOCUMENTATION: "Tài liệu",
-  DOCUMENT: "Văn bản",
-  WEBSITE: "Website",
-  EXERCISE_SET: "Bộ bài tập",
-  OTHER: "Khác",
+const TYPE_KEYS: Record<string, I18nKey> = {
+  ARTICLE: "res.type.ARTICLE",
+  VIDEO: "res.type.VIDEO",
+  DOCUMENTATION: "res.type.DOCUMENTATION",
+  DOCUMENT: "res.type.DOCUMENT",
+  WEBSITE: "res.type.WEBSITE",
+  EXERCISE_SET: "res.type.EXERCISE_SET",
+  OTHER: "res.type.OTHER",
 };
 
-const SORTS = [
-  { value: "quality", label: "Chất lượng" },
-  { value: "rating", label: "Đánh giá cao" },
-  { value: "popular", label: "Xem nhiều" },
-  { value: "newest", label: "Mới nhất" },
-];
+const DIFF_KEYS: Record<string, I18nKey> = {
+  easy: "res.diff.easy",
+  medium: "res.diff.medium",
+  hard: "res.diff.hard",
+};
 
-const formatNumber = (num: number) => num.toLocaleString("vi-VN");
+const SORT_KEYS = [
+  { value: "quality", labelKey: "res.sort.quality" },
+  { value: "rating", labelKey: "res.sort.rating" },
+  { value: "popular", labelKey: "res.sort.popular" },
+  { value: "newest", labelKey: "res.sort.newest" },
+] as const;
 
 export default function ResourcesPage() {
+  const { t, lang } = useLanguage();
+  const { push } = useToast();
+  const formatNumber = (num: number) => num.toLocaleString(localeFor(lang));
   const [data, setData] = useState<ListData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +90,7 @@ export default function ResourcesPage() {
       if (json.success) setData(json.data);
       else setError(json.error);
     } catch {
-      setError("Không thể kết nối tới máy chủ.");
+      setError(t("common.connectionError"));
     } finally {
       setLoading(false);
     }
@@ -99,7 +109,7 @@ export default function ResourcesPage() {
       body: JSON.stringify({ rating: rateValue }),
     });
     const json: ApiResponse<unknown> = await res.json();
-    if (!json.success) alert(json.error);
+    if (!json.success) push("error", json.error);
     else {
       setRateId(null);
       await load();
@@ -118,13 +128,13 @@ export default function ResourcesPage() {
   return (
     <section>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, flexWrap: "wrap", gap: 10 }}>
-        <h2 style={{ fontSize: 20, margin: 0 }}>Tài liệu học 📚</h2>
+        <h2 style={{ fontSize: 20, margin: 0 }}>{t("res.title")}</h2>
         <button className="btn-secondary" style={{ fontSize: 13 }} onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Đóng" : "+ Đóng góp tài liệu"}
+          {showForm ? t("common.close") : t("res.contribute")}
         </button>
       </div>
       <p style={{ color: "var(--text-dim)", fontSize: 13.5, marginTop: 0, marginBottom: 18 }}>
-        Catalog chung do cộng đồng đóng góp — chất lượng tính từ đánh giá thật, lượt đọc và báo cáo.
+        {t("res.subtitle")}
       </p>
 
       {showForm && <CreateResourceForm onCreated={() => { setShowForm(false); load(); }} />}
@@ -140,42 +150,42 @@ export default function ResourcesPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm kiếm tiêu đề, mô tả..."
+            placeholder={t("res.searchPh")}
             style={{ flex: "2 1 200px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 10, padding: "9px 12px", color: "var(--text)", fontSize: 13.5, outline: "none" }}
           />
           <input
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            placeholder="Môn (vd: Toán)"
+            placeholder={t("res.subjectPh")}
             style={{ flex: "1 1 120px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 10, padding: "9px 12px", color: "var(--text)", fontSize: 13.5, outline: "none" }}
           />
           <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} style={{ background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 10, padding: "9px 12px", color: "var(--text)", fontSize: 13.5 }}>
-            <option value="">Mọi độ khó</option>
-            <option value="easy">Dễ</option>
-            <option value="medium">Trung bình</option>
-            <option value="hard">Khó</option>
+            <option value="">{t("res.anyDiff")}</option>
+            <option value="easy">{t("res.diff.easy")}</option>
+            <option value="medium">{t("res.diff.medium")}</option>
+            <option value="hard">{t("res.diff.hard")}</option>
           </select>
           <select value={type} onChange={(e) => setType(e.target.value)} style={{ background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 10, padding: "9px 12px", color: "var(--text)", fontSize: 13.5 }}>
-            <option value="">Mọi loại</option>
-            {Object.entries(TYPE_LABELS).map(([v, l]) => (
-              <option key={v} value={v}>{l}</option>
+            <option value="">{t("res.anyType")}</option>
+            {Object.entries(TYPE_KEYS).map(([v, k]) => (
+              <option key={v} value={v}>{t(k)}</option>
             ))}
           </select>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} style={{ background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 10, padding: "9px 12px", color: "var(--text)", fontSize: 13.5 }}>
-            {SORTS.map((s) => (
-              <option key={s.value} value={s.value}>{s.label}</option>
+            {SORT_KEYS.map((s) => (
+              <option key={s.value} value={s.value}>{t(s.labelKey)}</option>
             ))}
           </select>
-          <button type="submit" className="btn-primary" style={{ fontSize: 13 }}>Lọc</button>
+          <button type="submit" className="btn-primary" style={{ fontSize: 13 }}>{t("res.filter")}</button>
         </form>
       </Panel>
 
-      {loading && <StateMessage kind="loading" text="Đang tải tài liệu học..." />}
+      {loading && <StateMessage kind="loading" text={t("res.loading")} />}
       {error && <StateMessage kind="error" text={error} />}
       {!loading && !error && data && data.resources.length === 0 && (
         <Panel>
           <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>
-            Chưa có tài liệu nào phù hợp — hãy nới bộ lọc hoặc đóng góp tài liệu đầu tiên!
+            {t("res.empty")}
           </p>
         </Panel>
       )}
@@ -187,7 +197,7 @@ export default function ResourcesPage() {
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
                 <div style={{ fontWeight: 600, fontSize: 14.5 }}>{r.title}</div>
                 <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: "var(--indigo-soft)", color: "var(--indigo)", fontWeight: 600, whiteSpace: "nowrap" }}>
-                  {TYPE_LABELS[r.type] ?? r.type}
+                  {t(TYPE_KEYS[r.type] ?? "res.type.OTHER")}
                 </span>
               </div>
               {r.description && (
@@ -196,7 +206,7 @@ export default function ResourcesPage() {
               <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 8, display: "flex", gap: 12, flexWrap: "wrap" }}>
                 {r.subject && <span>📚 {r.subject}</span>}
                 {r.topic && <span>{r.topic}</span>}
-                {r.difficulty && <span>{r.difficulty === "easy" ? "Dễ" : r.difficulty === "medium" ? "Trung bình" : "Khó"}</span>}
+                {r.difficulty && <span>{t(DIFF_KEYS[r.difficulty] ?? "res.diff.medium")}</span>}
               </div>
               <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 8, display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <span style={{ color: "var(--amber)", fontWeight: 600 }}>
@@ -206,16 +216,16 @@ export default function ResourcesPage() {
                 <span>✦ {Math.round(r.qualityScore)}/100</span>
               </div>
               <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 6 }}>
-                Đóng góp bởi {r.contributor.name || r.contributor.nickname || "Ẩn danh"}
+                {t("res.by", { n: r.contributor.name || r.contributor.nickname || t("res.anonymous") })}
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                 {r.url && (
                   <button className="btn-primary" style={{ fontSize: 12 }} onClick={() => openResource(r)}>
-                    Mở tài liệu
+                    {t("res.open")}
                   </button>
                 )}
                 <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => { setRateValue(5); setRateId(r.id); }}>
-                  Đánh giá
+                  {t("res.rate")}
                 </button>
               </div>
             </Panel>
@@ -226,7 +236,7 @@ export default function ResourcesPage() {
       {rateId && (
         <div className="modal-overlay" onClick={() => setRateId(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
-            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>Đánh giá tài liệu (1–5 ⭐)</div>
+            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>{t("res.rateTitle")}</div>
             <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
               {[1, 2, 3, 4, 5].map((v) => (
                 <button
@@ -239,15 +249,15 @@ export default function ResourcesPage() {
                     cursor: "pointer",
                     opacity: rateValue >= v ? 1 : 0.3,
                   }}
-                  aria-label={`${v} sao`}
+                  aria-label={t("res.rateStar", { n: v })}
                 >
                   ⭐
                 </button>
               ))}
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button className="btn-secondary" style={{ fontSize: 13 }} onClick={() => setRateId(null)}>Hủy</button>
-              <button className="btn-primary" style={{ fontSize: 13 }} onClick={submitRate}>Gửi</button>
+              <button className="btn-secondary" style={{ fontSize: 13 }} onClick={() => setRateId(null)}>{t("common.cancel")}</button>
+              <button className="btn-primary" style={{ fontSize: 13 }} onClick={submitRate}>{t("res.send")}</button>
             </div>
           </div>
         </div>
@@ -257,6 +267,7 @@ export default function ResourcesPage() {
 }
 
 function CreateResourceForm({ onCreated }: { onCreated: () => void }) {
+  const { t } = useLanguage();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [subject, setSubject] = useState("");
@@ -284,7 +295,7 @@ function CreateResourceForm({ onCreated }: { onCreated: () => void }) {
       }
       onCreated();
     } catch {
-      setError("Không thể tạo tài liệu học.");
+      setError(t("res.form.createFail"));
     } finally {
       setSubmitting(false);
     }
@@ -304,26 +315,26 @@ function CreateResourceForm({ onCreated }: { onCreated: () => void }) {
   return (
     <Panel style={{ marginBottom: 16 }}>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <input placeholder="Tiêu đề *" required value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} />
-        <textarea placeholder="Mô tả ngắn" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical" as const }} />
+        <input placeholder={t("res.form.title")} required value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} />
+        <textarea placeholder={t("res.form.desc")} value={description} onChange={(e) => setDescription(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical" as const }} />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input placeholder="Môn" value={subject} onChange={(e) => setSubject(e.target.value)} style={{ ...inputStyle, flex: "1 1 120px" }} />
-          <input placeholder="Chủ đề" value={topic} onChange={(e) => setTopic(e.target.value)} style={{ ...inputStyle, flex: "1 1 120px" }} />
+          <input placeholder={t("res.form.subject")} value={subject} onChange={(e) => setSubject(e.target.value)} style={{ ...inputStyle, flex: "1 1 120px" }} />
+          <input placeholder={t("res.form.topic")} value={topic} onChange={(e) => setTopic(e.target.value)} style={{ ...inputStyle, flex: "1 1 120px" }} />
           <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} style={{ ...inputStyle, flex: "1 1 120px" }}>
-            <option value="easy">Dễ</option>
-            <option value="medium">Trung bình</option>
-            <option value="hard">Khó</option>
+            <option value="easy">{t("res.diff.easy")}</option>
+            <option value="medium">{t("res.diff.medium")}</option>
+            <option value="hard">{t("res.diff.hard")}</option>
           </select>
           <select value={type} onChange={(e) => setType(e.target.value)} style={{ ...inputStyle, flex: "1 1 120px" }}>
-            {Object.entries(TYPE_LABELS).map(([v, l]) => (
-              <option key={v} value={v}>{l}</option>
+            {Object.entries(TYPE_KEYS).map(([v, k]) => (
+              <option key={v} value={v}>{t(k)}</option>
             ))}
           </select>
         </div>
-        <input placeholder="URL https://... *" required value={url} onChange={(e) => setUrl(e.target.value)} style={inputStyle} />
+        <input placeholder={t("res.form.url")} required value={url} onChange={(e) => setUrl(e.target.value)} style={inputStyle} />
         {error && <p style={{ color: "var(--rose)", fontSize: 13 }}>{error}</p>}
         <button type="submit" className="btn-primary" disabled={submitting} style={{ fontSize: 13.5 }}>
-          {submitting ? "Đang tạo..." : "Đóng góp"}
+          {submitting ? t("res.form.creating") : t("res.form.create")}
         </button>
       </form>
     </Panel>

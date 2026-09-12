@@ -163,21 +163,94 @@ export function parseErrorCode(errorMessage: string | null | undefined): Documen
   return code in DOCUMENT_ERROR_SPECS ? code : null;
 }
 
-/** Spec hiển thị cho UI từ errorMessage DB (null-safe). */
-export function describeDocumentError(errorMessage: string | null | undefined): {
+/** Bản tiếng Anh của message/suggestion theo code (UI song ngữ). */
+export const DOCUMENT_ERROR_TEXT_EN: Record<DocumentErrorCode, { userMessage: string; suggestion: string }> = {
+  FILE_UPLOAD_FAILED: {
+    userMessage: "Could not upload the file.",
+    suggestion: "Check your connection and try again.",
+  },
+  FILE_EMPTY: {
+    userMessage: "File is empty (0 bytes).",
+    suggestion: "Pick an intact file from your device.",
+  },
+  INVALID_FILE: {
+    userMessage: "File format is not supported yet.",
+    suggestion: "Supported: .txt, .md, .pdf, .docx, .pptx.",
+  },
+  INVALID_PDF: {
+    userMessage: "File is not a valid PDF.",
+    suggestion: "The .pdf extension doesn't match its content — check the original file.",
+  },
+  PDF_CORRUPTED: {
+    userMessage: "PDF file is corrupted and unreadable.",
+    suggestion: "Open it in a PDF reader; if it opens, print it to a new PDF and upload again.",
+  },
+  PDF_ENCRYPTED: {
+    userMessage: "PDF is password-protected and unreadable.",
+    suggestion: "Remove the PDF password and upload again.",
+  },
+  PDF_PARSE_FAILED: {
+    userMessage: "Could not extract PDF content.",
+    suggestion: "This PDF structure isn't supported yet — try printing it to a new PDF and uploading.",
+  },
+  PDF_NO_TEXT_LAYER: {
+    userMessage: "PDF has no text layer (possibly a scanned file).",
+    suggestion: "Scanned files need OCR — LearnX doesn't support OCR yet, so use a text-based PDF.",
+  },
+  OCR_UNAVAILABLE: {
+    userMessage: "OCR for scanned files is not supported.",
+    suggestion: "Use a text-based PDF instead of a photo/scan.",
+  },
+  DOCUMENT_TOO_LARGE: {
+    userMessage: "Document is too large to process.",
+    suggestion: "Split it into smaller parts and upload each.",
+  },
+  DOCUMENT_EMPTY: {
+    userMessage: "No content found in the file.",
+    suggestion: "Make sure the file has real text (not blank/scanned).",
+  },
+  CHUNKING_FAILED: {
+    userMessage: "Could not split the document content.",
+    suggestion: "Try again in a few minutes.",
+  },
+  EMBEDDING_FAILED: {
+    userMessage: "Could not create embeddings (AI overloaded).",
+    suggestion: "Wait a few minutes and hit Retry — no need to re-upload.",
+  },
+  AI_PROCESSING_FAILED: {
+    userMessage: "AI is overloaded and couldn't summarize yet.",
+    suggestion: "Wait a few minutes and hit Retry — no need to re-upload.",
+  },
+};
+
+/** Spec hiển thị cho UI từ errorMessage DB (null-safe), theo ngôn ngữ UI. */
+export function describeDocumentError(
+  errorMessage: string | null | undefined,
+  lang: "vi" | "en" = "vi"
+): {
   userMessage: string;
   suggestion: string;
   retryable: boolean;
 } {
   const code = parseErrorCode(errorMessage);
   if (!code) {
-    return {
-      userMessage: "Không thể xử lý tài liệu.",
-      suggestion: "Thử lại sau ít phút hoặc upload lại file.",
-      retryable: true,
-    };
+    return lang === "en"
+      ? {
+          userMessage: "Could not process the document.",
+          suggestion: "Try again in a few minutes or re-upload the file.",
+          retryable: true,
+        }
+      : {
+          userMessage: "Không thể xử lý tài liệu.",
+          suggestion: "Thử lại sau ít phút hoặc upload lại file.",
+          retryable: true,
+        };
   }
   const spec = DOCUMENT_ERROR_SPECS[code];
+  if (lang === "en") {
+    const en = DOCUMENT_ERROR_TEXT_EN[code];
+    return { userMessage: en.userMessage, suggestion: en.suggestion, retryable: spec.retryable };
+  }
   return { userMessage: spec.userMessage, suggestion: spec.suggestion, retryable: spec.retryable };
 }
 

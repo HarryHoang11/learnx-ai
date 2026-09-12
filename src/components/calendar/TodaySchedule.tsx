@@ -13,6 +13,8 @@
 import { useEffect, useState } from "react";
 import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import { localeFor } from "@/lib/i18n/dictionary";
 import type { ApiResponse } from "@/types";
 
 interface StudySessionDto {
@@ -30,12 +32,14 @@ const STATUS_ICON: Record<StudySessionDto["status"], string> = {
   PENDING: "○",
 };
 
-function formatTime(iso: string): string {
+function formatTime(locale: string, iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 }
 
 export default function TodaySchedule() {
+  const { t, lang } = useLanguage();
+  const locale = localeFor(lang);
   const [sessions, setSessions] = useState<StudySessionDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,11 +50,11 @@ export default function TodaySchedule() {
         if (json.success) setSessions(json.data);
         else setError(json.error);
       })
-      .catch(() => setError("Không thể tải lịch hôm nay."));
+      .catch(() => setError(t("schedule.loadFail")));
   }, []);
 
   if (error) return <StateMessage kind="error" text={error} />;
-  if (sessions === null) return <StateMessage kind="loading" text="Đang tải lịch hôm nay..." />;
+  if (sessions === null) return <StateMessage kind="loading" text={t("schedule.loading")} />;
 
   const completed = sessions.filter((s) => s.status === "COMPLETED").length;
   const total = sessions.length;
@@ -59,20 +63,20 @@ export default function TodaySchedule() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <Panel>
-        <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 10 }}>Hôm nay</div>
+        <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 10 }}>{t("schedule.today")}</div>
         <div className="bar-track" style={{ height: 10 }}>
           <div className="bar-fill" style={{ width: `${percent}%` }} />
         </div>
         <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>
-          {total === 0 ? "Chưa có nhiệm vụ nào cho hôm nay" : `${completed} / ${total} nhiệm vụ hoàn thành (${percent}%)`}
+          {total === 0 ? t("schedule.empty") : t("schedule.progress", { done: completed, total, p: percent })}
         </div>
       </Panel>
 
       <Panel>
-        <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 10 }}>Lịch hôm nay</div>
+        <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 10 }}>{t("schedule.title")}</div>
         {total === 0 ? (
           <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>
-            Chưa có buổi học nào — hãy thêm lịch ở trang Lịch học.
+            {t("schedule.emptyHint")}
           </p>
         ) : (
           sessions.map((s) => (
@@ -102,7 +106,7 @@ export default function TodaySchedule() {
                   {s.subject} — {s.title}
                 </div>
                 <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-                  {formatTime(s.startTime)} - {formatTime(s.endTime)}
+                  {formatTime(locale, s.startTime)} - {formatTime(locale, s.endTime)}
                 </div>
               </div>
             </div>

@@ -5,6 +5,8 @@
 "use client";
 
 import type { LeaderboardEntry } from "@/services/contribution.service";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import { localeFor } from "@/lib/i18n/dictionary";
 
 interface ContributorLeaderboardProps {
   leaderboard: LeaderboardEntry[];
@@ -13,11 +15,11 @@ interface ContributorLeaderboardProps {
   loading?: boolean;
 }
 
-const PERIOD_LABELS: Record<"weekly" | "monthly" | "alltime", string> = {
-  weekly: "Tuan nay",
-  monthly: "Thang nay",
-  alltime: "Tat ca thoi gian",
-};
+const PERIOD_KEYS = {
+  weekly: "com.lb.weekly",
+  monthly: "com.lb.monthly",
+  alltime: "com.lb.alltime",
+} as const;
 
 const PERIOD_ICONS: Record<"weekly" | "monthly" | "alltime", string> = {
   weekly: "📅",
@@ -33,10 +35,11 @@ export default function ContributorLeaderboard({
   onPeriodChange,
   loading = false,
 }: ContributorLeaderboardProps) {
+  const { t, lang } = useLanguage();
   if (loading) {
     return (
       <div style={{ padding: 24, textAlign: "center", color: "var(--text-dim)" }}>
-        Dang tai bang xep hang...
+        {t("com.lb.loading")}
       </div>
     );
   }
@@ -44,7 +47,7 @@ export default function ContributorLeaderboard({
   if (!leaderboard || leaderboard.length === 0) {
     return (
       <div style={{ padding: 24, textAlign: "center", color: "var(--text-dim)" }}>
-        Chua co du lieu xep hang
+        {t("lb.emptyContrib")}
       </div>
     );
   }
@@ -56,9 +59,9 @@ export default function ContributorLeaderboard({
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 20 }}>🏆</span>
           <div>
-            <div style={{ fontWeight: 600, fontSize: 16 }}>Bang xep hang nguoi dong gop</div>
+            <div style={{ fontWeight: 600, fontSize: 16 }}>{t("com.lb.title").replace("🏆 ", "")}</div>
             <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-              Xep hang theo diem dong gop (CP)
+              {t("com.lb.subtitle")}
             </div>
           </div>
         </div>
@@ -94,7 +97,7 @@ export default function ContributorLeaderboard({
                 }
               }}
             >
-              {PERIOD_ICONS[p]} {PERIOD_LABELS[p]}
+              {PERIOD_ICONS[p]} {t(PERIOD_KEYS[p])}
             </button>
           ))}
         </div>
@@ -169,9 +172,9 @@ export default function ContributorLeaderboard({
                     )}
                   </div>
                   <div style={{ fontSize: 11, color: "var(--text-faint)", display: "flex", gap: 12, marginTop: 2 }}>
-                    <span>📄 {entry.totalUploads} tai lieu</span>
-                    <span>⭐ {entry.avgQuality.toFixed(0)} chat luong</span>
-                    <span>👍 {entry.helpfulVotes} huu ich</span>
+                    <span>📄 {t("com.lb.uploads", { n: entry.totalUploads })}</span>
+                    <span>⭐ {entry.avgQuality.toFixed(0)} {t("com.lb.quality")}</span>
+                    <span>👍 {entry.helpfulVotes} {t("com.detail.helpful").toLowerCase()}</span>
                   </div>
                 </div>
               </div>
@@ -184,7 +187,7 @@ export default function ContributorLeaderboard({
                   color: "var(--amber)",
                   fontFamily: "var(--font-space-grotesk), sans-serif",
                 }}>
-                  {entry.contributionPoints.toLocaleString("vi-VN")}
+                  {entry.contributionPoints.toLocaleString(localeFor(lang))}
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>
                   CP

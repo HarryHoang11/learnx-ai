@@ -17,6 +17,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import MarkdownLite from "./MarkdownLite";
 import { useToast } from "@/components/ui/Toast";
+import { useLanguage } from "@/components/providers/LanguageProvider";
+import { localeFor } from "@/lib/i18n/dictionary";
 import { downloadSummaryAsMarkdown } from "@/lib/documents/downloadSummary";
 
 export interface LibraryDocument {
@@ -54,6 +56,7 @@ const FORMATS = [
 type Format = typeof FORMATS[number]['value'];
 
 export default function DocumentDetailModal({ doc, onClose }: DocumentDetailModalProps) {
+  const { t, lang } = useLanguage();
   const [showFormatModal, setShowFormatModal] = useState(false);
   const [creatingMap, setCreatingMap] = useState(false);
   const router = useRouter();
@@ -70,14 +73,14 @@ export default function DocumentDetailModal({ doc, onClose }: DocumentDetailModa
       });
       const json = await res.json();
       if (!json.success) {
-        push("error", json.error ?? "Không thể tạo Mind Map.");
+        push("error", json.error ?? t("doc.mindmapFail"));
         return;
       }
-      push("success", "Đã tạo Mind Map từ tài liệu.");
+      push("success", t("doc.mindmapDone"));
       onClose();
       router.push(`/mindmap?id=${json.data.id}`);
     } catch {
-      push("error", "Không thể tạo Mind Map, thử lại sau.");
+      push("error", t("doc.mindmapFailRetry"));
     } finally {
       setCreatingMap(false);
     }
@@ -94,7 +97,7 @@ export default function DocumentDetailModal({ doc, onClose }: DocumentDetailModa
       
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Không thể tải file');
+        throw new Error(err.error || t("doc.downloadFail"));
       }
       
       const blob = await res.blob();
@@ -108,7 +111,7 @@ export default function DocumentDetailModal({ doc, onClose }: DocumentDetailModa
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Download failed:', err);
-      push("error", err instanceof Error ? err.message : 'Không thể tải file, thử lại sau');
+      push("error", err instanceof Error ? err.message : t("doc.downloadFail"));
     }
   }
 
@@ -119,12 +122,12 @@ export default function DocumentDetailModal({ doc, onClose }: DocumentDetailModa
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 15.5, fontWeight: 600, wordBreak: "break-word" }}>{doc.fileName}</div>
             <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>
-              {doc.fileType.toUpperCase()} · Cập nhật {new Date(doc.updatedAt).toLocaleString("vi-VN")}
+              {doc.fileType.toUpperCase()} · {t("doc.updatedAt", { d: new Date(doc.updatedAt).toLocaleString(localeFor(lang)) })}
             </div>
           </div>
           <button
             onClick={onClose}
-            aria-label="Đóng"
+            aria-label={t("common.close")}
             style={{
               background: "none",
               border: "none",
@@ -150,13 +153,13 @@ export default function DocumentDetailModal({ doc, onClose }: DocumentDetailModa
               marginBottom: 14,
             }}
           >
-            TÓM TẮT AI
+            {t("doc.summaryTitle")}
           </div>
 
           {doc.summary ? (
             <MarkdownLite content={doc.summary} />
           ) : (
-            <p style={{ color: "var(--text-dim)", fontSize: 14 }}>Chưa có tóm tắt cho tài liệu này.</p>
+            <p style={{ color: "var(--text-dim)", fontSize: 14 }}>{t("doc.noSummary")}</p>
           )}
         </div>
 
@@ -168,19 +171,19 @@ export default function DocumentDetailModal({ doc, onClose }: DocumentDetailModa
                 onClick={handleCreateMindMap}
                 disabled={creatingMap}
               >
-                {creatingMap ? "Đang tạo Mind Map..." : "🧠 Tạo Mind Map"}
+                {creatingMap ? t("doc.creatingMindmap") : t("doc.createMindmap")}
               </button>
               <button
                 className="btn-secondary"
                 onClick={() => setShowFormatModal(true)}
               >
-                ↓ Tải tóm tắt
+                {t("doc.downloadSummary")}
               </button>
             </>
           )}
           {doc.hasOriginalFile && (
             <a className="btn-secondary" href={`/api/documents/${doc.id}/download`} download>
-              ↓ Tải tài liệu gốc
+              {t("doc.downloadOriginal")}
             </a>
           )}
         </div>
@@ -191,7 +194,7 @@ export default function DocumentDetailModal({ doc, onClose }: DocumentDetailModa
         <div className="modal-overlay" onClick={() => setShowFormatModal(false)} style={{ zIndex: 200 }}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 360 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <div style={{ fontWeight: 600, fontSize: 15 }}>Chọn định dạng tải xuống</div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>{t("doc.pickFormat")}</div>
               <button 
                 onClick={() => setShowFormatModal(false)} 
                 style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 20, cursor: "pointer", lineHeight: 1 }}

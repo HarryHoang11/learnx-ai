@@ -19,6 +19,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Panel from "@/components/ui/Panel";
 import ChatBubble from "@/components/tutor/ChatBubble";
+import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { ApiResponse } from "@/types";
 
 // Next.js yêu cầu mọi component dùng useSearchParams() phải nằm trong
@@ -27,10 +28,15 @@ import type { ApiResponse } from "@/types";
 // ở component export mặc định, thay vì bọc lẫn vào logic chat bên trong.
 export default function TutorPage() {
   return (
-    <Suspense fallback={<p className="state-msg">Đang tải...</p>}>
+    <Suspense fallback={<TutorLoadingFallback />}>
       <TutorPageInner />
     </Suspense>
   );
+}
+
+function TutorLoadingFallback() {
+  const { t } = useLanguage();
+  return <p className="state-msg">{t("common.loading")}</p>;
 }
 
 interface DisplayMessage {
@@ -67,20 +73,21 @@ function extractResourceQuery(message: string, fallbackTopic: string): string {
   return cleaned.length >= 2 ? cleaned : fallbackTopic;
 }
 
-const HINT_LABELS: Record<1 | 2 | 3, string> = {
-  1: "🟢 Gợi ý",
-  2: "🟡 Hướng dẫn",
-  3: "🔴 Lời giải",
+const HINT_LABELS: Record<1 | 2 | 3, "tutor.hint1" | "tutor.hint2" | "tutor.hint3"> = {
+  1: "tutor.hint1",
+  2: "tutor.hint2",
+  3: "tutor.hint3",
 };
 
 function TutorPageInner() {
+  const { t, lang } = useLanguage();
   const searchParams = useSearchParams();
   const [topic] = useState("Toán — Đại số"); // MVP: cố định 1 topic; sau này có thể cho học sinh chọn
   const [messages, setMessages] = useState<DisplayMessage[]>([
     {
       role: "assistant",
-      tag: "AI GIA SƯ",
-      content: "Chào bạn! Mình là LearnX AI. Cứ hỏi mình bất cứ bài nào bạn đang vướng nhé.",
+      tag: t("tutor.tag"),
+      content: t("tutor.greeting"),
     },
   ]);
   const [input, setInput] = useState("");
@@ -123,7 +130,7 @@ function TutorPageInner() {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed, topic, hintLevel: 0 }),
+        body: JSON.stringify({ message: trimmed, topic, hintLevel: 0, language: lang }),
       });
       const json: ApiResponse<{ reply: string }> = await res.json();
       const attached = await resourcePromise;
@@ -133,19 +140,19 @@ function TutorPageInner() {
           ...prev,
           {
             role: "assistant",
-            tag: "AI GIA SƯ",
+            tag: t("tutor.tag"),
             content: json.data.reply,
             awaitingHint: true,
             resources: attached.length > 0 ? attached : undefined,
           },
         ]);
       } else {
-        setMessages((prev) => [...prev, { role: "assistant", tag: "LỖI", content: json.error }]);
+        setMessages((prev) => [...prev, { role: "assistant", tag: t("tutor.errorTag"), content: json.error }]);
       }
     } catch {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", tag: "LỖI", content: "Không thể kết nối tới AI Gia sư, thử lại sau." },
+        { role: "assistant", tag: t("tutor.errorTag"), content: t("common.connectionError") },
       ]);
     } finally {
       setSending(false);
@@ -159,7 +166,7 @@ function TutorPageInner() {
       const res = await fetch("/api/ai/hint", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, hintLevel: level }),
+        body: JSON.stringify({ topic, hintLevel: level, language: lang }),
       });
       const json: ApiResponse<{ reply: string }> = await res.json();
 
@@ -168,7 +175,7 @@ function TutorPageInner() {
           ...prev,
           {
             role: "assistant",
-            tag: HINT_LABELS[level],
+            tag: t(HINT_LABELS[level]),
             content: json.data.reply,
             awaitingHint: level < 3, // sau lời giải (level 3) thì không mời gợi ý thêm nữa
           },
@@ -181,7 +188,7 @@ function TutorPageInner() {
 
   return (
     <section>
-      <h2 style={{ fontSize: 20, marginBottom: 16 }}>AI Gia sư</h2>
+      <h2 style={{ fontSize: 20, marginBottom: 16 }}>{t("tutor.title")}</h2>
 
       <div className="grid-tutor">
         <Panel style={{ height: 560, display: "flex", flexDirection: "column" }}>
@@ -213,7 +220,7 @@ function TutorPageInner() {
                         </div>
                         {r.url && (
                           <a href={r.url} target="_blank" rel="noreferrer" style={{ color: "var(--cyan)", fontWeight: 600, fontSize: 12.5 }}>
-                            Mở nguồn học ↗
+                            {t("tutor.openResource")}
                           </a>
                         )}
                       </div>
@@ -222,14 +229,14 @@ function TutorPageInner() {
                 )}
                 {m.awaitingHint && i === messages.length - 1 && (
                   <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                    <HintButton label="🟢 Gợi ý" onClick={() => requestHint(1)} disabled={sending} />
-                    <HintButton label="🟡 Hướng dẫn" onClick={() => requestHint(2)} disabled={sending} />
-                    <HintButton label="🔴 Lời giải" onClick={() => requestHint(3)} disabled={sending} />
+                    <HintButton label={t("tutor.hint1")} onClick={() => requestHint(1)} disabled={sending} />
+                    <HintButton label={t("tutor.hint2")} onClick={() => requestHint(2)} disabled={sending} />
+                    <HintButton label={t("tutor.hint3")} onClick={() => requestHint(3)} disabled={sending} />
                   </div>
                 )}
               </div>
             ))}
-            {sending && <div style={{ color: "var(--text-dim)", fontSize: 13 }}>AI đang trả lời...</div>}
+            {sending && <div style={{ color: "var(--text-dim)", fontSize: 13 }}>{t("tutor.sending")}</div>}
           </div>
 
           <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
@@ -237,7 +244,7 @@ function TutorPageInner() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendMessage(input)}
-              placeholder="Nhập câu hỏi của bạn..."
+              placeholder={t("tutor.inputPh")}
               style={{
                 flex: 1,
                 background: "var(--panel-strong)",
@@ -250,20 +257,20 @@ function TutorPageInner() {
               }}
             />
             <button className="btn-primary" onClick={() => sendMessage(input)} disabled={sending}>
-              Gửi
+              {t("common.send")}
             </button>
           </div>
         </Panel>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <Panel>
-            <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 10 }}>Chế độ sư phạm</div>
+            <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 10 }}>{t("tutor.pedagogyTitle")}</div>
             <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6 }}>
-              AI sẽ gợi ý từng bước thay vì đưa đáp án ngay, để bạn tự tư duy trước.
+              {t("tutor.pedagogyDesc")}
             </div>
           </Panel>
           <Panel>
-            <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 10 }}>Đang học</div>
+            <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 10 }}>{t("tutor.studying")}</div>
             <div style={{ fontWeight: 600, fontSize: 14 }}>{topic}</div>
           </Panel>
         </div>
