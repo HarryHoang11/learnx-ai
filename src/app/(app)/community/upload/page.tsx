@@ -68,6 +68,7 @@ export default function CommunityUploadPage() {
 
   const [selectedSubject, setSelectedSubject] = useState<any>(null);
   const [loadingSubjects, setLoadingSubjects] = useState(true);
+  const [subjectsError, setSubjectsError] = useState<string | null>(null);
 
   useEffect(() => {
     loadSubjects();
@@ -79,8 +80,9 @@ export default function CommunityUploadPage() {
       const res = await fetch("/api/community/subjects?includeTopics=true");
       const json = await res.json();
       if (json.success) setSubjects(json.data);
-    } catch (err) {
-      console.error("Failed to load subjects:", err);
+      else setSubjectsError(json.error);
+    } catch {
+      setSubjectsError("Không thể kết nối tới máy chủ");
     } finally {
       setLoadingSubjects(false);
     }
@@ -305,6 +307,7 @@ export default function CommunityUploadPage() {
                   <option value="">{loadingSubjects ? "Đang tải môn học..." : "Chọn môn học"}</option>
                   {!loadingSubjects && subjects.map(s => <option key={s.id} value={s.id}>{s.icon} {s.name}</option>)}
                 </select>
+                {subjectsError && <p style={{ color: "var(--rose)", fontSize: 12, marginTop: 4 }}>{subjectsError}</p>}
               </div>
             </div>
 

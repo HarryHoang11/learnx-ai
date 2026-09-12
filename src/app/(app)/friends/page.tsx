@@ -63,6 +63,7 @@ export default function FriendsPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [profile, setProfile] = useState<FriendProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -90,10 +91,14 @@ export default function FriendsPage() {
     e?.preventDefault();
     if (query.trim().length < 2) return;
     setSearching(true);
+    setSearchError(null);
     try {
       const res = await fetch(`/api/friends/search?q=${encodeURIComponent(query.trim())}`);
       const json: ApiResponse<SearchResult[]> = await res.json();
       if (json.success) setResults(json.data);
+      else setSearchError(json.error);
+    } catch {
+      setSearchError(t("common.connectionError"));
     } finally {
       setSearching(false);
     }
@@ -166,6 +171,7 @@ export default function FriendsPage() {
             {results.length === 0 && (
               <p style={{ color: "var(--text-dim)", fontSize: 13 }}>{t("friends.noResult")}</p>
             )}
+            {searchError && <StateMessage kind="error" text={searchError} />}
             {results.map((u) => (
               <div key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 4px", borderTop: "1px solid var(--border-soft)" }}>
                 <div style={{ fontSize: 13.5 }}>
@@ -258,6 +264,9 @@ export default function FriendsPage() {
         <div className="modal-overlay" onClick={() => { setProfileId(null); setProfile(null); }}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
             {profileLoading && <StateMessage kind="loading" text={t("friends.profileLoading")} />}
+            {!profileLoading && !profile && (
+              <StateMessage kind="error" text={t("common.connectionError")} />
+            )}
             {profile && (
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>

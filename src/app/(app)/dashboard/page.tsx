@@ -18,6 +18,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import Skeleton from "@/components/ui/Skeleton";
 import LevelProgressBar from "@/components/ui/LevelProgressBar";
 import TodaySchedule from "@/components/calendar/TodaySchedule";
+import NextActionModule from "@/components/dashboard/NextActionModule";
 import { getLevelProgressDetails } from "@/lib/constants/xp";
 import { useCountUp } from "@/lib/hooks/useCountUp";
 import { useLanguage } from "@/components/providers/LanguageProvider";
@@ -73,8 +74,10 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reviewDue, setReviewDue] = useState<ReviewDueResponse | null>(null);
-  const [recentXP, setRecentXP] = useState<XPHistoryItem[]>([]);
+  const [reviewLoading, setReviewLoading] = useState(true);
+  const [recentXP, setRecentXP] = useState<XPHistoryItem[] | null>(null);
   const [goals, setGoals] = useState<GoalWithRoadmap[] | null>(null);
+  const [streakError, setStreakError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/progress")
@@ -90,28 +93,34 @@ export default function HomePage() {
       .then((res) => res.json())
       .then((json: ApiResponse<StreakResponse>) => {
         if (json.success) setXpData(json.data);
-      });
+        else setStreakError(json.error);
+      })
+      .catch(() => setStreakError(t("common.connectionError")));
 
     fetch("/api/review/due?limit=5")
       .then((res) => res.json())
       .then((json: ApiResponse<ReviewDueResponse>) => {
         if (json.success) setReviewDue(json.data);
+        else setReviewDue(null);
       })
-      .catch(() => {});
+      .catch(() => setReviewDue(null))
+      .finally(() => setReviewLoading(false));
 
     fetch("/api/xp/history?page=1&limit=5")
       .then((res) => res.json())
       .then((json: ApiResponse<{ transactions: XPHistoryItem[] }>) => {
         if (json.success) setRecentXP(json.data.transactions);
+        else setRecentXP([]);
       })
-      .catch(() => {});
+      .catch(() => setRecentXP([]));
 
     fetch("/api/roadmaps")
       .then((res) => res.json())
       .then((json: ApiResponse<GoalWithRoadmap[]>) => {
         if (json.success) setGoals(json.data);
+        else setGoals([]);
       })
-      .catch(() => {});
+      .catch(() => setGoals([]));
   }, []);
 
   function goToTutor() {
@@ -198,27 +207,30 @@ export default function HomePage() {
       )}
       {error && <StateMessage kind="error" text={error} />}
 
-      {progress && xp && streak && (
+      {progress && (
         <>
           {/* XP / Level / LXP Stats */}
           <div className="grid-stats enter enter--1" style={{ marginBottom: 20 }}>
             <StatCard
-              value={t("common.level", { n: levelDetails?.level ?? xp.level })}
+              value={t("common.level", { n: levelDetails?.level ?? 1 })}
               label={t("common.xpLabel", { n: formatNumber(animatedXP) })}
             />
             <StatCard
-              value={`${levelDetails?.progressPercent ?? xp.levelProgress.percent}%`}
-              label={t("common.toLevel", { n: (levelDetails?.level ?? xp.level) + 1 })}
+              value={`${levelDetails?.progressPercent ?? 0}%`}
+              label={t("common.toLevel", { n: (levelDetails?.level ?? 1) + 1 })}
             />
             <StatCard
-              value={`${formatNumber(xp.lxpBalance)} LXP`}
+              value={`${formatNumber(xp?.lxpBalance ?? 0)} LXP`}
               label={t("dashboard.lxpLabel")}
             />
-            <StatCard value={`🔥 ${streak.current}`} label={t("common.longestDays", { n: streak.longest })} />
+            <StatCard value={`🔥 ${streak?.current ?? 0}`} label={t("common.longestDays", { n: streak?.longest ?? 0 })} />
           </div>
 
           {/* XP Progress Bar — dùng component chung, cùng 1 công thức */}
-          <LevelProgressBar lifetimeXP={xp.lifetimeXP} />
+          {xp !== null && (
+            <LevelProgressBar lifetimeXP={xp?.lifetimeXP ?? 0} />
+          )}
+          {streakError && <StateMessage kind="error" text={streakError} />}
 
           {/* Hôm nay: lịch học + ôn tập đến hạn + học tiếp */}
           <div className="grid-progress enter enter--2" style={{ marginBottom: 20 }}>
@@ -252,8 +264,10 @@ export default function HomePage() {
                       {t("dashboard.reviewEmpty")}
                     </div>
                   )
-                ) : (
+                ) : reviewLoading ? (
                   <Skeleton height={40} />
+                ) : (
+                  <StateMessage kind="error" text={t("common.connectionError")} />
                 )}
               </Panel>
 
@@ -318,7 +332,9 @@ export default function HomePage() {
 
             <Panel>
               <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{t("dashboard.recentActivity")}</div>
-              {recentXP.length === 0 ? (
+              {recentXP === null ? (
+                <Skeleton height={40} />
+              ) : recentXP.length === 0 ? (
                 <div style={{ fontSize: 13.5, color: "var(--text-dim)" }}>
                   {t("dashboard.activityEmpty")}
                 </div>
@@ -361,6 +377,10 @@ export default function HomePage() {
               onAction={() => router.push("/diagnostic")}
             />
           )}
+
+          <div className="enter enter--4" style={{ marginTop: 20 }}>
+            <NextActionModule />
+          </div>
         </>
       )}
     </section>

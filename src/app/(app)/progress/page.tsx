@@ -55,32 +55,29 @@ export default function ProgressPage() {
 
   const [insight, setInsight] = useState<string | null>(null);
   const [insightLoading, setInsightLoading] = useState(true);
+  const [insightError, setInsightError] = useState<string | null>(null);
 
   const [xpData, setXpData] = useState<StreakResponse | null>(null);
   const [xpLoading, setXpLoading] = useState(true);
+  const [xpError, setXpError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/progress")
-      .then((res) => res.json())
-      .then((json: ApiResponse<ProgressData>) => {
-        if (json.success) setProgress(json.data);
-        else setError(json.error);
-      })
-      .catch(() => setError(t("common.connectionError")))
-      .finally(() => setLoading(false));
-
     fetch("/api/analytics")
       .then((res) => res.json())
       .then((json: ApiResponse<{ insight: string }>) => {
         if (json.success) setInsight(json.data.insight);
+        else setInsightError(json.error);
       })
+      .catch(() => setInsightError(t("common.connectionError")))
       .finally(() => setInsightLoading(false));
 
     fetch("/api/streak")
       .then((res) => res.json())
       .then((json: ApiResponse<{ streak: StreakData; progress: ProgressResponse }>) => {
         if (json.success) setXpData(json.data);
+        else setXpError(json.error);
       })
+      .catch(() => setXpError(t("common.connectionError")))
       .finally(() => setXpLoading(false));
   }, []);
 
@@ -110,6 +107,10 @@ export default function ProgressPage() {
         <div className="enter enter--1">
           <LevelHero lifetimeXP={xp.lifetimeXP} />
         </div>
+      ) : xpError ? (
+        <Panel style={{ marginBottom: 24 }}>
+          <StateMessage kind="error" text={xpError} />
+        </Panel>
       ) : (
         <Panel style={{ marginBottom: 24 }}>
           <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>
@@ -159,6 +160,8 @@ export default function ProgressPage() {
           <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 10 }}>{t("progress.aiTitle")}</div>
           {insightLoading ? (
             <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>{t("progress.aiLoading")}</p>
+          ) : insightError ? (
+            <StateMessage kind="error" text={insightError} />
           ) : (
             <div
               style={{

@@ -9,24 +9,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { submitQuizAnswer } from "@/services/quiz.service";
-import type { ApiResponse, GeneratedQuestion } from "@/types";
+import type { ApiResponse } from "@/types";
 
 export async function POST(req: NextRequest) {
   try {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
     const body = await req.json();
-    const question = body.question as GeneratedQuestion;
+    const questionId = body.questionId as string;
     const selectedIndex = Number(body.selectedIndex);
 
-    if (!question || Number.isNaN(selectedIndex)) {
+    if (!questionId || Number.isNaN(selectedIndex)) {
       return NextResponse.json<ApiResponse<never>>(
-        { success: false, error: "Thiếu question hoặc selectedIndex không hợp lệ." },
+        { success: false, error: "Thiếu questionId hoặc selectedIndex không hợp lệ." },
         { status: 400 }
       );
     }
 
-    const result = await submitQuizAnswer({ userId, question, selectedIndex });
+    const result = await submitQuizAnswer({ userId, questionId, selectedIndex });
 
     return NextResponse.json<ApiResponse<typeof result>>({ success: true, data: result });
   } catch (err) {

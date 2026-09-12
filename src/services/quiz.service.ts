@@ -25,6 +25,7 @@ interface RawQuestionFromAI {
 // học sinh THỰC SỰ trả lời (xem submitQuizAnswer), tránh rác dữ liệu
 // từ những câu AI sinh ra nhưng học sinh chưa làm.
 export async function generateQuizQuestion(
+  userId: string,
   subject: string,
   topic: string,
   difficulty: Difficulty
@@ -35,7 +36,7 @@ export async function generateQuizQuestion(
     userPrompt: prompt.user,
   });
 
-  return {
+  const question: GeneratedQuestion = {
     id: crypto.randomUUID(),
     text: raw.text,
     options: raw.options,
@@ -44,6 +45,31 @@ export async function generateQuizQuestion(
     subject,
     topic,
   };
+
+  // Cache the question server-side so the correctIndex can be
+  // verified independently when the user submits their answer.
+  // Old cached questions are cleaned up automatically by the TTL
+  // via the background job, but we also clean up during generation.
+  await prisma.quizQuestionCache.create({
+    data: {
+      userId,
+      questionId: question.id,
+      subject: question.subject,
+      topic: question.topic,
+      difficulty: question.difficulty,
+      questionText: question.text,
+      options: question.options,
+      correctIndex: question.correctIndex,
+    },
+  });
+
+  // Clean up expired cache entries (> 24 hours old)
+  const expiry = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  await prisma.quizQuestionCache.deleteMany({
+    where: { createdAt: { lt: expiry } },
+  });
+
+  return question;
 }
 
 // Ghi nhận câu trả lời của học sinh: lưu Attempt + cập nhật mastery.
@@ -52,28 +78,44 @@ export async function generateQuizQuestion(
 // chỉ cần gọi lại đúng 2 hàm này (prisma.attempt.create + updateMastery).
 export async function submitQuizAnswer(params: {
   userId: string;
-  question: GeneratedQuestion;
+  questionId: string;
   selectedIndex: number;
 }): Promise<{ isCorrect: boolean }> {
-  const isCorrect = params.selectedIndex === params.question.correctIndex;
+  // Server-side verification: look up the cached question to verify
+  // the correctIndex. This prevents cheating by modifying the
+  // client-side question object.
+  const cached = await prisma.quizQuestionCache.findUnique({
+    where: { questionId: params.questionId },
+  });
+
+  if (!cached || cached.userId !== params.userId) {
+    throw new Error("Question not found or not authorized");
+  }
+
+  const isCorrect = params.selectedIndex === cached.correctIndex;
 
   await prisma.attempt.create({
     data: {
       userId: params.userId,
       assessmentId: null, // null vì đây là quiz luyện tập, không thuộc phiên diagnostic nào
-      subject: params.question.subject,
-      topic: params.question.topic,
-      difficulty: params.question.difficulty,
-      question: params.question.text,
+      subject: cached.subject,
+      topic: cached.topic,
+      difficulty: cached.difficulty,
+      question: cached.questionText,
       isCorrect,
     },
   });
 
   await updateMastery({
     userId: params.userId,
-    subject: params.question.subject,
-    topic: params.question.topic,
+    subject: cached.subject,
+    topic: cached.topic,
     isCorrect,
+  });
+
+  // Delete the cached question after use (one-shot)
+  await prisma.quizQuestionCache.delete({
+    where: { questionId: params.questionId },
   });
 
   return { isCorrect };

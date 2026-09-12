@@ -200,6 +200,53 @@ export async function recordLearningActivity(input: LearningActivityInput): Prom
     isFirstCompletion = true,
     sourceId,
     sourceType = type,
+    metadata,
+  } = input;
+
+  const result = await recordLearningActivityInternal({
+    userId,
+    type,
+    difficulty,
+    scorePercent,
+    isFirstCompletion,
+    sourceId,
+    sourceType,
+  });
+
+  // Check and unlock achievements AFTER the main transaction commits
+  if (result.xpEarned > 0 && type !== 'achievement_unlocked') {
+    try {
+      const unlockedAchievements = await checkAndUnlockAchievements(userId, { type, data: metadata });
+      for (const unlocked of unlockedAchievements) {
+        if (unlocked.achievement) {
+          await recordLearningActivity({
+            userId,
+            type: 'achievement_unlocked',
+            difficulty: 'medium',
+            isFirstCompletion: true,
+            sourceId: unlocked.achievement.code,
+            sourceType: 'achievement',
+            metadata: { achievementCode: unlocked.achievement.code },
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[learning-activity] Achievement check failed:', err);
+    }
+  }
+
+  return result;
+}
+
+async function recordLearningActivityInternal(input: LearningActivityInput): Promise<ActivityResult> {
+  const { 
+    userId, 
+    type, 
+    difficulty = 'medium', 
+    scorePercent = 0, 
+    isFirstCompletion = true,
+    sourceId,
+    sourceType = type,
   } = input;
 
   const date = getUserLocalDate();
@@ -214,6 +261,30 @@ export async function recordLearningActivity(input: LearningActivityInput): Prom
   let leveledUp = false;
   let newLevel: number | undefined;
   let oldLevel = 0;
+
+  // Deduplication: check if an identical activity was already recorded
+  // for this user with the same sourceType + sourceId. This prevents
+  // XP/LXP farming via repeated API calls.
+  if (sourceId) {
+    const existing = await prisma.xPTransaction.findFirst({
+      where: {
+        userId,
+        sourceType,
+        sourceId,
+      },
+    });
+
+    if (existing) {
+      return {
+        xpEarned: 0,
+        lxpEarned: 0,
+        learningDayCreated: false,
+        streakUpdated: { current: 0, longest: 0 },
+        leveledUp: false,
+        previousLevel: 0,
+      };
+    }
+  }
 
   await prisma.$transaction(async (tx) => {
     const learningDay = await tx.learningDay.upsert({
@@ -273,34 +344,9 @@ export async function recordLearningActivity(input: LearningActivityInput): Prom
       await checkLevelUpRewards(tx, userId, oldLevel, newLevel);
     }
 
-    streakResult = await updateStreak(tx, userId, date, isNewLearningDay);
-    await checkAndUpdateDailyChallenge(tx, userId, type, date);
-  });
-
-  // Check and unlock achievements AFTER the main transaction commits
-  // This avoids circular dependency with achievement.service.ts
-  if (type !== 'achievement_unlocked') {
-    try {
-      const unlockedAchievements = await checkAndUnlockAchievements(userId, { type, data: input.metadata });
-      // Record achievement unlock activities for each unlocked achievement
-      for (const unlocked of unlockedAchievements) {
-        if (unlocked.achievement) {
-          await recordLearningActivity({
-            userId,
-            type: 'achievement_unlocked',
-            difficulty: 'medium',
-            isFirstCompletion: true,
-            sourceId: unlocked.achievement.code,
-            sourceType: 'achievement',
-            metadata: { achievementCode: unlocked.achievement.code },
-          });
-        }
-      }
-    } catch (err) {
-      // Log but don't fail the main activity if achievement check fails
-      console.error('[learning-activity] Achievement check failed:', err);
-    }
-  }
+     streakResult = await updateStreak(tx, userId, date, isNewLearningDay);
+     await checkAndUpdateDailyChallenge(tx, userId, type, date);
+   });
 
   return {
     xpEarned,

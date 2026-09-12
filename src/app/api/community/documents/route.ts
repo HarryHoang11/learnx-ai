@@ -8,6 +8,10 @@ import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { getCommunityDocuments, uploadCommunityDocument } from "@/services/community-document.service";
 import type { ApiResponse } from "@/types";
 
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20MB — match documents/upload/route.ts
+
+const VALID_VISIBILITIES = ["COMMUNITY", "PRIVATE"];
+
 export async function GET(req: NextRequest) {
   try {
     const userId = await getCurrentUserId();
@@ -62,6 +66,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "File quá lớn (giới hạn 20MB)." },
+        { status: 413 }
+      );
+    }
+
     const title = formData.get("title") as string;
     const description = formData.get("description") as string | null;
     const subjectId = formData.get("subjectId") as string;
@@ -70,7 +81,11 @@ export async function POST(req: NextRequest) {
     const language = formData.get("language") as string | null;
     const grade = formData.get("grade") as string | null;
     const tags = formData.get("tags") as string | null;
-    const visibility = formData.get("visibility") as "COMMUNITY" | "PRIVATE" | null;
+    const visibilityRaw = formData.get("visibility") as string | null;
+
+    const visibility = visibilityRaw && VALID_VISIBILITIES.includes(visibilityRaw)
+      ? visibilityRaw as "COMMUNITY" | "PRIVATE"
+      : "COMMUNITY";
 
     if (!title || !subjectId) {
       return NextResponse.json<ApiResponse<never>>(

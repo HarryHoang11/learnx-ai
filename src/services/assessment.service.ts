@@ -107,3 +107,54 @@ export async function getSkillProfile(userId: string): Promise<SkillMasteryPoint
     };
   });
 }
+
+// --- Helper: lấy hồ sơ năng lực theo môn học cụ thể ---
+// Dùng cho trang diagnostic khi đã chọn môn: chỉ hiển thị mastery của
+// chính môn đó, KHÔNG đè môn khác (Phase 4 multi-subject).
+export async function getSkillProfileBySubject(userId: string, subject: string): Promise<SkillMasteryPoint[]> {
+  const rows: LearningProgressRow[] = await prisma.learningProgress.findMany({
+    where: { userId, subject },
+  });
+  return rows.map((r: LearningProgressRow) => {
+    const masteryPercent = Math.round(r.mastery * 100);
+    return {
+      subject: r.subject,
+      topic: r.topic,
+      masteryPercent,
+      isWeak: masteryPercent < WEAK_THRESHOLD_PERCENT,
+    };
+  });
+}
+
+// --- Helper: kiểm tra trạng thái đã làm bài kiểm tra năng lực theo môn ---
+// Dùng cho Phase 5: hiển thị trạng thái "Đã kiểm tra" / "Chưa kiểm tra"
+// / "Kết quả cũ" trước khi người dùng bắt đầu. Người dùng vẫn có thể
+// retake tùy ý.
+export async function getAssessmentHistoryBySubject(userId: string): Promise<
+  Array<{
+    subject: string;
+    completed: boolean;
+    completedAt: Date | null;
+    lastMastery: number;
+  }>
+> {
+  const rows = await prisma.$queryRaw<
+    Array<{
+      subject: string;
+      completed: boolean;
+      completedAt: Date | null;
+      lastMastery: number;
+    }>
+  >`SELECT subject,
+     bool_or(status = 'completed' OR "completedAt" IS NOT NULL) as completed,
+     max("completedAt") as "completedAt",
+     COALESCE(ROUND(MAX(lp.mastery) * 100), 0) as "lastMastery"
+   FROM "Assessment" a
+   LEFT JOIN "Attempt" att ON att."assessmentId" = a.id
+   LEFT JOIN "LearningProgress" lp ON lp."userId" = a."userId" AND lp.subject = a.subject
+   WHERE a."userId" = ${userId}
+     AND a.subject IS NOT NULL
+   GROUP BY subject`;
+
+  return rows;
+}

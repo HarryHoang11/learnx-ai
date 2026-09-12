@@ -100,7 +100,7 @@ export async function generateDiagnosticQuestions(config: DiagnosticConfig): Pro
 export async function evaluateDiagnosticResult(params: {
   userId: string;
   diagnosticSessionId: string;
-  answers: Array<{ questionId: string; answer: string; isCorrect: boolean; difficulty: Difficulty; topic: string }>;
+  answers: Array<{ questionId: string; answer: string; isCorrect: boolean; difficulty: Difficulty; topic: string; subject: string }>;
 }): Promise<DiagnosticResult> {
   const { userId, diagnosticSessionId, answers } = params;
 
@@ -149,7 +149,7 @@ export async function evaluateDiagnosticResult(params: {
   for (const ans of answers) {
     await updateMastery({
       userId,
-      subject: ans.topic.split(" - ")[0] || "General",
+      subject: ans.subject,
       topic: ans.topic,
       isCorrect: ans.isCorrect,
     });

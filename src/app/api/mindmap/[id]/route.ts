@@ -1,5 +1,6 @@
 // ================================================================
 // PUT /api/mindmap/[id] — cập nhật mind map (tiêu đề/nodes sau edit)
+// DELETE /api/mindmap/[id] — xóa mind map
 // ================================================================
 // Mạch tư duy: UI Mind Map cho sửa/xóa/thêm node ở client rồi LƯU
 // về DB qua route này. Verify mind map thuộc về đúng user để chống
@@ -55,6 +56,41 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     console.error("[api/mindmap/[id]] Error:", err);
     return NextResponse.json<ApiResponse<never>>(
       { success: false, error: "Không thể lưu Mind Map, thử lại sau." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) return unauthorizedResponse();
+
+    const { id } = await params;
+
+    const existing = await prisma.mindMap.findFirst({
+      where: { id, userId },
+      select: { id: true, title: true },
+    });
+    if (!existing) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "Không tìm thấy Mind Map." },
+        { status: 404 }
+      );
+    }
+
+    await prisma.mindMap.delete({
+      where: { id },
+    });
+
+    return NextResponse.json<ApiResponse<{ id: string; title: string }>>({
+      success: true,
+      data: { id: existing.id, title: existing.title },
+    });
+  } catch (err) {
+    console.error("[api/mindmap/[id]] DELETE Error:", err);
+    return NextResponse.json<ApiResponse<never>>(
+      { success: false, error: "Không thể xóa Mind Map, thử lại sau." },
       { status: 500 }
     );
   }

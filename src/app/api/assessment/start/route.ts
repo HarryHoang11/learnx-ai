@@ -23,13 +23,13 @@ export async function POST(req: NextRequest) {
     const subject = (body.subject as string) ?? "Toán";
 
     const assessment = await prisma.assessment.create({
-      data: { userId, status: "in_progress" },
+      data: { userId, subject, status: "in_progress" },
     });
 
     // Câu đầu tiên LUÔN ở độ khó "easy" và chủ đề tổng quát nhất của
     // môn học — mục đích là "khởi động" trước khi thích ứng dần theo
     // đúng/sai (xem services/assessment.service.ts -> pickNextDifficulty).
-    const firstQuestion = await generateQuizQuestion(subject, "Kiến thức nền tảng", "easy");
+    const firstQuestion = await generateQuizQuestion(userId, subject, "Kiến thức nền tảng", "easy");
 
     return NextResponse.json<ApiResponse<{ assessmentId: string; question: GeneratedQuestion }>>({
       success: true,

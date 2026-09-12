@@ -18,6 +18,7 @@ export default function LeaderboardPage() {
   const [loading, setLoading] = useState(true);
   const [lbLoading, setLbLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [subjectsError, setSubjectsError] = useState<string | null>(null);
 
   const [period, setPeriod] = useState<"weekly" | "monthly" | "alltime">("alltime");
   const [subjectId, setSubjectId] = useState<string | undefined>(undefined);
@@ -33,8 +34,9 @@ export default function LeaderboardPage() {
       const res = await fetch("/api/community/subjects");
       const json = await res.json();
       if (json.success) setSubjects(json.data);
-    } catch (err) {
-      console.error("Failed to load subjects:", err);
+      else setSubjectsError(json.error);
+    } catch {
+      setSubjectsError(t("common.connectionError"));
     }
   }
 
@@ -133,6 +135,7 @@ export default function LeaderboardPage() {
               <option value="">{t("com.clb.allSubjects")}</option>
               {subjects.map(s => <option key={s.id} value={s.id}>{s.icon} {s.name}</option>)}
             </select>
+            {subjectsError && <p style={{ color: "var(--rose)", fontSize: 12 }}>{subjectsError}</p>}
 
             <select
               value={limit}

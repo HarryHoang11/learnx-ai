@@ -186,10 +186,21 @@ function MindMapPageInner() {
     if (!record) return;
     setSaving(true);
     try {
+      // Recompute edges from current nodes to avoid stale edges
+      const edgeSet = new Map<string, MindEdge>();
+      for (const n of nodes) {
+        if (n.parentId) {
+          const key = `${n.parentId}->${n.id}`;
+          if (!edgeSet.has(key)) {
+            edgeSet.set(key, { id: key, source: n.parentId, target: n.id });
+          }
+        }
+      }
+      const edges = Array.from(edgeSet.values());
       const res = await fetch(`/api/mindmap/${record.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: { version: 1, nodes, edges: record.data?.edges ?? [] } }),
+        body: JSON.stringify({ data: { version: record.data?.version ?? 1, nodes, edges } }),
       });
       const json: ApiResponse<MindMapRecord> = await res.json();
       if (!json.success) {
@@ -206,9 +217,60 @@ function MindMapPageInner() {
     }
   }
 
+  async function deleteMindMap() {
+    if (!record) return;
+    if (!confirm(t("mm.deleteConfirm", { title: record.title }))) return;
+    try {
+      const res = await fetch(`/api/mindmap/${record.id}`, { method: "DELETE" });
+      const json: ApiResponse<{ id: string }> = await res.json();
+      if (!json.success) {
+        push("error", json.error);
+        return;
+      }
+      push("success", t("mm.deletedMap"));
+      // Remove from list and redirect
+      setList((prev) => (prev ? prev.filter((m) => m.id !== record.id) : prev));
+      router.push("/mindmap");
+    } catch {
+      push("error", t("mm.deleteFail"));
+    }
+  }
+
+  async function createBlankMindMap() {
+    try {
+      const res = await fetch("/api/mindmap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: t("mm.blankTitle"),
+          data: { version: 1, nodes: [], edges: [] },
+        }),
+      });
+      const json: ApiResponse<MindMapRecord> = await res.json();
+      if (!json.success) {
+        push("error", json.error);
+        return;
+      }
+      push("success", t("mm.createdMap"));
+      router.push(`/mindmap?id=${json.data.id}`);
+    } catch {
+      push("error", t("mm.createFail"));
+    }
+  }
+
   function exportJSON() {
     if (!record) return;
-    const blob = new Blob([JSON.stringify({ title: record.title, nodes, edges: record.data?.edges ?? [] }, null, 2)], {
+    const edgeSet = new Map<string, MindEdge>();
+    for (const n of nodes) {
+      if (n.parentId) {
+        const key = `${n.parentId}->${n.id}`;
+        if (!edgeSet.has(key)) {
+          edgeSet.set(key, { id: key, source: n.parentId, target: n.id });
+        }
+      }
+    }
+    const edges = Array.from(edgeSet.values());
+    const blob = new Blob([JSON.stringify({ title: record.title, nodes, edges }, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -253,11 +315,8 @@ function MindMapPageInner() {
             margin: "5px 0",
             borderRadius: depth === 0 ? 14 : 10,
             background: isSelected ? "var(--indigo-soft)" : "var(--panel-strong)",
-            borderWidth: 1,
-            borderStyle: "solid",
-            borderColor: isSelected ? "var(--indigo)" : isHit ? "var(--cyan)" : "var(--border)",
-            borderLeftWidth: 3,
-            borderLeftColor: color,
+            border: `1px solid ${isSelected ? "var(--indigo)" : isHit ? "var(--cyan)" : "var(--border)"}`,
+            borderLeft: `3px solid ${color}`,
             fontSize: depth === 0 ? 15 : 13.5,
             fontWeight: depth === 0 ? 700 : 500,
             cursor: "pointer",
@@ -317,14 +376,19 @@ function MindMapPageInner() {
   if (!id) {
     return (
       <section className="page-enter">
-        <h2 className="page-title">Mind Map</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 8 }}>
+          <h2 className="page-title" style={{ margin: 0 }}>Mind Map</h2>
+          <button className="btn-primary" onClick={createBlankMindMap}>
+            {t("mm.create")}
+          </button>
+        </div>
         {(list?.length ?? 0) === 0 ? (
           <EmptyState
             icon="🧠"
             title={t("mm.emptyTitle")}
             description={t("mm.emptyDesc")}
-            actionLabel={t("mm.openLibrary")}
-            onAction={() => router.push("/library")}
+            actionLabel={t("mm.create")}
+            onAction={createBlankMindMap}
           />
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -338,9 +402,28 @@ function MindMapPageInner() {
                     {m.topic ? ` · ${m.topic}` : ""}
                   </div>
                 </div>
-                <button className="btn-secondary" onClick={() => router.push(`/mindmap?id=${m.id}`)} style={{ flexShrink: 0 }}>
-                  {t("mm.open")}
-                </button>
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  <button className="btn-secondary" onClick={() => router.push(`/mindmap?id=${m.id}`)}>
+                    {t("mm.open")}
+                  </button>
+                  <button className="btn-secondary" onClick={() => {
+                    if (confirm(t("mm.deleteConfirm", { title: m.title }))) {
+                      (async () => {
+                        try {
+                          const res = await fetch(`/api/mindmap/${m.id}`, { method: "DELETE" });
+                          const json: ApiResponse<{ id: string }> = await res.json();
+                          if (!json.success) { push("error", json.error); return; }
+                          push("success", t("mm.deletedMap"));
+                          setList((prev) => (prev ? prev.filter((x) => x.id !== m.id) : prev));
+                        } catch {
+                          push("error", t("mm.deleteFail"));
+                        }
+                      })();
+                    }
+                  }} style={{ color: "var(--rose)" }}>
+                    {t("common.delete")}
+                  </button>
+                </div>
               </Panel>
             ))}
           </div>
@@ -362,6 +445,9 @@ function MindMapPageInner() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn-secondary" onClick={deleteMindMap} style={{ color: "var(--rose)" }}>
+            {t("common.delete")}
+          </button>
           <button className="btn-secondary" onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)))} aria-label={t("mm.zoomOut")}>
             −
           </button>

@@ -257,6 +257,12 @@ export async function updateTaskStatus(params: {
 
   if (!task) throw new Error("Task not found");
 
+  // Deduplication: if task was already completed, don't award XP again
+  if (task.status === "completed" && params.status === "completed") {
+    // Status hasn't changed from completed — return without awarding XP
+    return task as LearningAgentTask;
+  }
+
   const updated = await prisma.learningAgentTask.update({
     where: { id: params.taskId },
     data: {
@@ -395,6 +401,18 @@ export async function resumePlan(planId: string, userId: string): Promise<Learni
 
 // --- 9) COMPLETE PLAN ---
 export async function completePlan(planId: string, userId: string): Promise<LearningAgentPlan> {
+  const existingPlan = await prisma.learningAgentPlan.findUnique({
+    where: { id: planId, userId },
+    select: { status: true },
+  });
+
+  if (!existingPlan) throw new Error("Plan not found");
+
+  // Deduplication: if plan was already completed, don't award XP again
+  if (existingPlan.status === "completed") {
+    return existingPlan as unknown as LearningAgentPlan;
+  }
+
   const plan = await prisma.learningAgentPlan.update({
     where: { id: planId, userId },
     data: { status: "completed" },

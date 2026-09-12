@@ -9,9 +9,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { recordLearningActivity, type LearningActivityInput } from "@/services/learning-activity.service";
+import type { ActivityType } from "@/lib/constants/xp";
 import type { ApiResponse } from "@/types";
 
-const VALID_TYPES = [
+const VALID_TYPES: ActivityType[] = [
   'lesson_complete',
   'exercise_easy',
   'exercise_medium',
@@ -22,7 +23,17 @@ const VALID_TYPES = [
   'daily_mission',
   'weekly_mission',
   'mastery_milestone',
-] as const;
+  'achievement_unlocked',
+  'tutor_session_completed',
+  'mindmap_created',
+  'document_analyzed',
+  'reflection_completed',
+  'task_completed',
+  'diagnostic_completed',
+  'roadmap_completed',
+  'review_completed',
+  'study_session_completed',
+];
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,19 +43,29 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { type, difficulty, scorePercent, isFirstCompletion, sourceId, sourceType, metadata } = body as LearningActivityInput;
 
-    if (!type || !VALID_TYPES.includes(type as any)) {
+    if (!type || !VALID_TYPES.includes(type)) {
       return NextResponse.json<ApiResponse<never>>(
         { success: false, error: "Invalid or missing activity type." },
         { status: 400 }
       );
     }
 
+    // Validate difficulty server-side — must be a known value
+    const validDifficulty = ['easy', 'medium', 'hard'];
+    const safeDifficulty = validDifficulty.includes(difficulty ?? '') ? (difficulty as 'easy' | 'medium' | 'hard') : 'medium';
+
+    // Validate scorePercent server-side — must be a number in [0, 100]
+    const safeScorePercent = typeof scorePercent === 'number' && scorePercent >= 0 && scorePercent <= 100 ? scorePercent : 0;
+
+    // Validate isFirstCompletion — must be a boolean
+    const safeIsFirstCompletion = typeof isFirstCompletion === 'boolean' ? isFirstCompletion : true;
+
     const result = await recordLearningActivity({
       userId,
       type,
-      difficulty: difficulty ?? 'medium',
-      scorePercent: scorePercent ?? 0,
-      isFirstCompletion: isFirstCompletion ?? true,
+      difficulty: safeDifficulty,
+      scorePercent: safeScorePercent,
+      isFirstCompletion: safeIsFirstCompletion,
       sourceId,
       sourceType: sourceType ?? type,
       metadata,

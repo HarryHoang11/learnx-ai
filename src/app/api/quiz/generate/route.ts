@@ -10,11 +10,15 @@
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { generateQuizQuestion } from "@/services/quiz.service";
 import type { ApiResponse, Difficulty, GeneratedQuestion } from "@/types";
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getCurrentUserId();
+    if (!userId) return unauthorizedResponse();
+
     const body = await req.json();
     const subject = body.subject as string;
     const topic = body.topic as string;
@@ -27,7 +31,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const question = await generateQuizQuestion(subject, topic, difficulty);
+    const question = await generateQuizQuestion(userId, subject, topic, difficulty);
 
     return NextResponse.json<ApiResponse<GeneratedQuestion>>({ success: true, data: question });
   } catch (err) {

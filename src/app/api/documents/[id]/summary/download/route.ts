@@ -8,8 +8,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import type { ApiResponse } from "@/types";
+import path from "path";
+import fs from "fs";
 
 type Format = 'pdf' | 'docx' | 'txt' | 'md';
+
+// Font paths for Noto Sans (supports Vietnamese + math symbols)
+const FONT_DIR = path.join(process.cwd(), "src", "fonts");
+const FONT_REGULAR = path.join(FONT_DIR, "NotoSans-Regular.ttf");
+const FONT_BOLD = path.join(FONT_DIR, "NotoSans-Bold.ttf");
+const FONT_ITALIC = path.join(FONT_DIR, "NotoSans-Italic.ttf");
+const FONT_BOLD_ITALIC = path.join(FONT_DIR, "NotoSans-BoldItalic.ttf");
 
 function generateMarkdown(fileName: string, summary: string): string {
   const baseName = fileName.replace(/\.[^/.]+$/, '');
@@ -35,8 +44,20 @@ async function generatePDF(fileName: string, summary: string): Promise<Uint8Arra
     
     const baseName = fileName.replace(/\.[^/.]+$/, '');
     
+    // Register Noto Sans fonts (supports Vietnamese + math symbols)
+    // Check if font files exist, fallback to Helvetica if not
+    const hasFonts = fs.existsSync(FONT_REGULAR) && fs.existsSync(FONT_BOLD) && 
+                     fs.existsSync(FONT_ITALIC) && fs.existsSync(FONT_BOLD_ITALIC);
+    
+    if (hasFonts) {
+      doc.registerFont('NotoSans', FONT_REGULAR);
+      doc.registerFont('NotoSans-Bold', FONT_BOLD);
+      doc.registerFont('NotoSans-Italic', FONT_ITALIC);
+      doc.registerFont('NotoSans-BoldItalic', FONT_BOLD_ITALIC);
+    }
+    
     // Title
-    doc.fontSize(20).text(`${baseName} — Tóm tắt AI`, { align: 'center' });
+    doc.fontSize(20).font(hasFonts ? 'NotoSans-Bold' : 'Helvetica-Bold').text(`${baseName} — Tóm tắt AI`, { align: 'center' });
     doc.moveDown();
     
     // Content - parse markdown-like content
@@ -44,25 +65,25 @@ async function generatePDF(fileName: string, summary: string): Promise<Uint8Arra
     for (const line of lines) {
       if (line.startsWith('## ')) {
         doc.moveDown(0.5);
-        doc.fontSize(16).text(line.slice(3));
+        doc.fontSize(16).font(hasFonts ? 'NotoSans-Bold' : 'Helvetica-Bold').text(line.slice(3));
       } else if (line.startsWith('### ')) {
         doc.moveDown(0.3);
-        doc.fontSize(14).text(line.slice(4));
+        doc.fontSize(14).font(hasFonts ? 'NotoSans-Bold' : 'Helvetica-Bold').text(line.slice(4));
       } else if (line.startsWith('**') && line.endsWith('**')) {
-        doc.fontSize(12).font('Helvetica-Bold').text(line.slice(2, -2));
-        doc.font('Helvetica');
+        doc.fontSize(12).font(hasFonts ? 'NotoSans-Bold' : 'Helvetica-Bold').text(line.slice(2, -2));
+        doc.font(hasFonts ? 'NotoSans' : 'Helvetica');
       } else if (line.startsWith('- ') || line.startsWith('* ')) {
-        doc.fontSize(12).text(`  • ${line.slice(2)}`);
+        doc.fontSize(12).font(hasFonts ? 'NotoSans' : 'Helvetica').text(`  • ${line.slice(2)}`);
       } else if (line.match(/^\d+\. /)) {
-        doc.fontSize(12).text(`  ${line}`);
+        doc.fontSize(12).font(hasFonts ? 'NotoSans' : 'Helvetica').text(`  ${line}`);
       } else if (line.trim()) {
-        doc.fontSize(12).text(line);
+        doc.fontSize(12).font(hasFonts ? 'NotoSans' : 'Helvetica').text(line);
       }
       doc.moveDown(0.2);
     }
     
     doc.moveDown();
-    doc.fontSize(10).fillColor('gray').text('Tóm tắt được tạo bởi LearnX AI', { align: 'center' });
+    doc.fontSize(10).font(hasFonts ? 'NotoSans-Italic' : 'Helvetica-Oblique').fillColor('gray').text('Tóm tắt được tạo bởi LearnX AI', { align: 'center' });
     doc.end();
   });
 }
@@ -72,11 +93,15 @@ async function generateDOCX(fileName: string, summary: string): Promise<Uint8Arr
   
   const baseName = fileName.replace(/\.[^/.]+$/, '');
   const lines = summary.split('\n');
+  
+  // Use Noto Sans (Unicode-capable) as default font for all text
+  // This ensures Vietnamese characters and math symbols render correctly
   const children = [
     new Paragraph({
       text: `${baseName} — Tóm tắt AI`,
       heading: HeadingLevel.TITLE,
       alignment: AlignmentType.CENTER,
+      ...{ font: "Noto Sans" },
     }),
     new Paragraph({ text: '' }),
   ];
@@ -86,30 +111,35 @@ async function generateDOCX(fileName: string, summary: string): Promise<Uint8Arr
       children.push(new Paragraph({
         text: line.slice(3),
         heading: HeadingLevel.HEADING_1,
+        ...{ font: "Noto Sans" },
       }));
     } else if (line.startsWith('### ')) {
       children.push(new Paragraph({
         text: line.slice(4),
         heading: HeadingLevel.HEADING_2,
+        ...{ font: "Noto Sans" },
       }));
     } else if (line.startsWith('**') && line.endsWith('**')) {
       children.push(new Paragraph({
-        children: [new TextRun({ text: line.slice(2, -2), bold: true, size: 24 })],
+        children: [new TextRun({ text: line.slice(2, -2), bold: true, size: 24, font: "Noto Sans" })],
       }));
     } else if (line.startsWith('- ') || line.startsWith('* ')) {
       children.push(new Paragraph({
         text: `• ${line.slice(2)}`,
         indent: { left: 720 },
+        ...{ font: "Noto Sans" },
       }));
     } else if (line.match(/^\d+\. /)) {
       children.push(new Paragraph({
         text: line,
         indent: { left: 720 },
+        ...{ font: "Noto Sans" },
       }));
     } else if (line.trim()) {
       children.push(new Paragraph({
         text: line,
         spacing: { after: 120 },
+        ...{ font: "Noto Sans" },
       }));
     }
   }
@@ -117,9 +147,9 @@ async function generateDOCX(fileName: string, summary: string): Promise<Uint8Arr
   children.push(
     new Paragraph({ text: '' }),
     new Paragraph({
-      text: 'Tóm tắt được tạo bởi LearnX AI',
+      ...{ font: "Noto Sans" },
       alignment: AlignmentType.CENTER,
-      children: [new TextRun({ text: 'Tóm tắt được tạo bởi LearnX AI', size: 20, color: '999999' })],
+      children: [new TextRun({ text: 'Tóm tắt được tạo bởi LearnX AI', size: 20, color: '999999', font: "Noto Sans" })],
     })
   );
   

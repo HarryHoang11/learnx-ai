@@ -12,11 +12,14 @@
 import type { ReactNode } from "react";
 import AppShell from "@/components/layout/AppShell";
 import { ToastProvider } from "@/components/ui/Toast";
+import PageTransition from "@/components/ui/PageTransition";
 
 export default function AppGroupLayout({ children }: { children: ReactNode }) {
   return (
     <ToastProvider>
-      <AppShell>{children}</AppShell>
+      <AppShell>
+        <PageTransition>{children}</PageTransition>
+      </AppShell>
     </ToastProvider>
   );
 }

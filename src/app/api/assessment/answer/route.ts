@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
 
     // Chưa đủ câu -> sinh câu tiếp theo với độ khó đã điều chỉnh
     const nextDifficulty = pickNextDifficulty(question.difficulty, isCorrect);
-    const nextQuestion = await generateQuizQuestion(question.subject, question.topic, nextDifficulty);
+    const nextQuestion = await generateQuizQuestion(userId, question.subject, question.topic, nextDifficulty);
 
     return NextResponse.json<ApiResponse<{ done: false; isCorrect: boolean; nextQuestion: GeneratedQuestion }>>({
       success: true,

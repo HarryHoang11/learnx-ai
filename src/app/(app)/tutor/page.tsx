@@ -170,7 +170,7 @@ function TutorPageInner() {
       });
       const json: ApiResponse<{ reply: string }> = await res.json();
 
-      if (json.success) {
+       if (json.success) {
         setMessages((prev) => [
           ...prev,
           {
@@ -180,7 +180,18 @@ function TutorPageInner() {
             awaitingHint: level < 3, // sau lời giải (level 3) thì không mời gợi ý thêm nữa
           },
         ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", tag: t("tutor.errorTag"), content: json.error },
+        ]);
       }
+    } catch {
+      setSending(false);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", tag: t("tutor.errorTag"), content: t("common.connectionError") },
+      ]);
     } finally {
       setSending(false);
     }

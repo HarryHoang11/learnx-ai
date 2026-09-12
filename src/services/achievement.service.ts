@@ -463,10 +463,10 @@ async function evaluateCondition(
 
   switch (condition.type) {
     case "first_lesson":
-      return event.type === "lesson_completed" && stats.lessonsCompleted === 1;
+      return event.type === "lesson_complete" && stats.lessonsCompleted === 1;
 
     case "first_solve":
-      return event.type === "exercise_correct" && stats.exercisesSolved === 1;
+      return (event.type === "exercise_easy" || event.type === "exercise_medium" || event.type === "exercise_hard") && stats.exercisesSolved === 1;
 
     case "topic_mastered":
       return progress.some(p => p.mastery * 100 >= condition.threshold);
@@ -506,20 +506,21 @@ async function evaluateCondition(
   }
 }
 
-// --- 6) GET USER STATS ---
+// --- GET USER STATS ---
+// Query XPTransaction table for count-based stats — this is the
+// source of truth since recordLearningActivity writes to XPTransaction,
+// not LearningActivity.
 async function getUserStats(userId: string): Promise<{
   lessonsCompleted: number;
   exercisesSolved: number;
   reviewsCompleted: number;
   documentsAnalyzed: number;
 }> {
-  // These would come from LearningActivity or other tracking tables
-  // For now, return defaults - can be enhanced with actual queries
   const [lessons, exercises, reviews, docs] = await Promise.all([
-    prisma.learningActivity.count({ where: { userId, type: "lesson_completed" } }),
-    prisma.learningActivity.count({ where: { userId, type: "exercise_correct" } }),
-    prisma.learningActivity.count({ where: { userId, type: "review_completed" } }),
-    prisma.learningActivity.count({ where: { userId, type: "document_analyzed" } }),
+    prisma.xPTransaction.count({ where: { userId, reason: "lesson_complete" } }),
+    prisma.xPTransaction.count({ where: { userId, reason: { in: ["exercise_easy", "exercise_medium", "exercise_hard"] } } }),
+    prisma.xPTransaction.count({ where: { userId, reason: "review_completed" } }),
+    prisma.xPTransaction.count({ where: { userId, reason: "document_analyzed" } }),
   ]);
 
   return {

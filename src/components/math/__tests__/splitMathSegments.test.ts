@@ -43,4 +43,39 @@ describe("splitMathSegments", () => {
   it("chuỗi rỗng cho mảng rỗng", () => {
     expect(splitMathSegments("")).toEqual([]);
   });
+
+  it("Vietnamese text with LaTeX block math ($$...$$)", () => {
+    const input = `Chứng minh các điểm thẳng hàng bằng định lý Ceva và Menelaus.
+
+$$
+\\frac{MB}{NC}\\cdot\\frac{PA}{MC}\\cdot\\frac{NA}{PB}=1
+$$
+
+Kết luận: Học sinh cần nhớ công thức Ceva và Menelaus.`;
+    const segs = splitMathSegments(input);
+    expect(segs).toHaveLength(3);
+    expect(segs[0].type).toBe("text");
+    expect(segs[0].content).toBe("Chứng minh các điểm thẳng hàng bằng định lý Ceva và Menelaus.\n\n");
+    expect(segs[1].type).toBe("math");
+    expect(segs[1].display).toBe(true);
+    expect(segs[2].type).toBe("text");
+    expect(segs[2].content).toContain("Kết luận");
+  });
+
+  it("Vietnamese text with LaTeX inline math (\\(...\\))", () => {
+    const input = "Xét tam giản ABC với M, N, P nằm trên các cạnh tương ứng. Công thức \\(\\frac{a}{b} = k\\) áp dụng.";
+    const segs = splitMathSegments(input);
+    expect(segs).toHaveLength(3);
+    expect(segs[0].type).toBe("text");
+    expect(segs[1].type).toBe("math");
+    expect(segs[1].content).toBe("\\frac{a}{b} = k");
+    expect(segs[2].type).toBe("text");
+  });
+
+  it("Preserves Vietnamese diacritics through normalization", () => {
+    const input = "Chứng minh, kiểm chứng, ứng dụng, cộng thức";
+    const segs = splitMathSegments(input);
+    expect(segs).toHaveLength(1);
+    expect(segs[0].content).toBe("Chứng minh, kiểm chứng, ứng dụng, cộng thức");
+  });
 });

@@ -68,8 +68,9 @@ model User {
   learningResources      LearningResource[]
   resourceRatings        ResourceRating[]
   resourceReports        ResourceReport[]
-  createdExercises       Exercise[] @relation("ExerciseAuthor")
-  exerciseAttempts       ExerciseAttempt[]
+   createdExercises       Exercise[] @relation("ExerciseAuthor")
+   exerciseAttempts       ExerciseAttempt[]
+   quizQuestions          QuizQuestionCache[]
 }
 
 model Account {
@@ -134,6 +135,7 @@ model LearningGoal {
 model Assessment {
   id                String    @id @default(cuid())
   userId            String
+  subject           String?   // môn kiểm tra: Toán, Tin học, Vật lý... (nullable cho assessment cũ)
   status            String    @default("in_progress")
   startedAt         DateTime  @default(now())
   completedAt       DateTime?
@@ -156,6 +158,22 @@ model Attempt {
   createdAt    DateTime    @default(now())
   assessment   Assessment? @relation(fields: [assessmentId], references: [id])
   user         User        @relation(fields: [userId], references: [id])
+}
+
+model QuizQuestionCache {
+  id           String   @id @default(cuid())
+  questionId   String   @unique
+  userId       String
+  subject      String
+  topic        String
+  difficulty   String
+  questionText String
+  options      Json
+  correctIndex Int
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@index([questionId])
 }
 
 model LearningProgress {
@@ -437,6 +455,7 @@ model DiagnosticSession {
   startedAt         DateTime  @default(now())
   completedAt       DateTime?
   result            Json?
+  questions         Json?
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   assessment        Assessment? @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
 
@@ -514,6 +533,7 @@ model XPTransaction {
 
   @@index([userId, createdAt])
   @@index([userId, sourceType, sourceId])
+  @@unique([userId, sourceType, sourceId], name: "XPTransaction_userId_sourceType_sourceId_unique")
 }
 
 model PointTransaction {

@@ -75,6 +75,7 @@ export default function RoadmapPage() {
   // Skill gap của goal đang chọn — fetch riêng vì tính từ plan +
   // LearningProgress, không nằm trong GoalWithRoadmap.
   const [gap, setGap] = useState<SkillGapItem[] | null>(null);
+  const [gapError, setGapError] = useState<string | null>(null);
 
   useEffect(() => {
     loadGoals();
@@ -83,15 +84,16 @@ export default function RoadmapPage() {
   useEffect(() => {
     if (!selectedGoalId) {
       setGap(null);
+      setGapError(null);
       return;
     }
     fetch(`/api/goals/${selectedGoalId}/gap`)
       .then((res) => res.json())
       .then((json: ApiResponse<SkillGapItem[]>) => {
         if (json.success) setGap(json.data);
-        else setGap(null);
+        else setGapError(json.error);
       })
-      .catch(() => setGap(null));
+      .catch(() => setGapError(t("common.connectionError")));
   }, [selectedGoalId]);
 
   async function loadGoals(preferGoalId?: string) {
@@ -346,10 +348,12 @@ export default function RoadmapPage() {
             : ""}
           {t("roadmap.gapDesc", { n: 80 })}
         </p>
-        {!gap || gap.length === 0 ? (
-          <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>
-            {!gap ? t("roadmap.gapAnalyzing") : t("roadmap.gapEmpty")}
-          </p>
+        {gapError ? (
+          <StateMessage kind="error" text={gapError} />
+        ) : !gap ? (
+          <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>{t("roadmap.gapAnalyzing")}</p>
+        ) : gap.length === 0 ? (
+          <p style={{ color: "var(--text-dim)", fontSize: 13.5 }}>{t("roadmap.gapEmpty")}</p>
         ) : (
           <Panel>
             {gap.slice(0, 8).map((g) => (

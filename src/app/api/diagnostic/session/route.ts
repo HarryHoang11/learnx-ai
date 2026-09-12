@@ -29,10 +29,10 @@ export async function POST(req: NextRequest) {
     // Generate questions
     const questions = await generateDiagnosticQuestions({ subject, topic, goal });
 
-    // Update session with questions
+    // Update session with questions (stored server-side for answer verification)
     await prisma.diagnosticSession.update({
       where: { id: session.id },
-      data: { totalQuestions: questions.length, currentDifficulty: 0.5 },
+      data: { totalQuestions: questions.length, currentDifficulty: 0.5, questions: questions as any },
     });
 
     return NextResponse.json<ApiResponse<{ sessionId: string; questions: typeof questions }>>({

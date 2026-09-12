@@ -69,6 +69,8 @@ function CommunityPageInner() {
   const [docLoading, setDocLoading] = useState(false);
   const [lbLoading, setLbLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [subjectsError, setSubjectsError] = useState<string | null>(null);
+  const [lbError, setLbError] = useState<string | null>(null);
   const [totalDocs, setTotalDocs] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
 
@@ -93,8 +95,9 @@ function CommunityPageInner() {
       const res = await fetch("/api/community/subjects?includeTopics=true");
       const json = await res.json();
       if (json.success) setSubjects(json.data);
+      else setSubjectsError(json.error);
     } catch (err) {
-      console.error("Failed to load subjects:", err);
+      setSubjectsError(t("common.connectionError"));
     }
   }
 
@@ -143,8 +146,9 @@ function CommunityPageInner() {
       const res = await fetch(`/api/community/leaderboard?${params.toString()}`);
       const json = await res.json();
       if (json.success) setLeaderboard(json.data);
+      else setLbError(json.error);
     } catch (err) {
-      console.error("Failed to load leaderboard:", err);
+      setLbError(t("common.connectionError"));
     } finally {
       setLbLoading(false);
     }
@@ -473,7 +477,7 @@ function CommunityPageInner() {
           )}
 
           {/* Leaderboard Sidebar on Desktop - could be moved to separate page */}
-          {leaderboard.length > 0 && (
+          {(leaderboard.length > 0 || lbLoading) && (
             <div style={{ marginTop: 32 }}>
               <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{t("com.topContributors")}</h2>
               <ContributorLeaderboard
@@ -482,6 +486,7 @@ function CommunityPageInner() {
                 onPeriodChange={handleLeaderboardPeriodChange}
                 loading={lbLoading}
               />
+              {lbError && <StateMessage kind="error" text={lbError} />}
               <div style={{ textAlign: "center", marginTop: 12 }}>
                 <button
                   className="btn-secondary"
@@ -492,6 +497,9 @@ function CommunityPageInner() {
                 </button>
               </div>
             </div>
+          )}
+          {lbError && leaderboard.length === 0 && !lbLoading && (
+            <StateMessage kind="error" text={lbError} />
           )}
         </div>
       </div>

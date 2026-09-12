@@ -146,25 +146,39 @@ export async function sendTutorMessage(params: {
   }
 
   // Check if session should complete (e.g., user understands concept)
-  const isComplete = hintLevel === 3 && userMessage.toLowerCase().includes("hiểu") || 
-                     hintLevel === 5 || 
-                     (hintLevel >= 4 && reply.toLowerCase().includes("đúng"));
+  const wouldBeComplete = hintLevel === 3 && userMessage.toLowerCase().includes("hiểu") || 
+                   hintLevel === 5 || 
+                   (hintLevel >= 4 && reply.toLowerCase().includes("đúng"));
 
-  if (isComplete) {
-    await prisma.tutorSession.update({
+  let isComplete = wouldBeComplete;
+
+  if (wouldBeComplete) {
+    // Deduplication: check if session was already completed
+    const existingSession = await prisma.tutorSession.findUnique({
       where: { id: session.id },
-      data: { completedAt: new Date() },
+      select: { completedAt: true },
     });
+    if (existingSession?.completedAt) {
+      // Session already completed — return without awarding XP again
+      isComplete = false;
+    }
 
-    // Record learning activity
-    await recordLearningActivity({
-      userId,
-      type: "tutor_session_completed",
-      difficulty: session.difficulty < 0.33 ? "easy" : session.difficulty < 0.66 ? "medium" : "hard",
-      isFirstCompletion: true,
-      sourceId: session.id,
-      sourceType: "tutor",
-    });
+    if (isComplete) {
+      await prisma.tutorSession.update({
+        where: { id: session.id },
+        data: { completedAt: new Date() },
+      });
+
+      // Record learning activity
+      await recordLearningActivity({
+        userId,
+        type: "tutor_session_completed",
+        difficulty: session.difficulty < 0.33 ? "easy" : session.difficulty < 0.66 ? "medium" : "hard",
+        isFirstCompletion: true,
+        sourceId: session.id,
+        sourceType: "tutor",
+      });
+    }
   }
 
   // Extract concepts covered from reply

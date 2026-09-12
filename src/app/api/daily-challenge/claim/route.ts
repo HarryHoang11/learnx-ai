@@ -37,23 +37,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Mark as claimed and award rewards
-    const updated = await prisma.dailyChallenge.update({
-      where: { id: challenge.id },
-      data: { claimed: true },
+    // Atomic: mark claimed + award XP in a single transaction to prevent
+    // race conditions from concurrent requests.
+    await prisma.$transaction(async (tx) => {
+      await tx.dailyChallenge.update({
+        where: { id: challenge.id },
+        data: { claimed: true },
+      });
+
+      // Award XP and LXP for completing daily challenge
+      await recordLearningActivity({
+        userId,
+        type: 'daily_challenge',
+        difficulty: 'medium',
+        isFirstCompletion: true,
+        sourceId: challenge.id,
+        sourceType: 'daily_challenge',
+      });
     });
 
-    // Award XP and LXP for completing daily challenge
-    await recordLearningActivity({
-      userId,
-      type: 'daily_challenge',
-      difficulty: 'medium',
-      isFirstCompletion: true,
-      sourceId: challenge.id,
-      sourceType: 'daily_challenge',
-    });
-
-    return NextResponse.json<ApiResponse<typeof updated>>({ success: true, data: updated });
+    return NextResponse.json<ApiResponse<{ claimed: true }>>({ success: true, data: { claimed: true } });
   } catch (err) {
     console.error("[api/daily-challenge/claim] Error:", err);
     return NextResponse.json<ApiResponse<never>>(

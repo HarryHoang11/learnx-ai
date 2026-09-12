@@ -50,6 +50,15 @@ export async function POST(req: NextRequest) {
       jsonMode: true,
     });
 
+    // Validate AI response structure before saving
+    if (!mindMapData || !Array.isArray(mindMapData.nodes)) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "AI không trả về dữ liệu nodes hợp lệ, thử lại sau." },
+        { status: 500 }
+      );
+    }
+    const edges = Array.isArray(mindMapData.edges) ? mindMapData.edges : [];
+
     // Save mind map
     const mindMap = await prisma.mindMap.create({
       data: {
@@ -57,12 +66,12 @@ export async function POST(req: NextRequest) {
         title: title || `${document.fileName} - Mind Map`,
         description: `Mind Map được tạo từ tài liệu: ${document.fileName}`,
         sourceDocumentId: documentId,
-        subject,
-        topic,
+        subject: subject || document.subject || undefined,
+        topic: topic || document.topic || undefined,
         data: {
           version: 1,
           nodes: mindMapData.nodes,
-          edges: mindMapData.edges,
+          edges,
         },
       },
     });

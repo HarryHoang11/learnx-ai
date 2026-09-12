@@ -29,23 +29,9 @@ import StateMessage from "@/components/ui/StateMessage";
 import DocumentCard from "@/components/documents/DocumentCard";
 import DocumentDetailModal, { type LibraryDocument } from "@/components/documents/DocumentDetailModal";
 import { useLanguage } from "@/components/providers/LanguageProvider";
-import type { I18nKey } from "@/lib/i18n/dictionary";
 import type { ApiResponse } from "@/types";
 
-// Value lưu DB luôn là tên tiếng Việt chuẩn (nội dung user, không
-// dịch); label hiển thị theo ngôn ngữ UI.
-const SUBJECTS: { value: string; labelKey: I18nKey }[] = [
-  { value: "Toán", labelKey: "library.subjects.math" },
-  { value: "Vật lý", labelKey: "library.subjects.physics" },
-  { value: "Hóa học", labelKey: "library.subjects.chemistry" },
-  { value: "Sinh học", labelKey: "library.subjects.biology" },
-  { value: "Tin học", labelKey: "library.subjects.cs" },
-  { value: "Tiếng Anh", labelKey: "library.subjects.english" },
-  { value: "Ngữ văn", labelKey: "library.subjects.literature" },
-  { value: "Lịch sử", labelKey: "library.subjects.history" },
-  { value: "Địa lý", labelKey: "library.subjects.geography" },
-  { value: "Khác", labelKey: "library.subjects.other" },
-];
+import { SUBJECTS, CUSTOM_SUBJECT_VALUE } from "@/lib/constants/subjects";
 
 const DIFFICULTY_KEYS = [
   { value: "easy", labelKey: "doc.difficulty.easy" },
@@ -238,6 +224,7 @@ export default function LibraryPage() {
                 {SUBJECTS.map((s) => (
                   <option key={s.value} value={s.value}>{t(s.labelKey)}</option>
                 ))}
+                <option value={CUSTOM_SUBJECT_VALUE}>{t("library.subjects.other")}</option>
               </select>
             </div>
             <div>

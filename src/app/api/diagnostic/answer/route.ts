@@ -5,18 +5,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { updateDiagnosticSession, evaluateDiagnosticResult } from "@/services/diagnostic.service";
+import { updateDiagnosticSession, evaluateDiagnosticResult, generateDiagnosticQuestions, type DiagnosticQuestion } from "@/services/diagnostic.service";
 import { pickNextDifficulty } from "@/services/assessment.service";
-import { generateDiagnosticQuestions } from "@/services/diagnostic.service";
-import type { ApiResponse, Difficulty } from "@/types";
+import type { ApiResponse } from "@/types";
+
+const MAX_QUESTIONS = 15;
 
 interface AnswerInput {
   sessionId: string;
   questionId: string;
   answer: string;
-  isCorrect: boolean;
-  difficulty: Difficulty;
-  topic: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -25,7 +23,11 @@ export async function POST(req: NextRequest) {
     if (!userId) return unauthorizedResponse();
 
     const body = await req.json();
-    const { sessionId, questionId, answer, isCorrect, difficulty, topic } = body as AnswerInput;
+    const { sessionId, questionId, answer } = body as {
+      sessionId: string;
+      questionId: string;
+      answer: string;
+    };
 
     if (!sessionId || !questionId) {
       return NextResponse.json<ApiResponse<never>>(
@@ -56,17 +58,39 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Server-side answer verification: look up the stored question in
+    // the session's questions cache and verify the answer independently.
+    // This prevents cheating by modifying client-side question data.
+    const storedQuestions = (session.questions as unknown as DiagnosticQuestion[] | undefined) ?? [];
+    const storedQuestion = storedQuestions.find((q: { id: string }) => q.id === questionId);
+
+    if (!storedQuestion) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "Câu hỏi không tồn tại trong phiên này." },
+        { status: 404 }
+      );
+    }
+
+    // Verify answer server-side
+    const isCorrect = answer.trim().toLowerCase() === storedQuestion.correctAnswer.trim().toLowerCase();
+
     // Update session
+    // Map difficulty to numeric value for currentDifficulty field
+    const difficultyToNumber = (d: string): number => {
+      if (d === "easy") return 0.25;
+      if (d === "hard") return 0.75;
+      return 0.5; // medium
+    };
+
     await updateDiagnosticSession({
       sessionId,
       userId,
       answeredQuestions: session.answeredQuestions + 1,
       correctAnswers: isCorrect ? session.correctAnswers + 1 : session.correctAnswers,
-      currentDifficulty: isCorrect ? pickNextDifficulty(difficulty, true) as any : difficulty,
+      currentDifficulty: difficultyToNumber(isCorrect ? pickNextDifficulty(storedQuestion.difficulty, true) : storedQuestion.difficulty),
     });
 
-    // Check if diagnostic is complete (max 15 questions or adaptive stopping)
-    const MAX_QUESTIONS = 15;
+    // Check if diagnostic is complete
     const answeredCount = session.answeredQuestions + 1;
 
     if (answeredCount >= MAX_QUESTIONS) {
@@ -101,10 +125,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate next question with adaptive difficulty
-    const nextDifficulty = pickNextDifficulty(difficulty, isCorrect);
+    const nextDifficulty = pickNextDifficulty(storedQuestion.difficulty, isCorrect);
     const questions = await generateDiagnosticQuestions({
       subject: session.subject!,
       topic: session.topic || undefined,
+    });
+
+    // Store new questions in session cache for verification
+    await prisma.diagnosticSession.update({
+      where: { id: sessionId },
+      data: { questions: questions as any },
     });
 
     // Filter for appropriate difficulty
