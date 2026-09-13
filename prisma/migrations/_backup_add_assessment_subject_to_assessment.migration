@@ -1,0 +1,10 @@
+// Add subject column to Assessment table
+// This fixes the PrismaClientKnownRequestError P2022: The column Assessment.subject does not exist in the current database
+
+export const create = async ({ prisma }) => {
+  await prisma.assessment.addColumn({
+    name: "subject",
+    type: "string",
+    isNullable: true,
+  });
+};
