@@ -21,6 +21,10 @@ export interface GeneratedQuestion {
   correctIndex: number;
 }
 
+// Client chỉ cần text/options để render. Đáp án đúng luôn nằm trong
+// QuizQuestionCache ở server, không gửi về trình duyệt.
+export type PublicQuestion = Omit<GeneratedQuestion, "correctIndex">;
+
 // Kết quả 1 dòng trong hồ sơ năng lực — map trực tiếp từ LearningProgress
 // nhưng KHÔNG expose toàn bộ field DB (vd id nội bộ) ra frontend.
 export interface SkillMasteryPoint {

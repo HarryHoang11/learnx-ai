@@ -1,20 +1,44 @@
 // ================================================================
-// POST /api/diagnostic/answer — Submit diagnostic answer
+// POST /api/diagnostic/answer — verify and persist one adaptive answer
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { updateDiagnosticSession, evaluateDiagnosticResult, generateDiagnosticQuestions, type DiagnosticQuestion } from "@/services/diagnostic.service";
+import {
+  evaluateDiagnosticResult,
+  parseDiagnosticSessionState,
+  serializeDiagnosticSessionState,
+  toPublicDiagnosticQuestion,
+  type DiagnosticAnswer,
+  type DiagnosticResult,
+} from "@/services/diagnostic.service";
 import { pickNextDifficulty } from "@/services/assessment.service";
 import type { ApiResponse } from "@/types";
 
-const MAX_QUESTIONS = 15;
+function normalizeAnswer(answer: string): string {
+  return answer.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+}
 
-interface AnswerInput {
-  sessionId: string;
-  questionId: string;
-  answer: string;
+function difficultyToNumber(difficulty: "easy" | "medium" | "hard"): number {
+  if (difficulty === "easy") return 0.25;
+  if (difficulty === "hard") return 0.75;
+  return 0.5;
+}
+
+function resultToJson(result: DiagnosticResult): Prisma.InputJsonObject {
+  return {
+    overallScore: result.overallScore,
+    skillBreakdown: result.skillBreakdown.map((item) => ({
+      topic: item.topic,
+      score: item.score,
+      level: item.level,
+      confidence: item.confidence,
+    })),
+    recommendedTopics: result.recommendedTopics,
+    prerequisites: result.prerequisites,
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -22,132 +46,118 @@ export async function POST(req: NextRequest) {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
 
-    const body = await req.json();
-    const { sessionId, questionId, answer } = body as {
-      sessionId: string;
-      questionId: string;
-      answer: string;
-    };
-
-    if (!sessionId || !questionId) {
+    const body = await req.json() as { sessionId?: unknown; questionId?: unknown; answer?: unknown };
+    const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
+    const questionId = typeof body.questionId === "string" ? body.questionId : "";
+    const answer = typeof body.answer === "string" ? body.answer.trim() : "";
+    if (!sessionId || !questionId || !answer || answer.length > 5_000) {
       return NextResponse.json<ApiResponse<never>>(
-        { success: false, error: "Thiếu sessionId hoặc questionId." },
+        { success: false, error: "Thiếu hoặc sai định dạng sessionId, questionId hoặc câu trả lời." },
         { status: 400 }
       );
     }
 
-    // Verify session ownership
-    const session = await prisma.diagnosticSession.findFirst({
-      where: { id: sessionId, userId },
-    });
-
+    const session = await prisma.diagnosticSession.findFirst({ where: { id: sessionId, userId } });
     if (!session) {
       return NextResponse.json<ApiResponse<never>>(
         { success: false, error: "Phiên kiểm tra không tồn tại." },
         { status: 404 }
       );
     }
-
-    // IDEMPOTENT: phiên đã completed thì trả kết quả đã lưu, KHÔNG cập
-    // nhật counters, KHÔNG evaluate/record lại — chống farm XP/streak
-    // bằng cách submit lặp lại.
     if (session.status === "completed") {
       return NextResponse.json<ApiResponse<{ done: true; result: unknown }>>({
         success: true,
-        data: { done: true, result: (session as { result?: unknown }).result ?? null },
+        data: { done: true, result: session.result },
       });
     }
 
-    // Server-side answer verification: look up the stored question in
-    // the session's questions cache and verify the answer independently.
-    // This prevents cheating by modifying client-side question data.
-    const storedQuestions = (session.questions as unknown as DiagnosticQuestion[] | undefined) ?? [];
-    const storedQuestion = storedQuestions.find((q: { id: string }) => q.id === questionId);
-
-    if (!storedQuestion) {
+    const state = parseDiagnosticSessionState(session.questions);
+    const question = state.questions.find((item) => item.id === questionId);
+    if (!question) {
       return NextResponse.json<ApiResponse<never>>(
         { success: false, error: "Câu hỏi không tồn tại trong phiên này." },
         { status: 404 }
       );
     }
+    if (state.answers.some((item) => item.questionId === questionId)) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "Câu trả lời này đã được ghi nhận." },
+        { status: 409 }
+      );
+    }
 
-    // Verify answer server-side
-    const isCorrect = answer.trim().toLowerCase() === storedQuestion.correctAnswer.trim().toLowerCase();
-
-    // Update session
-    // Map difficulty to numeric value for currentDifficulty field
-    const difficultyToNumber = (d: string): number => {
-      if (d === "easy") return 0.25;
-      if (d === "hard") return 0.75;
-      return 0.5; // medium
+    const isCorrect = normalizeAnswer(answer) === normalizeAnswer(question.correctAnswer);
+    const nextDifficulty = pickNextDifficulty(question.difficulty, isCorrect);
+    const nextAnswer: DiagnosticAnswer = {
+      questionId,
+      answer,
+      isCorrect,
+      difficulty: question.difficulty,
+      topic: question.topic,
+      subject: question.subject,
     };
-
-    await updateDiagnosticSession({
-      sessionId,
-      userId,
-      answeredQuestions: session.answeredQuestions + 1,
-      correctAnswers: isCorrect ? session.correctAnswers + 1 : session.correctAnswers,
-      currentDifficulty: difficultyToNumber(isCorrect ? pickNextDifficulty(storedQuestion.difficulty, true) : storedQuestion.difficulty),
-    });
-
-    // Check if diagnostic is complete
+    const nextState = { ...state, answers: [...state.answers, nextAnswer] };
     const answeredCount = session.answeredQuestions + 1;
+    const correctAnswers = session.correctAnswers + (isCorrect ? 1 : 0);
+    const totalQuestions = Math.min(Math.max(session.totalQuestions || state.questions.length, 5), 15);
 
-    if (answeredCount >= MAX_QUESTIONS) {
-      // Complete diagnostic
-      const updatedSession = await prisma.diagnosticSession.findUnique({
-        where: { id: sessionId },
-      });
+    // Optimistic concurrency check prevents duplicate/replayed requests from
+    // incrementing counters or overwriting an answer saved by another tab.
+    const update = await prisma.diagnosticSession.updateMany({
+      where: {
+        id: sessionId,
+        userId,
+        status: "in_progress",
+        answeredQuestions: session.answeredQuestions,
+      },
+      data: {
+        answeredQuestions: answeredCount,
+        correctAnswers,
+        currentDifficulty: difficultyToNumber(nextDifficulty),
+        questions: serializeDiagnosticSessionState(nextState),
+      },
+    });
+    if (update.count !== 1) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "Phiên kiểm tra vừa được cập nhật ở nơi khác. Hãy tải lại." },
+        { status: 409 }
+      );
+    }
 
-      // Get all answers from session metadata or we need to store them
-      // For now, we'll evaluate based on what we have
-      const answers = []; // In real implementation, store answers in session
-      
-      // Evaluate result
-      // Note: In production, you'd store answers during the session
+    if (answeredCount >= totalQuestions) {
       const result = await evaluateDiagnosticResult({
         userId,
         diagnosticSessionId: sessionId,
-        answers: [], // Would come from stored answers
+        answers: nextState.answers,
       });
-
-      await updateDiagnosticSession({
-        sessionId,
-        userId,
-        status: "completed",
-        result: result,
+      await prisma.diagnosticSession.updateMany({
+        where: { id: sessionId, userId, status: "in_progress", answeredQuestions: answeredCount },
+        data: { status: "completed", completedAt: new Date(), result: resultToJson(result) },
       });
-
-      return NextResponse.json<ApiResponse<{ done: true; result: typeof result }>>({
+      return NextResponse.json<ApiResponse<{ done: true; isCorrect: boolean; result: typeof result }>>({
         success: true,
-        data: { done: true, result },
+        data: { done: true, isCorrect, result },
       });
     }
 
-    // Generate next question with adaptive difficulty
-    const nextDifficulty = pickNextDifficulty(storedQuestion.difficulty, isCorrect);
-    const questions = await generateDiagnosticQuestions({
-      subject: session.subject!,
-      topic: session.topic || undefined,
-    });
+    const answeredIds = new Set(nextState.answers.map((item) => item.questionId));
+    const candidates = state.questions.filter((item) => !answeredIds.has(item.id));
+    const nextQuestion = candidates.find((item) => item.difficulty === nextDifficulty) ?? candidates[0];
+    if (!nextQuestion) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "Không còn câu hỏi hợp lệ trong phiên kiểm tra." },
+        { status: 409 }
+      );
+    }
 
-    // Store new questions in session cache for verification
-    await prisma.diagnosticSession.update({
-      where: { id: sessionId },
-      data: { questions: questions as any },
-    });
-
-    // Filter for appropriate difficulty
-    const nextQuestion = questions.find(q => q.difficulty === nextDifficulty) || questions[0];
-
-    return NextResponse.json<ApiResponse<{ 
-      done: false; 
-      isCorrect: boolean; 
-      nextQuestion: typeof nextQuestion;
+    return NextResponse.json<ApiResponse<{
+      done: false;
+      isCorrect: boolean;
+      nextQuestion: ReturnType<typeof toPublicDiagnosticQuestion>;
       answeredCount: number;
     }>>({
       success: true,
-      data: { done: false, isCorrect, nextQuestion, answeredCount },
+      data: { done: false, isCorrect, nextQuestion: toPublicDiagnosticQuestion(nextQuestion), answeredCount },
     });
   } catch (err) {
     console.error("[api/diagnostic/answer] Error:", err);

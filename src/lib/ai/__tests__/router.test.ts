@@ -131,6 +131,44 @@ describe("AI Router — fallback & retry", () => {
     expect(gemini.generate).not.toHaveBeenCalled();
   });
 
+  it("JSON lỗi từ provider đầu tiên -> retry rồi fallback provider tiếp theo", async () => {
+    const gemini = mockProvider("gemini", {
+      behavior: [fakeResponse("not-json"), fakeResponse("still-not-json")],
+    });
+    const groq = mockProvider("groq", {
+      behavior: [{ content: '{"ok":true}', provider: "groq", model: "test-model" }],
+    });
+
+    const router = createAIRouter([gemini, groq]);
+    await expect(router.generateJSON<{ ok: boolean }>(baseOpts)).resolves.toEqual({ ok: true });
+    expect(gemini.generate).toHaveBeenCalledTimes(2);
+    expect(groq.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("JSON đúng cú pháp nhưng sai schema -> validator kích hoạt fallback", async () => {
+    const gemini = mockProvider("gemini", {
+      behavior: [
+        { content: '{"wrong":true}', provider: "gemini", model: "test-model" },
+        { content: '{"wrong":true}', provider: "gemini", model: "test-model" },
+      ],
+    });
+    const groq = mockProvider("groq", {
+      behavior: [{ content: '{"ok":true}', provider: "groq", model: "test-model" }],
+    });
+
+    const router = createAIRouter([gemini, groq]);
+    await expect(
+      router.generateJSON<{ ok: boolean }>(baseOpts, (value) => {
+        if (typeof value !== "object" || value === null || !("ok" in value)) {
+          throw new Error("schema mismatch");
+        }
+        return value as { ok: boolean };
+      })
+    ).resolves.toEqual({ ok: true });
+    expect(gemini.generate).toHaveBeenCalledTimes(2);
+    expect(groq.generate).toHaveBeenCalledTimes(1);
+  });
+
   it("Lỗi 'fatal' (bad request) không retry, không fallback, ném ra ngay", async () => {
     const gemini = mockProvider("gemini", {
       behavior: [new ProviderError("bad request", "fatal", 400)],

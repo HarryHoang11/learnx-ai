@@ -3,6 +3,7 @@
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { AIOverloadedError } from "@/lib/ai/router";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { evaluateUserAnswer } from "@/services/socratic-tutor.service";
 import type { ApiResponse } from "@/types";
@@ -38,6 +39,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json<ApiResponse<typeof result>>({ success: true, data: result });
   } catch (err) {
     console.error("[api/tutor/evaluate] Error:", err);
+    if (err instanceof AIOverloadedError) {
+      return NextResponse.json<ApiResponse<never>>({ success: false, error: err.message }, { status: 503 });
+    }
     return NextResponse.json<ApiResponse<never>>(
       { success: false, error: "Không thể đánh giá câu trả lời, thử lại sau." },
       { status: 500 }

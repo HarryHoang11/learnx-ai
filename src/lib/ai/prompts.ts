@@ -79,7 +79,8 @@ Trình bày lời giải hoàn chỉnh, rõ ràng từng bước theo chuẩn s�
 export function buildQuestionGenPrompt(
   subject: string,
   topic: string,
-  difficulty: Difficulty
+  difficulty: Difficulty,
+  sourceContext?: string
 ): { system: string; user: string } {
   return {
     system: `Bạn là hệ thống sinh câu hỏi trắc nghiệm cho nền tảng học tập LearnX.
@@ -91,7 +92,8 @@ LUÔN trả về JSON THUẦN theo đúng schema sau, KHÔNG kèm markdown, KHÔ
 }
 ` + MATH_FORMAT_RULE,
     user: `Sinh 1 câu hỏi trắc nghiệm 4 đáp án, môn "${subject}", chủ đề "${topic}",
-độ khó "${difficulty}". Câu hỏi phải phù hợp trình độ học sinh phổ thông Việt Nam.`,
+độ khó "${difficulty}". Câu hỏi phải phù hợp trình độ học sinh phổ thông Việt Nam.
+${sourceContext ? `Chỉ sử dụng kiến thức trong nguồn sau và bám sát nội dung nguồn:\n${sourceContext.slice(0, 18_000)}` : ""}`,
   };
 }
 
@@ -101,7 +103,8 @@ LUÔN trả về JSON THUẦN theo đúng schema sau, KHÔNG kèm markdown, KHÔ
 export function buildRoadmapPrompt(
   goalTitle: string,
   targetMonths: number,
-  weakTopics: string[]
+  weakTopics: string[],
+  context?: { subject?: string | null; targetOutcome?: string | null }
 ): { system: string; user: string } {
   return {
     system: `Bạn là AI thiết kế lộ trình học cho nền tảng LearnX.
@@ -112,9 +115,12 @@ LUÔN trả JSON THUẦN theo schema:
 ]
 Không kèm giải thích, không markdown.`,
     user: `Mục tiêu học sinh: "${goalTitle}", thời gian ${targetMonths} tháng.
+${context?.subject ? `Môn/lĩnh vực: "${context.subject}".` : ""}
+${context?.targetOutcome ? `Kết quả mong muốn: "${context.targetOutcome}".` : ""}
 Các kiến thức học sinh đang YẾU cần ưu tiên ôn trước: ${weakTopics.join(", ") || "chưa có dữ liệu"}.
 Hãy chia lộ trình theo từng tháng, tháng đầu ưu tiên củng cố nền tảng/điểm yếu
-trước khi sang kiến thức nâng cao.`,
+trước khi sang kiến thức nâng cao. Nội dung phải bám sát môn/lĩnh vực và kết quả mong muốn,
+không tạo một lộ trình chung chung cho mọi mục tiêu.`,
   };
 }
 
@@ -226,6 +232,21 @@ export function buildDocumentSummaryPrompt(rawText: string): { system: string; u
 ## Kết luận
 (1-2 câu chốt lại điều học sinh cần nhớ nhất)`,
     user: rawText.slice(0, 12000), // cắt bớt nếu tài liệu quá dài, tránh vượt context window
+  };
+}
+
+export function buildStudyGuidePrompt(sourceText: string, difficulty: "beginner" | "intermediate" | "advanced"): { system: string; user: string } {
+  return {
+    system: `Bạn là trợ lý tạo Study Guide cho LearnX. Chỉ sử dụng thông tin trong nguồn được cung cấp, không bịa thêm kiến thức.
+Trả về Markdown có cấu trúc:
+## Mục tiêu học
+## Khái niệm cốt lõi
+## Định nghĩa và công thức quan trọng
+## Ví dụ cần hiểu
+## Lỗi thường gặp
+## Câu hỏi tự kiểm tra
+Mức độ: ${difficulty}. Nếu nguồn không có thông tin cho một mục, ghi rõ "Chưa có trong nguồn".`,
+    user: sourceText.slice(0, 40_000),
   };
 }
 

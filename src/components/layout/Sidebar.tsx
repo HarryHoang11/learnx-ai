@@ -25,6 +25,7 @@ import {
   Library,
   Network,
   Route,
+  RotateCcw,
   Sparkles,
   Trophy,
   User,
@@ -51,6 +52,8 @@ const NAV_GROUPS: NavGroup[] = [
     titleKey: "nav.groups.learn",
     items: [
       { href: "/dashboard", labelKey: "nav.dashboard", icon: Home },
+      { href: "/workspace", labelKey: "nav.workspace", icon: Network },
+      { href: "/review", labelKey: "nav.review", icon: RotateCcw },
       { href: "/calendar", labelKey: "nav.calendar", icon: CalendarDays },
       { href: "/roadmap", labelKey: "nav.roadmap", icon: Route },
       { href: "/practice", labelKey: "nav.practice", icon: FlaskConical },

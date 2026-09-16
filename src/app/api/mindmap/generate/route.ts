@@ -4,6 +4,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
+import { AIOverloadedError } from "@/lib/ai/router";
+import { parseMindMapData, toMindMapJson, type MindMapData } from "@/lib/mindmap/graph";
 import { prisma } from "@/lib/db/prisma";
 import { generateJSON } from "@/lib/ai/router";
 import { buildMindMapPrompt } from "@/lib/ai/prompts";
@@ -32,7 +34,7 @@ export async function POST(req: NextRequest) {
     // Get document
     const document = await prisma.document.findFirst({
       where: { id: documentId, userId },
-      select: { summary: true, fileName: true },
+      select: { summary: true, fileName: true, subject: true, topic: true },
     });
 
     if (!document || !document.summary) {
@@ -44,20 +46,25 @@ export async function POST(req: NextRequest) {
 
     // Generate mind map using AI
     const prompt = buildMindMapPrompt(document.summary);
-    const mindMapData = await generateJSON<{ nodes: any[]; edges: any[] }>({
-      systemPrompt: prompt.system,
-      userPrompt: prompt.user,
-      jsonMode: true,
-    });
+    const mindMapData = await generateJSON<MindMapData>(
+      {
+        systemPrompt: prompt.system,
+        userPrompt: prompt.user,
+      },
+      (value) => {
+        const parsed = parseMindMapData(value);
+        if (!parsed) throw new Error("AI không trả về graph Mind Map hợp lệ.");
+        return parsed;
+      }
+    );
 
     // Validate AI response structure before saving
-    if (!mindMapData || !Array.isArray(mindMapData.nodes)) {
+    if (!mindMapData) {
       return NextResponse.json<ApiResponse<never>>(
-        { success: false, error: "AI không trả về dữ liệu nodes hợp lệ, thử lại sau." },
-        { status: 500 }
+        { success: false, error: "AI không trả về graph Mind Map hợp lệ, thử lại sau." },
+        { status: 422 }
       );
     }
-    const edges = Array.isArray(mindMapData.edges) ? mindMapData.edges : [];
 
     // Save mind map
     const mindMap = await prisma.mindMap.create({
@@ -68,17 +75,19 @@ export async function POST(req: NextRequest) {
         sourceDocumentId: documentId,
         subject: subject || document.subject || undefined,
         topic: topic || document.topic || undefined,
-        data: {
-          version: 1,
-          nodes: mindMapData.nodes,
-          edges,
-        },
+        data: toMindMapJson(mindMapData),
       },
     });
 
     return NextResponse.json<ApiResponse<typeof mindMap>>({ success: true, data: mindMap });
   } catch (err) {
     console.error("[api/mindmap/generate] Error:", err);
+    if (err instanceof AIOverloadedError) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: err.message },
+        { status: 503 }
+      );
+    }
     return NextResponse.json<ApiResponse<never>>(
       { success: false, error: "Không thể tạo Mind Map, thử lại sau." },
       { status: 500 }

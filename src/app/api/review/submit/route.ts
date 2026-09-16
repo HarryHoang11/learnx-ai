@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
-import { submitReviewAttempt } from "@/services/spaced-repetition.service";
+import { ReviewConflictError, submitReviewAttempt } from "@/services/spaced-repetition.service";
 import type { ApiResponse } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -45,6 +45,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json<ApiResponse<typeof result>>({ success: true, data: result });
   } catch (err) {
     console.error("[api/review/submit] Error:", err);
+    if (err instanceof ReviewConflictError) {
+      return NextResponse.json<ApiResponse<never>>({ success: false, error: err.message }, { status: 409 });
+    }
     return NextResponse.json<ApiResponse<never>>(
       { success: false, error: "Không thể gửi ôn tập, thử lại sau." },
       { status: 500 }

@@ -11,11 +11,12 @@
 // ================================================================
 
 import { prisma } from "@/lib/db/prisma";
+import type { Prisma } from "@prisma/client";
 import { generateJSON } from "@/lib/ai/router";
 import { buildDiagnosticPrompt } from "@/lib/ai/prompts";
-import { updateMastery, WEAK_THRESHOLD_PERCENT } from "@/services/assessment.service";
+import { updateMastery } from "@/services/assessment.service";
 import { recordLearningActivity } from "@/services/learning-activity.service";
-import type { Difficulty, GeneratedQuestion } from "@/types";
+import type { Difficulty } from "@/types";
 
 export interface DiagnosticConfig {
   subject: string;
@@ -49,9 +50,150 @@ export interface DiagnosticResult {
   prerequisites: string[];
 }
 
+export interface DiagnosticAnswer {
+  questionId: string;
+  answer: string;
+  isCorrect: boolean;
+  difficulty: Difficulty;
+  topic: string;
+  subject: string;
+}
+
+export interface DiagnosticSessionState {
+  questions: DiagnosticQuestion[];
+  answers: DiagnosticAnswer[];
+}
+
+export type PublicDiagnosticQuestion = Omit<DiagnosticQuestion, "correctAnswer">;
+
 const DIFFICULTY_ORDER: Difficulty[] = ["easy", "medium", "hard"];
 const MAX_QUESTIONS = 15;
 const MIN_QUESTIONS = 5;
+const QUESTION_TYPES = new Set<DiagnosticQuestion["type"]>([
+  "multiple_choice",
+  "short_answer",
+  "code_reasoning",
+  "debugging",
+  "conceptual",
+  "problem_solving",
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function nonEmptyString(value: unknown, maxLength: number): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized.length > 0 && normalized.length <= maxLength ? normalized : null;
+}
+
+function isDifficulty(value: unknown): value is Difficulty {
+  return value === "easy" || value === "medium" || value === "hard";
+}
+
+function normalizeQuestion(value: unknown, index: number, config: DiagnosticConfig): DiagnosticQuestion {
+  if (!isRecord(value)) throw new Error("AI trả về một câu diagnostic không hợp lệ.");
+
+  const text = nonEmptyString(value.text, 8_000);
+  const correctAnswer = nonEmptyString(value.correctAnswer, 2_000);
+  const type = QUESTION_TYPES.has(value.type as DiagnosticQuestion["type"])
+    ? (value.type as DiagnosticQuestion["type"])
+    : "multiple_choice";
+  const difficulty = isDifficulty(value.difficulty) ? value.difficulty : "medium";
+  const subject = config.subject;
+  const topic = nonEmptyString(value.topic, 160) ?? config.topic ?? "General";
+  const id = nonEmptyString(value.id, 120) ?? `q-${index + 1}`;
+
+  if (!text || !correctAnswer) {
+    throw new Error("AI trả về nội dung hoặc đáp án diagnostic không hợp lệ.");
+  }
+
+  const options = Array.isArray(value.options)
+    ? value.options
+        .map((option) => nonEmptyString(option, 1_000))
+        .filter((option): option is string => option !== null)
+    : undefined;
+  if (type === "multiple_choice" && (!options || options.length < 2)) {
+    throw new Error("AI trả về lựa chọn diagnostic không hợp lệ.");
+  }
+
+  const explanation = nonEmptyString(value.explanation, 4_000) ?? undefined;
+  const concepts = Array.isArray(value.concepts)
+    ? value.concepts
+        .map((concept) => nonEmptyString(concept, 160))
+        .filter((concept): concept is string => concept !== null)
+    : undefined;
+
+  return { id, text, type, difficulty, subject, topic, options, correctAnswer, explanation, concepts };
+}
+
+function isDiagnosticQuestion(value: unknown): value is DiagnosticQuestion {
+  try {
+    normalizeQuestion(value, 0, { subject: "General" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isDiagnosticAnswer(value: unknown): value is DiagnosticAnswer {
+  return isRecord(value)
+    && nonEmptyString(value.questionId, 120) !== null
+    && typeof value.answer === "string"
+    && typeof value.isCorrect === "boolean"
+    && isDifficulty(value.difficulty)
+    && nonEmptyString(value.topic, 160) !== null
+    && nonEmptyString(value.subject, 120) !== null;
+}
+
+export function parseDiagnosticSessionState(value: unknown): DiagnosticSessionState {
+  const legacyQuestions = Array.isArray(value) ? value : null;
+  const state = isRecord(value) ? value : null;
+  const questions = (legacyQuestions ?? (Array.isArray(state?.questions) ? state.questions : []))
+    .filter(isDiagnosticQuestion) as DiagnosticQuestion[];
+  const answers = (Array.isArray(state?.answers) ? state.answers : [])
+    .filter(isDiagnosticAnswer) as DiagnosticAnswer[];
+  return { questions, answers };
+}
+
+function toQuestionJson(question: DiagnosticQuestion): Prisma.InputJsonObject {
+  return {
+    id: question.id,
+    text: question.text,
+    type: question.type,
+    difficulty: question.difficulty,
+    subject: question.subject,
+    topic: question.topic,
+    correctAnswer: question.correctAnswer,
+    ...(question.options ? { options: question.options } : {}),
+    ...(question.explanation ? { explanation: question.explanation } : {}),
+    ...(question.concepts ? { concepts: question.concepts } : {}),
+  };
+}
+
+function toAnswerJson(answer: DiagnosticAnswer): Prisma.InputJsonObject {
+  return {
+    questionId: answer.questionId,
+    answer: answer.answer,
+    isCorrect: answer.isCorrect,
+    difficulty: answer.difficulty,
+    topic: answer.topic,
+    subject: answer.subject,
+  };
+}
+
+export function serializeDiagnosticSessionState(state: DiagnosticSessionState): Prisma.InputJsonObject {
+  return {
+    questions: state.questions.map(toQuestionJson),
+    answers: state.answers.map(toAnswerJson),
+  };
+}
+
+export function toPublicDiagnosticQuestion(question: DiagnosticQuestion): PublicDiagnosticQuestion {
+  const { correctAnswer: _correctAnswer, ...publicQuestion } = question;
+  return publicQuestion;
+}
 
 // --- 1) ADAPTIVE BRANCHING ---
 export function pickNextDifficulty(current: Difficulty, wasCorrect: boolean): Difficulty {
@@ -75,25 +217,22 @@ export async function generateDiagnosticQuestions(config: DiagnosticConfig): Pro
     questionCount: count,
   });
 
-  const result = await generateJSON<{ questions: DiagnosticQuestion[] }>({
-    systemPrompt: prompt.system,
-    userPrompt: prompt.user,
-    jsonMode: true,
-  });
-
-  // Validate and ensure each question has required fields
-  return result.questions.map((q, i) => ({
-    id: q.id || `q-${i + 1}`,
-    text: q.text,
-    type: q.type || "multiple_choice",
-    difficulty: q.difficulty || "medium",
-    subject: q.subject || config.subject,
-    topic: q.topic || config.topic || "General",
-    options: q.options,
-    correctAnswer: q.correctAnswer,
-    explanation: q.explanation,
-    concepts: q.concepts,
-  }));
+  return generateJSON<DiagnosticQuestion[]>(
+    {
+      systemPrompt: prompt.system,
+      userPrompt: prompt.user,
+    },
+    (value) => {
+      if (!isRecord(value) || !Array.isArray(value.questions)) {
+        throw new Error("AI không trả về danh sách câu diagnostic hợp lệ.");
+      }
+      const questions = value.questions.map((question, index) => normalizeQuestion(question, index, config));
+      if (questions.length < MIN_QUESTIONS || new Set(questions.map((question) => question.id)).size !== questions.length) {
+        throw new Error("AI trả về không đủ hoặc trùng câu diagnostic.");
+      }
+      return questions.slice(0, count);
+    }
+  );
 }
 
 // --- 3) EVALUATE DIAGNOSTIC RESULT ---
@@ -103,6 +242,9 @@ export async function evaluateDiagnosticResult(params: {
   answers: Array<{ questionId: string; answer: string; isCorrect: boolean; difficulty: Difficulty; topic: string; subject: string }>;
 }): Promise<DiagnosticResult> {
   const { userId, diagnosticSessionId, answers } = params;
+  if (answers.length === 0) {
+    throw new Error("Không thể đánh giá diagnostic chưa có câu trả lời.");
+  }
 
   // Group answers by topic
   const topicStats = new Map<string, { correct: number; total: number; difficulties: Difficulty[] }>();
@@ -180,6 +322,7 @@ export async function createDiagnosticSession(params: {
   subject: string;
   topic?: string;
   assessmentId?: string;
+  questions?: DiagnosticQuestion[];
 }): Promise<{ id: string }> {
   const session = await prisma.diagnosticSession.create({
     data: {
@@ -189,6 +332,10 @@ export async function createDiagnosticSession(params: {
       assessmentId: params.assessmentId,
       status: "in_progress",
       currentDifficulty: 0.5,
+      totalQuestions: params.questions?.length ?? 0,
+      questions: params.questions
+        ? serializeDiagnosticSessionState({ questions: params.questions, answers: [] })
+        : undefined,
     },
   });
   return { id: session.id };
@@ -202,10 +349,10 @@ export async function updateDiagnosticSession(params: {
   correctAnswers?: number;
   currentDifficulty?: number;
   status?: string;
-  result?: any;
+  result?: Prisma.InputJsonValue;
 }): Promise<void> {
   await prisma.diagnosticSession.update({
-    where: { id: params.sessionId, userId: params.userId },
+    where: { id: params.sessionId },
     data: {
       answeredQuestions: params.answeredQuestions ?? { increment: 1 },
       correctAnswers: params.correctAnswers ?? { increment: 0 },

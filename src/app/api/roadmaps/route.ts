@@ -37,8 +37,8 @@ export async function POST(req: NextRequest) {
     if (!userId) return unauthorizedResponse();
 
     const body = await req.json();
-    const goalTitle = body.goalTitle as string | undefined;
-    const targetMonths = body.targetMonths as number | undefined;
+    const goalTitle = typeof body.goalTitle === "string" ? body.goalTitle.trim() : "";
+    const targetMonths = typeof body.targetMonths === "number" ? body.targetMonths : NaN;
     const subject = typeof body.subject === "string" && body.subject.trim() !== "" ? body.subject.trim().slice(0, 60) : null;
     const targetOutcome =
       typeof body.targetOutcome === "string" && body.targetOutcome.trim() !== ""
@@ -56,9 +56,9 @@ export async function POST(req: NextRequest) {
       deadline = parsed;
     }
 
-    if (!goalTitle || !targetMonths) {
+    if (!goalTitle || goalTitle.length > 200 || !Number.isInteger(targetMonths) || targetMonths < 1 || targetMonths > 24) {
       return NextResponse.json<ApiResponse<never>>(
-        { success: false, error: "Cần goalTitle và targetMonths để tạo lộ trình mới." },
+        { success: false, error: "Cần goalTitle hợp lệ và targetMonths từ 1 đến 24." },
         { status: 400 }
       );
     }

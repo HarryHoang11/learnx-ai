@@ -309,11 +309,12 @@ export async function rateDocument(
 
     const document = await prisma.communityDocument.findUnique({
       where: { id: documentId },
-      select: { ratingSum: true, ratingCount: true },
+      select: { ratingSum: true, ratingCount: true, ownerId: true, visibility: true, status: true },
     });
-    if (!document) {
+    if (!document || document.status !== "READY" || (document.visibility === "PRIVATE" && document.ownerId !== userId)) {
       return { success: false, error: "Không tìm thấy tài liệu" };
     }
+    if (document.ownerId === userId) return { success: false, error: "Không thể tự đánh giá tài liệu của mình" };
 
     const existingRating = await prisma.documentRating.findUnique({
       where: { userId_documentId: { userId, documentId } },
@@ -367,9 +368,9 @@ export async function toggleSaveDocument(userId: string, documentId: string): Pr
   try {
     const document = await prisma.communityDocument.findUnique({
       where: { id: documentId },
-      select: { saveCount: true },
+      select: { saveCount: true, ownerId: true, visibility: true, status: true },
     });
-    if (!document) {
+    if (!document || document.status !== "READY" || (document.visibility === "PRIVATE" && document.ownerId !== userId)) {
       return { success: false, error: "Không tìm thấy tài liệu" };
     }
 
@@ -407,9 +408,9 @@ export async function trackDownload(userId: string, documentId: string): Promise
   try {
     const document = await prisma.communityDocument.findUnique({
       where: { id: documentId },
-      select: { downloadCount: true, ownerId: true, visibility: true },
+      select: { downloadCount: true, ownerId: true, visibility: true, status: true },
     });
-    if (!document) {
+    if (!document || document.status !== "READY" || (document.visibility === "PRIVATE" && document.ownerId !== userId)) {
       return { success: false, error: "Không tìm thấy tài liệu" };
     }
 
@@ -437,9 +438,9 @@ export async function reportDocument(
   try {
     const document = await prisma.communityDocument.findUnique({
       where: { id: documentId },
-      select: { reportCount: true, ownerId: true },
+      select: { reportCount: true, ownerId: true, visibility: true, status: true },
     });
-    if (!document) {
+    if (!document || document.status !== "READY" || (document.visibility === "PRIVATE" && document.ownerId !== userId)) {
       return { success: false, error: "Không tìm thấy tài liệu" };
     }
 

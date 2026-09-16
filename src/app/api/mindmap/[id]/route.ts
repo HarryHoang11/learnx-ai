@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
+import { parseMindMapData, toMindMapJson } from "@/lib/mindmap/graph";
 import { prisma } from "@/lib/db/prisma";
 import type { ApiResponse } from "@/types";
 
@@ -42,12 +43,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       );
     }
 
+    let graph;
+    if (data !== undefined) {
+      graph = parseMindMapData(data);
+      if (!graph) {
+        return NextResponse.json<ApiResponse<never>>(
+          { success: false, error: "Graph Mind Map không hợp lệ." },
+          { status: 400 }
+        );
+      }
+    }
+
     const updated = await prisma.mindMap.update({
       where: { id },
       data: {
         ...(title !== undefined ? { title: title.trim() } : {}),
         ...(description !== undefined ? { description } : {}),
-        ...(data !== undefined ? { data: data as object } : {}),
+        ...(graph !== undefined ? { data: toMindMapJson(graph) } : {}),
       },
     });
 

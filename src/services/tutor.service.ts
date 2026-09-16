@@ -36,6 +36,19 @@ export async function sendTutorMessage(params: {
 }): Promise<{ reply: string; conversationId: string }> {
   const conversation = await getOrCreateConversation(params.userId, params.topic);
   const history = (conversation.messages as unknown as ChatMessage[]) ?? [];
+  const [activeGoal, topicProgress] = await Promise.all([
+    prisma.learningGoal.findFirst({
+      where: { userId: params.userId, status: "ACTIVE" },
+      orderBy: { createdAt: "desc" },
+      select: { title: true, subject: true, targetOutcome: true },
+    }),
+    prisma.learningProgress.findMany({
+      where: { userId: params.userId, topic: { contains: params.topic, mode: "insensitive" } },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+      select: { subject: true, topic: true, mastery: true, attempts: true },
+    }),
+  ]);
 
   // Thêm tin nhắn của học sinh vào lịch sử TRƯỚC khi gọi AI, để nếu
   // AI lỗi giữa chừng thì tin nhắn học sinh vẫn không bị mất khi họ
@@ -45,11 +58,18 @@ export async function sendTutorMessage(params: {
     { role: "user", content: params.userMessage, hintLevel: params.hintLevel },
   ];
 
+  const learningContext = `\n\nNGỮ CẢNH HỌC TẬP THẬT:
+- Mục tiêu hiện tại: ${activeGoal?.title ?? "chưa đặt mục tiêu"}
+- Môn: ${activeGoal?.subject ?? "chưa xác định"}
+- Kết quả mong muốn: ${activeGoal?.targetOutcome ?? "chưa xác định"}
+- Hồ sơ chủ đề: ${topicProgress.length > 0 ? topicProgress.map((item) => `${item.subject}/${item.topic}: ${Math.round(item.mastery * 100)}% sau ${item.attempts} lượt`).join("; ") : "chưa có dữ liệu"}
+Hãy điều chỉnh ví dụ và mức độ giải thích theo ngữ cảnh này, nhưng không bịa số liệu ngoài dữ liệu được cung cấp.`;
+
   const systemPrompt = buildSocraticPrompt(
     params.topic,
     params.hintLevel,
     params.language === "en" ? "en" : "vi"
-  );
+  ) + learningContext;
 
   // Truyền vài lượt hội thoại gần nhất làm ngữ cảnh (không truyền cả
   // lịch sử để tránh vượt giới hạn token) — 6 tin nhắn gần nhất là đủ

@@ -18,9 +18,35 @@ import { prisma } from "@/lib/db/prisma";
 import { getSkillProfile } from "@/services/assessment.service";
 import type { RoadmapPlan, RoadmapStatus, GoalWithRoadmap } from "@/types";
 
-interface RawMonthFromAI {
-  month: number;
-  topics: string[];
+function normalizeRoadmap(value: unknown, targetMonths: number): RoadmapPlan[] {
+  if (!Array.isArray(value)) throw new Error("AI không trả về danh sách roadmap hợp lệ.");
+
+  const plan = value.map((rawMonth, index): RoadmapPlan => {
+    if (typeof rawMonth !== "object" || rawMonth === null) {
+      throw new Error(`AI trả về tháng ${index + 1} không hợp lệ.`);
+    }
+    const month = rawMonth as { month?: unknown; topics?: unknown };
+    if (!Number.isInteger(month.month) || (month.month as number) < 1 || (month.month as number) > targetMonths) {
+      throw new Error("AI trả về số tháng không hợp lệ.");
+    }
+    if (!Array.isArray(month.topics)) throw new Error("AI trả về topics không hợp lệ.");
+    const topics = month.topics
+      .filter((topic): topic is string => typeof topic === "string")
+      .map((topic) => topic.trim())
+      .filter((topic) => topic.length > 0 && topic.length <= 160)
+      .filter((topic, topicIndex, allTopics) => allTopics.indexOf(topic) === topicIndex);
+    if (topics.length === 0) throw new Error("Mỗi tháng roadmap phải có ít nhất một topic.");
+    return {
+      month: month.month as number,
+      label: month.month === 1 ? `Tháng ${month.month} — đang học` : `Tháng ${month.month}`,
+      topics: topics.map((name) => ({ name, status: month.month === 1 ? "current" : "locked" })),
+    };
+  });
+
+  if (plan.length === 0 || new Set(plan.map((month) => month.month)).size !== plan.length) {
+    throw new Error("AI trả về roadmap rỗng hoặc trùng tháng.");
+  }
+  return plan.sort((a, b) => a.month - b.month);
 }
 
 export async function generateRoadmap(params: {
@@ -28,6 +54,8 @@ export async function generateRoadmap(params: {
   learningGoalId: string;
   goalTitle: string;
   targetMonths: number;
+  subject?: string | null;
+  targetOutcome?: string | null;
 }): Promise<RoadmapPlan[]> {
   // Bước 1: lấy hồ sơ năng lực hiện tại, lọc ra các topic đang yếu —
   // đây chính là "input cá nhân hoá" khiến lộ trình của mỗi học sinh
@@ -36,32 +64,24 @@ export async function generateRoadmap(params: {
   const weakTopics = profile.filter((p) => p.isWeak).map((p) => p.topic);
 
   // Bước 2: gọi AI sinh lộ trình thô (chỉ có tên tháng + danh sách topic)
-  const prompt = buildRoadmapPrompt(params.goalTitle, params.targetMonths, weakTopics);
-  const rawMonths = await generateJSON<RawMonthFromAI[]>({
-    systemPrompt: prompt.system,
-    userPrompt: prompt.user,
+  const prompt = buildRoadmapPrompt(params.goalTitle, params.targetMonths, weakTopics, {
+    subject: params.subject,
+    targetOutcome: params.targetOutcome,
   });
-
-  // Bước 3: gắn trạng thái (done/current/locked) cho từng topic.
-  // Quy tắc đơn giản cho MVP: tháng 1 = "current" (đang học), các
-  // tháng sau = "locked" (chưa mở khoá) — trạng thái "done" sẽ được
-  // service khác cập nhật dần khi học sinh hoàn thành topic thực tế
-  // (ngoài phạm vi MVP, để lại comment TODO bên dưới).
-  const plan: RoadmapPlan[] = rawMonths.map((m) => ({
-    month: m.month,
-    label: m.month === 1 ? `Tháng ${m.month} — đang học` : `Tháng ${m.month}`,
-    topics: m.topics.map((name) => ({
-      name,
-      status: m.month === 1 ? "current" : ("locked" as const),
-    })),
-  }));
+  const plan = await generateJSON<RoadmapPlan[]>(
+    {
+      systemPrompt: prompt.system,
+      userPrompt: prompt.user,
+    },
+    (value) => normalizeRoadmap(value, params.targetMonths)
+  );
 
   // Bước 4: lưu vào DB dạng JSON (xem lý do trong schema.prisma)
   await prisma.roadmap.create({
     data: {
       userId: params.userId,
       learningGoalId: params.learningGoalId,
-      months: plan as unknown as object, // Prisma Json field nhận object thuần
+      months: JSON.parse(JSON.stringify(plan)),
     },
   });
 
@@ -176,10 +196,16 @@ export async function createGoalWithRoadmap(params: {
   targetOutcome?: string | null;
   deadline?: Date | null;
 }): Promise<GoalWithRoadmap> {
+  const goalTitle = params.goalTitle.trim();
+  if (!goalTitle || goalTitle.length > 200) throw new Error("Tên mục tiêu không hợp lệ.");
+  if (!Number.isInteger(params.targetMonths) || params.targetMonths < 1 || params.targetMonths > 24) {
+    throw new Error("Thời gian mục tiêu phải từ 1 đến 24 tháng.");
+  }
+
   const goal = await prisma.learningGoal.create({
     data: {
       userId: params.userId,
-      title: params.goalTitle,
+      title: goalTitle,
       targetMonths: params.targetMonths,
       subject: params.subject ?? null,
       targetOutcome: params.targetOutcome ?? null,
@@ -195,6 +221,8 @@ export async function createGoalWithRoadmap(params: {
     learningGoalId: goal.id,
     goalTitle: goal.title,
     targetMonths: goal.targetMonths,
+    subject: goal.subject,
+    targetOutcome: goal.targetOutcome,
   });
 
   const result = await toGoalWithRoadmap(goal);
@@ -251,6 +279,7 @@ export interface SkillGapItem {
   gap: number;
   hasData: boolean;
   priority: "HIGH" | "MEDIUM" | "LOW";
+  reason: "MASTERED" | "BIGGEST_GAP" | "NOT_ASSESSED" | "KEEP_BUILDING";
 }
 
 export const GAP_TARGET_DEFAULT = 80;
@@ -283,6 +312,7 @@ export async function getGoalGap(userId: string, goalId: string): Promise<SkillG
         gap,
         hasData: current !== null,
         priority: gap >= 50 ? "HIGH" : gap >= 25 ? "MEDIUM" : "LOW",
+        reason: current === null ? "NOT_ASSESSED" : current >= GAP_TARGET_DEFAULT ? "MASTERED" : gap >= 50 ? "BIGGEST_GAP" : "KEEP_BUILDING",
       };
     })
     .sort((a, b) => b.gap - a.gap);

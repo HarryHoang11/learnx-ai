@@ -161,7 +161,7 @@ model Attempt {
 }
 
 model QuizQuestionCache {
-  id           String   @id @default(cuid())
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   questionId   String   @unique
   userId       String
   subject      String
@@ -171,9 +171,12 @@ model QuizQuestionCache {
   options      Json
   correctIndex Int
   createdAt    DateTime @default(now())
+  sourceDocumentId String?
   user         User     @relation(fields: [userId], references: [id])
+  sourceDocument Document? @relation("QuizQuestionSource", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
 
   @@index([questionId])
+  @@index([sourceDocumentId])
 }
 
 model LearningProgress {
@@ -236,6 +239,7 @@ model Document {
   user       User            @relation(fields: [userId], references: [id])
   chunks     DocumentChunk[]
   mindMaps   MindMap[]
+  quizQuestionCaches QuizQuestionCache[] @relation("QuizQuestionSource")
 }
 
 model DocumentChunk {

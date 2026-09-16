@@ -13,15 +13,16 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
+import { AIOverloadedError } from "@/lib/ai/router";
 import { prisma } from "@/lib/db/prisma";
-import { pickNextDifficulty, updateMastery } from "@/services/assessment.service";
-import { generateQuizQuestion } from "@/services/quiz.service";
+import { pickNextDifficulty } from "@/services/assessment.service";
+import { generateQuizQuestion, QuizQuestionError, submitQuizAnswer, toPublicQuestion } from "@/services/quiz.service";
 import { getCurrentStreak, recordLearningActivity } from "@/services/learning-activity.service";
-import type { ApiResponse, GeneratedQuestion } from "@/types";
+import type { ApiResponse, Difficulty, PublicQuestion } from "@/types";
 
 // Số câu tối đa cho 1 phiên kiểm tra — khớp với "15-20 câu" trong mô
 // tả gốc, đặt 16 làm mặc định MVP để demo không quá dài dòng.
-const MAX_QUESTIONS_PER_ASSESSMENT = 16;
+const MAX_QUESTIONS_PER_ASSESSMENT = 15;
 
 interface CompletionActivity {
   recorded: boolean;
@@ -36,15 +37,15 @@ export async function POST(req: NextRequest) {
     if (!userId) return unauthorizedResponse();
     const body = await req.json();
 
-    const { assessmentId, question, selectedIndex } = body as {
+    const { assessmentId, questionId, selectedIndex } = body as {
       assessmentId: string;
-      question: GeneratedQuestion;
+      questionId: string;
       selectedIndex: number;
     };
 
-    if (!assessmentId || !question) {
+    if (!assessmentId || !questionId || !Number.isInteger(selectedIndex) || selectedIndex < 0) {
       return NextResponse.json<ApiResponse<never>>(
-        { success: false, error: "Thiếu assessmentId hoặc question." },
+        { success: false, error: "Thiếu assessmentId, questionId hoặc selectedIndex không hợp lệ." },
         { status: 400 }
       );
     }
@@ -77,30 +78,11 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const isCorrect = selectedIndex === question.correctIndex;
+    // Chấm bằng câu hỏi đã cache ở server. Không nhận subject/topic,
+    // difficulty hay correctIndex từ client để chống giả mạo kết quả.
+    const answered = await submitQuizAnswer({ userId, questionId, selectedIndex, assessmentId });
 
-    // Lưu Attempt GẮN VỚI assessmentId (khác quiz luyện tập thường,
-    // xem quiz.service.ts submitQuizAnswer dùng assessmentId: null)
-    await prisma.attempt.create({
-      data: {
-        userId,
-        assessmentId,
-        subject: question.subject,
-        topic: question.topic,
-        difficulty: question.difficulty,
-        question: question.text,
-        isCorrect,
-      },
-    });
-
-    await updateMastery({
-      userId,
-      subject: question.subject,
-      topic: question.topic,
-      isCorrect,
-    });
-
-    const answeredCount = await prisma.attempt.count({ where: { assessmentId } });
+    const answeredCount = await prisma.attempt.count({ where: { assessmentId, userId } });
 
     // Đủ số câu -> đóng phiên assessment, ghi nhận hoạt động học MỘT
     // LẦN duy nhất (ngay tại transition sang completed — lần gọi sau
@@ -111,11 +93,13 @@ export async function POST(req: NextRequest) {
         where: { id: assessmentId },
         data: { status: "completed", completedAt: new Date() },
       });
+      const correctCount = await prisma.attempt.count({ where: { assessmentId, userId, isCorrect: true } });
+      const scorePercent = Math.round((correctCount / answeredCount) * 100);
       const activityResult = await recordLearningActivity({
         userId,
         type: "diagnostic_completed",
         difficulty: "medium",
-        scorePercent: 0,
+        scorePercent,
         isFirstCompletion: true,
         sourceId: assessmentId,
         sourceType: "diagnostic",
@@ -132,15 +116,27 @@ export async function POST(req: NextRequest) {
     }
 
     // Chưa đủ câu -> sinh câu tiếp theo với độ khó đã điều chỉnh
-    const nextDifficulty = pickNextDifficulty(question.difficulty, isCorrect);
-    const nextQuestion = await generateQuizQuestion(userId, question.subject, question.topic, nextDifficulty);
+    const nextDifficulty = pickNextDifficulty(answered.difficulty as Difficulty, answered.isCorrect);
+    const nextQuestion = await generateQuizQuestion(userId, answered.subject, answered.topic, nextDifficulty);
 
-    return NextResponse.json<ApiResponse<{ done: false; isCorrect: boolean; nextQuestion: GeneratedQuestion }>>({
+    return NextResponse.json<ApiResponse<{ done: false; isCorrect: boolean; nextQuestion: PublicQuestion }>>({
       success: true,
-      data: { done: false, isCorrect, nextQuestion },
+      data: { done: false, isCorrect: answered.isCorrect, nextQuestion: toPublicQuestion(nextQuestion) },
     });
   } catch (err) {
     console.error("[api/assessment/answer] Lỗi:", err);
+    if (err instanceof QuizQuestionError) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: err.message },
+        { status: err.status }
+      );
+    }
+    if (err instanceof AIOverloadedError) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: err.message },
+        { status: 503 }
+      );
+    }
     return NextResponse.json<ApiResponse<never>>(
       { success: false, error: "Không thể xử lý câu trả lời, thử lại sau." },
       { status: 500 }

@@ -82,7 +82,7 @@ const HINT_LABELS: Record<1 | 2 | 3, "tutor.hint1" | "tutor.hint2" | "tutor.hint
 function TutorPageInner() {
   const { t, lang } = useLanguage();
   const searchParams = useSearchParams();
-  const [topic] = useState("Toán — Đại số"); // MVP: cố định 1 topic; sau này có thể cho học sinh chọn
+  const topic = searchParams?.get("topic")?.trim() || "Chủ đề học tập";
   const [messages, setMessages] = useState<DisplayMessage[]>([
     {
       role: "assistant",
@@ -100,7 +100,7 @@ function TutorPageInner() {
 
   // Nếu vào trang qua /tutor?q=... (từ ô hỏi ở Trang chủ), tự gửi luôn
   useEffect(() => {
-    const q = searchParams.get("q");
+    const q = searchParams?.get("q");
     if (q) sendMessage(q);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

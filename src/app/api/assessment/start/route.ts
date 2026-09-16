@@ -11,29 +11,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { generateQuizQuestion } from "@/services/quiz.service";
+import { generateQuizQuestion, QuizQuestionError, toPublicQuestion } from "@/services/quiz.service";
 import { AIOverloadedError } from "@/lib/ai/router";
-import type { ApiResponse, GeneratedQuestion } from "@/types";
+import type { ApiResponse, PublicQuestion } from "@/types";
 
 export async function POST(req: NextRequest) {
   try {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
-    const body = await req.json();
-    const subject = (body.subject as string) ?? "Toán";
-
-    const assessment = await prisma.assessment.create({
-      data: { userId, subject, status: "in_progress" },
-    });
+    const body = await req.json() as { subject?: unknown };
+    const subject = typeof body.subject === "string" ? body.subject.trim() : "";
+    if (!subject || subject.length > 120) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "Vui lòng chọn môn học hợp lệ." },
+        { status: 400 }
+      );
+    }
 
     // Câu đầu tiên LUÔN ở độ khó "easy" và chủ đề tổng quát nhất của
     // môn học — mục đích là "khởi động" trước khi thích ứng dần theo
     // đúng/sai (xem services/assessment.service.ts -> pickNextDifficulty).
     const firstQuestion = await generateQuizQuestion(userId, subject, "Kiến thức nền tảng", "easy");
 
-    return NextResponse.json<ApiResponse<{ assessmentId: string; question: GeneratedQuestion }>>({
+    const assessment = await prisma.assessment.create({
+      data: { userId, subject, status: "in_progress" },
+    });
+
+    return NextResponse.json<ApiResponse<{ assessmentId: string; question: PublicQuestion }>>({
       success: true,
-      data: { assessmentId: assessment.id, question: firstQuestion },
+      data: { assessmentId: assessment.id, question: toPublicQuestion(firstQuestion) },
     });
   } catch (err) {
     console.error("[api/assessment/start] Lỗi:", err);
@@ -42,6 +48,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json<ApiResponse<never>>(
         { success: false, error: err.message },
         { status: 503 }
+      );
+    }
+
+    if (err instanceof QuizQuestionError) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: err.message },
+        { status: err.status }
       );
     }
 

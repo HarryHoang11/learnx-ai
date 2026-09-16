@@ -18,7 +18,7 @@ export default function DocumentDetailPage() {
   const { push } = useToast();
   const router = useRouter();
   const routeParams = useParams();
-  const documentId = routeParams.id as string;
+  const documentId = typeof routeParams?.id === "string" ? routeParams.id : "";
   const [document, setDocument] = useState<CommunityDocumentWithRelations | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

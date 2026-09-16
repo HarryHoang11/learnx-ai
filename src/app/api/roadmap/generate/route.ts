@@ -24,8 +24,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     let goalId = body.goalId as string | undefined;
-    const bodyGoalTitle = body.goalTitle as string | undefined;
-    const bodyTargetMonths = body.targetMonths as number | undefined;
+    const bodyGoalTitle = typeof body.goalTitle === "string" ? body.goalTitle.trim() : "";
+    const bodyTargetMonths = typeof body.targetMonths === "number" ? body.targetMonths : NaN;
 
     // Dùng 2 biến "final..." được gán ĐÚNG 1 LẦN (thay vì mutate lại
     // goalTitle/targetMonths gốc qua nhiều nhánh if/else) — vừa tránh
@@ -39,9 +39,9 @@ export async function POST(req: NextRequest) {
     // Trường hợp 1: chưa có goal -> tạo mới. Bắt buộc phải có
     // goalTitle + targetMonths trong body ở trường hợp này.
     if (!goalId) {
-      if (!bodyGoalTitle || !bodyTargetMonths) {
+      if (!bodyGoalTitle || bodyGoalTitle.length > 200 || !Number.isInteger(bodyTargetMonths) || bodyTargetMonths < 1 || bodyTargetMonths > 24) {
         return NextResponse.json<ApiResponse<never>>(
-          { success: false, error: "Cần goalTitle và targetMonths để tạo mục tiêu mới." },
+          { success: false, error: "Cần goalTitle hợp lệ và targetMonths từ 1 đến 24." },
           { status: 400 }
         );
       }

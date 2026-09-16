@@ -13,7 +13,7 @@ import type { ApiResponse } from "@/types";
 export default function ContributorProfilePage() {
   const router = useRouter();
   const routeParams = useParams();
-  const contributorId = routeParams.id as string;
+  const contributorId = typeof routeParams?.id === "string" ? routeParams.id : "";
   const [profileData, setProfileData] = useState<any>(null);
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

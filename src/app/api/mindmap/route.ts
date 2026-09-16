@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
+import { parseMindMapData, toMindMapJson } from "@/lib/mindmap/graph";
 import { prisma } from "@/lib/db/prisma";
 import type { ApiResponse } from "@/types";
 
@@ -58,17 +59,18 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { title, description, sourceDocumentId, subject, topic, data } = body as {
-      title: string;
-      description?: string;
-      sourceDocumentId?: string;
-      subject?: string;
-      topic?: string;
-      data: any; // Mind map graph data
+      title?: unknown;
+      description?: unknown;
+      sourceDocumentId?: unknown;
+      subject?: unknown;
+      topic?: unknown;
+      data?: unknown;
     };
+    const graph = parseMindMapData(data);
 
-    if (!title || !data) {
+    if (typeof title !== "string" || title.trim() === "" || !graph) {
       return NextResponse.json<ApiResponse<never>>(
-        { success: false, error: "Thiếu title hoặc data." },
+        { success: false, error: "Thiếu title hợp lệ hoặc graph Mind Map không hợp lệ." },
         { status: 400 }
       );
     }
@@ -76,12 +78,12 @@ export async function POST(req: NextRequest) {
     const mindMap = await prisma.mindMap.create({
       data: {
         userId,
-        title,
-        description,
-        sourceDocumentId,
-        subject,
-        topic,
-        data,
+        title: title.trim(),
+        description: typeof description === "string" ? description.trim() || undefined : undefined,
+        sourceDocumentId: typeof sourceDocumentId === "string" ? sourceDocumentId : undefined,
+        subject: typeof subject === "string" ? subject.trim() || undefined : undefined,
+        topic: typeof topic === "string" ? topic.trim() || undefined : undefined,
+        data: toMindMapJson(graph),
       },
     });
 

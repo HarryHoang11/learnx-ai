@@ -47,7 +47,10 @@ function sleep(ms: number) {
 // __tests__/router.test.ts) có thể tự truyền vào danh sách provider
 // giả (mock) mà không cần mock module thật qua GEMINI_API_KEY/fetch.
 export function createAIRouter(providers: AIProvider[]) {
-  async function generate(opts: GenerateOptions): Promise<AIResponse> {
+  async function generateWith<T>(
+    opts: GenerateOptions,
+    parse: (response: AIResponse) => T
+  ): Promise<T> {
     let lastError: unknown;
 
     for (const provider of providers) {
@@ -65,8 +68,14 @@ export function createAIRouter(providers: AIProvider[]) {
       for (let attempt = 1; attempt <= MAX_ATTEMPTS_PER_PROVIDER; attempt++) {
         try {
           const result = await provider.generate(opts);
-          log(`${provider.name} success (model: ${result.model}).`);
-          return result;
+          try {
+            const parsed = parse(result);
+            log(`${provider.name} success (model: ${result.model}).`);
+            return parsed;
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            throw new ProviderError(`${provider.name} trả về dữ liệu không hợp lệ: ${message}`, "transient");
+          }
         } catch (err) {
           const providerErr =
             err instanceof ProviderError ? err : new ProviderError(String(err), "transient");
@@ -111,7 +120,18 @@ export function createAIRouter(providers: AIProvider[]) {
     );
   }
 
-  return { generate };
+  async function generate(opts: GenerateOptions): Promise<AIResponse> {
+    return generateWith(opts, (response) => response);
+  }
+
+  async function generateJSON<T>(opts: GenerateOptions, validate?: (value: unknown) => T): Promise<T> {
+    return generateWith({ ...opts, jsonMode: true }, (response) => {
+      const parsed: unknown = JSON.parse(response.content);
+      return validate ? validate(parsed) : (parsed as T);
+    });
+  }
+
+  return { generate, generateJSON };
 }
 
 const defaultRouter = createAIRouter([geminiProvider, groqProvider, openrouterProvider]);
@@ -125,13 +145,8 @@ export async function generateText(opts: GenerateOptions): Promise<string> {
   return result.content;
 }
 
-export async function generateJSON<T>(opts: GenerateOptions): Promise<T> {
-  const raw = await generateText({ ...opts, jsonMode: true });
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    throw new Error(`AI trả JSON không hợp lệ, không parse được. Raw: ${raw.slice(0, 200)}...`);
-  }
+export async function generateJSON<T>(opts: GenerateOptions, validate?: (value: unknown) => T): Promise<T> {
+  return defaultRouter.generateJSON(opts, validate);
 }
 
 export { AIOverloadedError };

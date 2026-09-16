@@ -38,6 +38,7 @@ interface SkillGapItem {
   gap: number;
   hasData: boolean;
   priority: "HIGH" | "MEDIUM" | "LOW";
+  reason: "MASTERED" | "BIGGEST_GAP" | "NOT_ASSESSED" | "KEEP_BUILDING";
 }
 
 const PRIORITY_LABEL = {
@@ -65,9 +66,9 @@ export default function RoadmapPage() {
   const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const [goalTitle, setGoalTitle] = useState("Thi chuyên Tin");
-  const [targetMonths, setTargetMonths] = useState(6);
-  const [goalSubject, setGoalSubject] = useState("Tin học");
+  const [goalTitle, setGoalTitle] = useState("");
+  const [targetMonths, setTargetMonths] = useState(3);
+  const [goalSubject, setGoalSubject] = useState("");
   const [goalTarget, setGoalTarget] = useState("");
   const [goalDeadline, setGoalDeadline] = useState("");
   const [creating, setCreating] = useState(false);
@@ -373,6 +374,15 @@ export default function RoadmapPage() {
                       background: g.priority === "HIGH" ? "var(--rose)" : g.priority === "MEDIUM" ? "var(--amber)" : "var(--cyan)",
                     }}
                   />
+                </div>
+                <div style={{ color: "var(--text-faint)", fontSize: 12, marginTop: 5 }}>
+                  {g.reason === "MASTERED"
+                    ? t("roadmap.whyMastered")
+                    : g.reason === "BIGGEST_GAP"
+                      ? t("roadmap.whyBiggestGap")
+                      : g.reason === "NOT_ASSESSED"
+                        ? t("roadmap.whyNotAssessed")
+                        : t("roadmap.whyKeepBuilding")}
                 </div>
               </div>
             ))}

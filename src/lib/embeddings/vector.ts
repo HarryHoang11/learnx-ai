@@ -50,7 +50,7 @@ const EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-
 // rồi CHUẨN HOÁ LẠI (L2-normalize) vẫn cho ra embedding hợp lệ, chỉ
 // giảm nhẹ chất lượng so với dùng đủ 3072 chiều — hoàn toàn chấp nhận
 // được cho tính năng RAG ở quy mô MVP.
-const EMBEDDING_DIMENSIONS = 768;
+export const EMBEDDING_DIMENSIONS = 768;
 
 function truncateAndNormalize(vector: number[], dims: number): number[] {
   const truncated = vector.slice(0, dims);
@@ -94,12 +94,25 @@ export async function embedText(
     throw err;
   }
 
-  return truncateAndNormalize(result.embedding.values, EMBEDDING_DIMENSIONS);
+  const values = result?.embedding?.values;
+  if (
+    !Array.isArray(values) ||
+    values.length < EMBEDDING_DIMENSIONS ||
+    values.some((value) => typeof value !== "number" || !Number.isFinite(value))
+  ) {
+    throw new Error(`Embedding trả về vector không hợp lệ: cần ít nhất ${EMBEDDING_DIMENSIONS} số hữu hạn.`);
+  }
+
+  return truncateAndNormalize(values, EMBEDDING_DIMENSIONS);
 }
 
 // Chia văn bản dài thành các đoạn nhỏ ~1000 ký tự, có overlap 100 ký tự
 // để không bị cắt đứt ý ở ranh giới 2 chunk liền nhau.
 export function splitIntoChunks(text: string, chunkSize = 1000, overlap = 100): string[] {
+  if (!Number.isInteger(chunkSize) || chunkSize <= 0 || !Number.isInteger(overlap) || overlap < 0 || overlap >= chunkSize) {
+    throw new RangeError("chunkSize phải là số nguyên dương và lớn hơn overlap.");
+  }
+
   const chunks: string[] = [];
   let start = 0;
   while (start < text.length) {
@@ -135,16 +148,20 @@ export async function searchSimilarChunks(
   documentId: string,
   query: string,
   topK = 4
-): Promise<{ content: string; chunkIndex: number }[]> {
+): Promise<{ content: string; chunkIndex: number; pageNumber: number | null }[]> {
+  if (!Number.isInteger(topK) || topK < 1 || topK > 50) {
+    throw new RangeError("topK phải nằm trong khoảng từ 1 đến 50.");
+  }
+
   const queryEmbedding = await embedText(query, TaskType.RETRIEVAL_QUERY);
   const vectorLiteral = `[${queryEmbedding.join(",")}]`;
 
   // Kết quả trả về đã tự sắp xếp theo khoảng cách gần nhất trước
   // (ORDER BY embedding <-> ...) nhờ pgvector, không cần sort lại ở JS.
-  const rows = await prisma.$queryRaw<{ content: string; chunkIndex: number }[]>`
-    SELECT content, "chunkIndex"
+  const rows = await prisma.$queryRaw<{ content: string; chunkIndex: number; pageNumber: number | null }[]>`
+    SELECT content, "chunkIndex", "pageNumber"
     FROM "DocumentChunk"
-    WHERE "documentId" = ${documentId}
+    WHERE "documentId" = ${documentId} AND embedding IS NOT NULL
     ORDER BY embedding <-> ${vectorLiteral}::vector
     LIMIT ${topK}
   `;
@@ -160,13 +177,17 @@ export async function searchSimilarChunksAcrossDocuments(
   query: string,
   topK = 5
 ): Promise<{ documentId: string; content: string; chunkIndex: number }[]> {
+  if (!Number.isInteger(topK) || topK < 1 || topK > 50) {
+    throw new RangeError("topK phải nằm trong khoảng từ 1 đến 50.");
+  }
+
   const queryEmbedding = await embedText(query, TaskType.RETRIEVAL_QUERY);
   const vectorLiteral = `[${queryEmbedding.join(",")}]`;
 
   const rows = await prisma.$queryRaw<{ documentId: string; content: string; chunkIndex: number }[]>`
     SELECT "documentId", content, "chunkIndex"
     FROM "DocumentChunk"
-    WHERE "documentId" <> ${excludeDocumentId}
+    WHERE "documentId" <> ${excludeDocumentId} AND embedding IS NOT NULL
     ORDER BY embedding <-> ${vectorLiteral}::vector
     LIMIT ${topK}
   `;

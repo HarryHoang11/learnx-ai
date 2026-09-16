@@ -86,7 +86,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       summary: doc.summary,
       // Chỉ trả errorMessage khi THẬT SỰ failed — tránh lộ chi tiết kỹ
       // thuật không cần thiết ở các trạng thái khác.
-      errorMessage: doc.status === "failed" ? doc.errorMessage : null,
+      errorMessage:
+        doc.status === "failed" || doc.errorMessage?.startsWith("[AI_PROCESSING_FAILED]")
+          ? doc.errorMessage
+          : null,
       hasOriginalFile: doc.hasOriginalFile,
       uploadedAt: doc.uploadedAt.toISOString(),
       updatedAt: doc.updatedAt.toISOString(),

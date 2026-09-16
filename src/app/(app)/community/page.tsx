@@ -75,15 +75,15 @@ function CommunityPageInner() {
   const [totalPages, setTotalPages] = useState(0);
 
   const [filters, setFilters] = useState<BrowseFilters>({
-    subjectId: searchParams.get("subjectId") || "",
-    topicId: searchParams.get("topicId") || "",
-    difficulty: searchParams.get("difficulty") || "",
-    language: searchParams.get("language") || "",
-    grade: searchParams.get("grade") || "",
-    search: searchParams.get("search") || "",
-    sortBy: searchParams.get("sortBy") || "newest",
-    trustLevel: searchParams.get("trustLevel") || "",
-    page: parseInt(searchParams.get("page") || "1"),
+    subjectId: searchParams?.get("subjectId") || "",
+    topicId: searchParams?.get("topicId") || "",
+    difficulty: searchParams?.get("difficulty") || "",
+    language: searchParams?.get("language") || "",
+    grade: searchParams?.get("grade") || "",
+    search: searchParams?.get("search") || "",
+    sortBy: searchParams?.get("sortBy") || "newest",
+    trustLevel: searchParams?.get("trustLevel") || "",
+    page: parseInt(searchParams?.get("page") || "1"),
     limit: 20,
   });
 

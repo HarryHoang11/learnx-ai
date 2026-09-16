@@ -67,7 +67,7 @@ function MindMapPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { push } = useToast();
-  const id = searchParams.get("id");
+  const id = searchParams?.get("id") ?? null;
 
   const [list, setList] = useState<MindMapRecord[] | null>(null);
   const [record, setRecord] = useState<MindMapRecord | null>(null);

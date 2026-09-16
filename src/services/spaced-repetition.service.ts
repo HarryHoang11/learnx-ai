@@ -22,6 +22,13 @@ export interface ReviewItemInput {
   metadata?: any;
 }
 
+export class ReviewConflictError extends Error {
+  constructor() {
+    super("Review item vừa được cập nhật ở nơi khác. Hãy tải lại danh sách ôn tập.");
+    this.name = "ReviewConflictError";
+  }
+}
+
 export interface ReviewItemData {
   id: string;
   userId: string;
@@ -205,6 +212,10 @@ export async function submitReviewAttempt(input: ReviewAttemptInput): Promise<{
   reviewItem: ReviewItemData;
   schedule: ReviewScheduleResult;
 }> {
+  if (![1, 2, 3, 4].includes(input.rating)) {
+    throw new Error("Rating phải từ 1 đến 4.");
+  }
+
   const reviewItem = await prisma.reviewItem.findFirst({
     where: { id: input.reviewItemId, userId: input.userId },
   });
@@ -220,32 +231,40 @@ export async function submitReviewAttempt(input: ReviewAttemptInput): Promise<{
     currentLapses: reviewItem.lapses,
   });
 
-  // Record attempt
-  await prisma.reviewAttempt.create({
-    data: {
-      reviewItemId: input.reviewItemId,
-      userId: input.userId,
-      rating: input.rating,
-      correct: input.rating >= 3,
-      response: input.response,
-      timeSpentSec: input.timeSpentSec,
-      previousInterval: reviewItem.intervalDays,
-      newInterval: schedule.intervalDays,
-    },
-  });
+  const updated = await prisma.$transaction(async (tx) => {
+    const claim = await tx.reviewItem.updateMany({
+      where: {
+        id: input.reviewItemId,
+        userId: input.userId,
+        repetitions: reviewItem.repetitions,
+        updatedAt: reviewItem.updatedAt,
+      },
+      data: {
+        difficulty: Math.max(0, Math.min(1, reviewItem.difficulty + (input.rating >= 3 ? -0.05 : 0.1))),
+        easeFactor: schedule.easeFactor,
+        intervalDays: schedule.intervalDays,
+        repetitions: schedule.repetitions,
+        lapses: schedule.lapses,
+        lastReviewedAt: new Date(),
+        nextReviewAt: schedule.nextReviewAt,
+      },
+    });
+    if (claim.count !== 1) throw new ReviewConflictError();
 
-  // Update review item
-  const updated = await prisma.reviewItem.update({
-    where: { id: input.reviewItemId },
-    data: {
-      difficulty: Math.max(0, Math.min(1, reviewItem.difficulty + (input.rating >= 3 ? -0.05 : 0.1))),
-      easeFactor: schedule.easeFactor,
-      intervalDays: schedule.intervalDays,
-      repetitions: schedule.repetitions,
-      lapses: schedule.lapses,
-      lastReviewedAt: new Date(),
-      nextReviewAt: schedule.nextReviewAt,
-    },
+    await tx.reviewAttempt.create({
+      data: {
+        reviewItemId: input.reviewItemId,
+        userId: input.userId,
+        rating: input.rating,
+        correct: input.rating >= 3,
+        response: input.response,
+        timeSpentSec: input.timeSpentSec,
+        previousInterval: reviewItem.intervalDays,
+        newInterval: schedule.intervalDays,
+      },
+    });
+
+    return tx.reviewItem.findUniqueOrThrow({ where: { id: input.reviewItemId } });
   });
 
   // Record learning activity for review

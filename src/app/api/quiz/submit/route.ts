@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
-import { submitQuizAnswer } from "@/services/quiz.service";
+import { QuizQuestionError, submitQuizAnswer } from "@/services/quiz.service";
 import type { ApiResponse } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const questionId = body.questionId as string;
     const selectedIndex = Number(body.selectedIndex);
 
-    if (!questionId || Number.isNaN(selectedIndex)) {
+    if (!questionId || !Number.isInteger(selectedIndex) || selectedIndex < 0) {
       return NextResponse.json<ApiResponse<never>>(
         { success: false, error: "Thiếu questionId hoặc selectedIndex không hợp lệ." },
         { status: 400 }
@@ -31,6 +31,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json<ApiResponse<typeof result>>({ success: true, data: result });
   } catch (err) {
     console.error("[api/quiz/submit] Lỗi:", err);
+    if (err instanceof QuizQuestionError) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: err.message },
+        { status: err.status }
+      );
+    }
     return NextResponse.json<ApiResponse<never>>(
       { success: false, error: "Không thể chấm câu trả lời, thử lại sau." },
       { status: 500 }

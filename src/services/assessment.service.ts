@@ -12,6 +12,7 @@
 // ================================================================
 
 import { prisma } from "@/lib/db/prisma";
+import type { Prisma } from "@prisma/client";
 import type { Difficulty, SkillMasteryPoint } from "@/types";
 
 // Ngưỡng coi là "yếu" — dưới mức này thì bị gắn cờ ⚠ trên UI.
@@ -52,8 +53,8 @@ export async function updateMastery(params: {
   subject: string;
   topic: string;
   isCorrect: boolean;
-}): Promise<void> {
-  const existing = await prisma.learningProgress.findUnique({
+}, db: Pick<Prisma.TransactionClient, "learningProgress"> = prisma): Promise<void> {
+  const existing = await db.learningProgress.findUnique({
     where: {
       userId_subject_topic: {
         userId: params.userId,
@@ -67,7 +68,7 @@ export async function updateMastery(params: {
   const correct = (existing?.correct ?? 0) + (params.isCorrect ? 1 : 0);
   const mastery = correct / attempts;
 
-  await prisma.learningProgress.upsert({
+  await db.learningProgress.upsert({
     where: {
       userId_subject_topic: {
         userId: params.userId,

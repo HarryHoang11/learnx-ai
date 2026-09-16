@@ -12,12 +12,68 @@ import { generateJSON } from "@/lib/ai/router";
 import { buildQuestionGenPrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/db/prisma";
 import { updateMastery } from "@/services/assessment.service";
-import type { Difficulty, GeneratedQuestion } from "@/types";
+import { recordLearningActivity } from "@/services/learning-activity.service";
+import type { Difficulty, GeneratedQuestion, PublicQuestion } from "@/types";
 
 interface RawQuestionFromAI {
   text: string;
   options: string[];
   correctIndex: number;
+}
+
+const DIFFICULTIES = new Set<Difficulty>(["easy", "medium", "hard"]);
+
+export class QuizQuestionError extends Error {
+  constructor(message: string, readonly status: 400 | 404 | 409 = 400) {
+    super(message);
+    this.name = "QuizQuestionError";
+  }
+}
+
+function requireNonEmptyText(value: unknown, field: string, maxLength: number): string {
+  if (typeof value !== "string") {
+    throw new QuizQuestionError(`AI trả về ${field} không hợp lệ.`);
+  }
+
+  const normalized = value.trim();
+  if (!normalized || normalized.length > maxLength) {
+    throw new QuizQuestionError(`AI trả về ${field} không hợp lệ.`);
+  }
+  return normalized;
+}
+
+function normalizeGeneratedQuestion(raw: RawQuestionFromAI, input: {
+  subject: string;
+  topic: string;
+  difficulty: Difficulty;
+}): GeneratedQuestion {
+  const text = requireNonEmptyText(raw?.text, "nội dung câu hỏi", 8_000);
+  if (!Array.isArray(raw?.options) || raw.options.length < 2 || raw.options.length > 8) {
+    throw new QuizQuestionError("AI trả về các lựa chọn không hợp lệ.");
+  }
+
+  const options = raw.options.map((option) => requireNonEmptyText(option, "lựa chọn", 1_000));
+  if (new Set(options.map((option) => option.toLocaleLowerCase())).size !== options.length) {
+    throw new QuizQuestionError("AI trả về các lựa chọn bị trùng.");
+  }
+  if (!Number.isInteger(raw.correctIndex) || raw.correctIndex < 0 || raw.correctIndex >= options.length) {
+    throw new QuizQuestionError("AI trả về đáp án đúng không hợp lệ.");
+  }
+
+  return {
+    id: crypto.randomUUID(),
+    text,
+    options,
+    correctIndex: raw.correctIndex,
+    difficulty: input.difficulty,
+    subject: input.subject,
+    topic: input.topic,
+  };
+}
+
+export function toPublicQuestion(question: GeneratedQuestion): PublicQuestion {
+  const { correctIndex: _correctIndex, ...publicQuestion } = question;
+  return publicQuestion;
 }
 
 // Sinh 1 câu hỏi quiz bằng AI theo (subject, topic, difficulty).
@@ -28,23 +84,36 @@ export async function generateQuizQuestion(
   userId: string,
   subject: string,
   topic: string,
-  difficulty: Difficulty
+  difficulty: Difficulty,
+  sourceDocumentId?: string
 ): Promise<GeneratedQuestion> {
-  const prompt = buildQuestionGenPrompt(subject, topic, difficulty);
-  const raw = await generateJSON<RawQuestionFromAI>({
-    systemPrompt: prompt.system,
-    userPrompt: prompt.user,
-  });
+  const normalizedSubject = requireNonEmptyText(subject, "môn học", 120);
+  const normalizedTopic = requireNonEmptyText(topic, "chủ đề", 160);
+  if (!DIFFICULTIES.has(difficulty)) {
+    throw new QuizQuestionError("Độ khó không hợp lệ.");
+  }
 
-  const question: GeneratedQuestion = {
-    id: crypto.randomUUID(),
-    text: raw.text,
-    options: raw.options,
-    correctIndex: raw.correctIndex,
-    difficulty,
-    subject,
-    topic,
-  };
+  let sourceContext: string | undefined;
+  if (sourceDocumentId) {
+    const source = await prisma.document.findFirst({
+      where: { id: sourceDocumentId, userId, status: "ready" },
+      select: { summary: true },
+    });
+    if (!source) throw new QuizQuestionError("Nguồn học không tồn tại hoặc chưa sẵn sàng.", 404);
+    sourceContext = source.summary ?? undefined;
+  }
+  const prompt = buildQuestionGenPrompt(normalizedSubject, normalizedTopic, difficulty, sourceContext);
+  const question = await generateJSON<GeneratedQuestion>(
+    {
+      systemPrompt: prompt.system,
+      userPrompt: prompt.user,
+    },
+    (value) => normalizeGeneratedQuestion(value as RawQuestionFromAI, {
+      subject: normalizedSubject,
+      topic: normalizedTopic,
+      difficulty,
+    })
+  );
 
   // Cache the question server-side so the correctIndex can be
   // verified independently when the user submits their answer.
@@ -60,6 +129,7 @@ export async function generateQuizQuestion(
       questionText: question.text,
       options: question.options,
       correctIndex: question.correctIndex,
+      sourceDocumentId: sourceDocumentId ?? null,
     },
   });
 
@@ -80,43 +150,88 @@ export async function submitQuizAnswer(params: {
   userId: string;
   questionId: string;
   selectedIndex: number;
-}): Promise<{ isCorrect: boolean }> {
+  assessmentId?: string | null;
+}): Promise<{
+  attemptId: string;
+  isCorrect: boolean;
+  subject: string;
+  topic: string;
+  difficulty: string;
+  xpEarned: number;
+}> {
   // Server-side verification: look up the cached question to verify
   // the correctIndex. This prevents cheating by modifying the
   // client-side question object.
-  const cached = await prisma.quizQuestionCache.findUnique({
-    where: { questionId: params.questionId },
+  const cached = await prisma.quizQuestionCache.findFirst({
+    where: { questionId: params.questionId, userId: params.userId },
   });
 
-  if (!cached || cached.userId !== params.userId) {
-    throw new Error("Question not found or not authorized");
+  if (!cached) {
+    throw new QuizQuestionError("Câu hỏi không tồn tại, đã hết hạn hoặc không thuộc về bạn.", 404);
   }
 
+  // Claim the cache row before grading. Concurrent/replayed requests can
+  // both read it, but exactly one can delete it and create an attempt.
   const isCorrect = params.selectedIndex === cached.correctIndex;
 
-  await prisma.attempt.create({
-    data: {
+  const attempt = await prisma.$transaction(async (tx) => {
+    const claim = await tx.quizQuestionCache.deleteMany({
+      where: { id: cached.id, userId: params.userId },
+    });
+    if (claim.count !== 1) {
+      throw new QuizQuestionError("Câu trả lời này đã được ghi nhận.", 409);
+    }
+
+    const createdAttempt = await tx.attempt.create({
+      data: {
+        userId: params.userId,
+        assessmentId: params.assessmentId ?? null,
+        subject: cached.subject,
+        topic: cached.topic,
+        difficulty: cached.difficulty,
+        question: cached.questionText,
+        isCorrect,
+      },
+    });
+
+    await updateMastery({
       userId: params.userId,
-      assessmentId: null, // null vì đây là quiz luyện tập, không thuộc phiên diagnostic nào
       subject: cached.subject,
       topic: cached.topic,
-      difficulty: cached.difficulty,
-      question: cached.questionText,
       isCorrect,
-    },
+    }, tx);
+
+    return createdAttempt;
   });
 
-  await updateMastery({
-    userId: params.userId,
+  let xpEarned = 0;
+  try {
+    const activity = await recordLearningActivity({
+      userId: params.userId,
+      type: isCorrect
+        ? cached.difficulty === "easy"
+          ? "exercise_easy"
+          : cached.difficulty === "hard"
+            ? "exercise_hard"
+            : "exercise_medium"
+        : "quiz_complete",
+      difficulty: cached.difficulty === "easy" || cached.difficulty === "hard" ? cached.difficulty : "medium",
+      scorePercent: isCorrect ? 100 : 0,
+      isFirstCompletion: true,
+      sourceId: params.questionId,
+      sourceType: "quiz_question",
+    });
+    xpEarned = activity.xpEarned;
+  } catch (activityError) {
+    console.error("[quiz] Không thể ghi nhận XP/LXP cho câu hỏi:", activityError);
+  }
+
+  return {
+    attemptId: attempt.id,
+    isCorrect,
     subject: cached.subject,
     topic: cached.topic,
-    isCorrect,
-  });
-
-  // Delete the cached question after use (one-shot)
-  await prisma.quizQuestionCache.delete({
-    where: { questionId: params.questionId },
-  });
-
-  return { isCorrect };
+    difficulty: cached.difficulty,
+    xpEarned,
+  };
 }

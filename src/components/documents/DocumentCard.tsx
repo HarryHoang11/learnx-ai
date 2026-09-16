@@ -158,6 +158,16 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
               {t("doc.download")}
             </button>
           )}
+          {!doc.summary && doc.errorMessage?.startsWith("[AI_PROCESSING_FAILED]") && (
+            <button
+              className="btn-secondary"
+              onClick={onRetry}
+              disabled={retrying}
+              style={{ fontSize: 12.5, padding: "7px 14px", opacity: retrying ? 0.6 : 1 }}
+            >
+              {retrying ? t("doc.retrying") : t("doc.retry")}
+            </button>
+          )}
         </div>
       )}
 

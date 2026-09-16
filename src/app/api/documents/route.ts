@@ -75,7 +75,10 @@ export async function GET(req: NextRequest) {
       fileType: d.fileType,
       status: d.status,
       summary: d.summary,
-      errorMessage: d.status === "failed" ? d.errorMessage : null,
+      errorMessage:
+        d.status === "failed" || d.errorMessage?.startsWith("[AI_PROCESSING_FAILED]")
+          ? d.errorMessage
+          : null,
       hasOriginalFile: d.hasOriginalFile,
       subject: d.subject,
       topic: d.topic,

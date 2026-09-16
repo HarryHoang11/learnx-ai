@@ -52,7 +52,7 @@ export default function LeaderboardPage() {
   const [entries, setEntries] = useState<XpEntry[]>([]);
   const [contributors, setContributors] = useState<ContributorEntry[]>([]);
   const [myRank, setMyRank] = useState<number | null>(null);
-  const [subject, setSubject] = useState("Toán");
+  const [subject, setSubject] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

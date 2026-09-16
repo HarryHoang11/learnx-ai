@@ -209,6 +209,21 @@ export default function HomePage() {
 
       {progress && (
         <>
+          <Panel className="dashboard-focus enter enter--1">
+            <div>
+              <span className="workspace-eyebrow">{t("dashboard.focusEyebrow")}</span>
+              <h2>{weakest ? `${weakest.subject} · ${weakest.topic}` : t("dashboard.focusEmpty")}</h2>
+              <p>
+                {weakest
+                  ? t("dashboard.focusReason", { n: weakest.masteryPercent })
+                  : t("dashboard.focusEmptyDesc")}
+              </p>
+            </div>
+            <button className="btn-primary" onClick={() => router.push(weakest ? "/workspace" : "/diagnostic")}>
+              {weakest ? t("dashboard.focusCta") : t("common.assessment")}
+            </button>
+          </Panel>
+
           {/* XP / Level / LXP Stats */}
           <div className="grid-stats enter enter--1" style={{ marginBottom: 20 }}>
             <StatCard

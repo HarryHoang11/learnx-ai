@@ -28,7 +28,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params;
     const doc = await prisma.document.findUnique({
       where: { id },
-      select: { userId: true, status: true, fileType: true, fileData: true },
+      select: { userId: true, status: true, errorMessage: true, fileType: true, fileData: true },
     });
 
     if (!doc || doc.userId !== userId) {
@@ -38,7 +38,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       );
     }
 
-    if (doc.status !== "failed") {
+    const summaryRetryable = doc.errorMessage?.startsWith("[AI_PROCESSING_FAILED]") === true;
+    if (doc.status !== "failed" && !(doc.status === "ready" && summaryRetryable)) {
       // Chỉ cho retry document THẬT SỰ đang failed — tránh xử lý lại
       // lãng phí (gọi AI tốn phí) 1 document đang "processing" hoặc
       // đã "ready" chỉ vì user bấm nhầm/spam click.

@@ -4,8 +4,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
-import { prisma } from "@/lib/db/prisma";
-import { createDiagnosticSession, generateDiagnosticQuestions } from "@/services/diagnostic.service";
+import {
+  createDiagnosticSession,
+  generateDiagnosticQuestions,
+  toPublicDiagnosticQuestion,
+} from "@/services/diagnostic.service";
 import type { ApiResponse } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -13,31 +16,26 @@ export async function POST(req: NextRequest) {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
 
-    const body = await req.json();
-    const { subject, topic, goal } = body as { subject: string; topic?: string; goal?: string };
+    const body = await req.json() as { subject?: unknown; topic?: unknown; goal?: unknown };
+    const subject = typeof body.subject === "string" ? body.subject.trim() : "";
+    const topic = typeof body.topic === "string" ? body.topic.trim() || undefined : undefined;
+    const goal = typeof body.goal === "string" ? body.goal.trim() || undefined : undefined;
 
-    if (!subject) {
+    if (!subject || subject.length > 120 || (topic && topic.length > 160) || (goal && goal.length > 500)) {
       return NextResponse.json<ApiResponse<never>>(
         { success: false, error: "Thiếu subject." },
         { status: 400 }
       );
     }
 
-    // Create session
-    const session = await createDiagnosticSession({ userId, subject, topic });
+    // Generate before persisting a session so an AI failure cannot leave
+    // an empty in-progress diagnostic in the user's history.
+    const questions = await generateDiagnosticQuestions({ subject, topic, goal, questionCount: 15 });
+    const session = await createDiagnosticSession({ userId, subject, topic, questions });
 
-    // Generate questions
-    const questions = await generateDiagnosticQuestions({ subject, topic, goal });
-
-    // Update session with questions (stored server-side for answer verification)
-    await prisma.diagnosticSession.update({
-      where: { id: session.id },
-      data: { totalQuestions: questions.length, currentDifficulty: 0.5, questions: questions as any },
-    });
-
-    return NextResponse.json<ApiResponse<{ sessionId: string; questions: typeof questions }>>({
+    return NextResponse.json<ApiResponse<{ sessionId: string; questions: ReturnType<typeof toPublicDiagnosticQuestion>[] }>>({
       success: true,
-      data: { sessionId: session.id, questions },
+      data: { sessionId: session.id, questions: questions.map(toPublicDiagnosticQuestion) },
     });
   } catch (err) {
     console.error("[api/diagnostic/session] Error:", err);

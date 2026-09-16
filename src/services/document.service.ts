@@ -21,7 +21,7 @@
 
 import { generateText } from "@/lib/ai/router";
 import { AIOverloadedError } from "@/lib/ai/router";
-import { buildDocumentSummaryPrompt } from "@/lib/ai/prompts";
+import { buildDocumentSummaryPrompt, buildStudyGuidePrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/db/prisma";
 import { saveChunkWithEmbedding, splitIntoChunks } from "@/lib/embeddings/vector";
 import { MAX_EXTRACTED_CHARS } from "@/lib/documents/extractText";
@@ -65,9 +65,14 @@ export async function processDocument(documentId: string, extraction: Extraction
     // trang chunk toàn văn với pageNumber null.
     const pageUnits =
       extraction.pages && extraction.pages.length > 0
-        ? extraction.pages
-            .filter((p) => p.text.trim() !== "")
-            .map((p) => ({ pageNumber: p.pageNumber as number | null, text: p.text }))
+        ? extraction.pages.reduce<Array<{ pageNumber: number | null; text: string }>>((units, page) => {
+            const usedChars = units.reduce((total, unit) => total + unit.text.length, 0);
+            const remaining = MAX_EXTRACTED_CHARS - usedChars;
+            if (remaining <= 0) return units;
+            const text = page.text.slice(0, remaining);
+            if (text.trim() !== "") units.push({ pageNumber: page.pageNumber, text });
+            return units;
+          }, [])
         : [{ pageNumber: null as number | null, text: fullText }];
 
     logDocumentStage(documentId, "CHUNKING", {
@@ -148,13 +153,27 @@ export async function processDocument(documentId: string, extraction: Extraction
 
 // Dùng cho tính năng "hỏi AI dựa trên tài liệu đã upload" — bước RAG
 // hoàn chỉnh: tìm chunk liên quan nhất rồi đưa vào prompt làm ngữ cảnh.
-export async function answerFromDocument(documentId: string, question: string): Promise<string> {
+export interface DocumentCitation {
+  chunkIndex: number;
+  pageNumber: number | null;
+  excerpt: string;
+}
+
+export async function answerFromDocument(documentId: string, question: string): Promise<{
+  answer: string;
+  citations: DocumentCitation[];
+}> {
   const { searchSimilarChunks } = await import("@/lib/embeddings/vector");
   const relevantChunks = await searchSimilarChunks(documentId, question, 4);
+  const citations = relevantChunks.map((chunk) => ({
+    chunkIndex: chunk.chunkIndex,
+    pageNumber: chunk.pageNumber,
+    excerpt: chunk.content.slice(0, 220),
+  }));
 
   const context = relevantChunks.map((c) => c.content).join("\n---\n");
 
-  return generateText({
+  const answer = await generateText({
     systemPrompt: `Bạn trả lời câu hỏi CHỈ dựa trên đoạn tài liệu được cung cấp dưới đây.
 Nếu tài liệu không chứa thông tin liên quan, hãy nói rõ là không tìm thấy trong tài liệu,
 KHÔNG bịa thêm kiến thức ngoài tài liệu.
@@ -162,4 +181,31 @@ KHÔNG bịa thêm kiến thức ngoài tài liệu.
 ${context}`,
     userPrompt: question,
   });
+
+  return { answer, citations };
+}
+
+export async function generateStudyGuide(
+  documentId: string,
+  userId: string,
+  difficulty: "beginner" | "intermediate" | "advanced" = "intermediate"
+): Promise<string> {
+  const document = await prisma.document.findFirst({
+    where: { id: documentId, userId, status: "ready" },
+    select: { summary: true },
+  });
+  if (!document) throw new Error("Không tìm thấy nguồn học đã xử lý.");
+
+  const chunks = await prisma.documentChunk.findMany({
+    where: { documentId },
+    orderBy: { chunkIndex: "asc" },
+    take: 24,
+    select: { content: true, chunkIndex: true, pageNumber: true },
+  });
+  const sourceText = [
+    document.summary ? `SUMMARY:\n${document.summary}` : "",
+    chunks.map((chunk) => `[${chunk.pageNumber ? `Page ${chunk.pageNumber}` : `Chunk ${chunk.chunkIndex}`}]\n${chunk.content}`).join("\n\n"),
+  ].filter(Boolean).join("\n\n");
+  const prompt = buildStudyGuidePrompt(sourceText, difficulty);
+  return generateText({ systemPrompt: prompt.system, userPrompt: prompt.user });
 }

@@ -18,8 +18,10 @@ export async function GET(req: NextRequest) {
     if (!userId) return unauthorizedResponse();
 
     const { searchParams } = new URL(req.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
+    const pageValue = Number(searchParams.get("page") || 1);
+    const limitValue = Number(searchParams.get("limit") || 20);
+    const page = Number.isInteger(pageValue) ? Math.max(1, pageValue) : 1;
+    const limit = Number.isInteger(limitValue) ? Math.min(50, Math.max(1, limitValue)) : 20;
     const sortBy = searchParams.get("sortBy") || undefined;
     const search = searchParams.get("search") || undefined;
     const subjectId = searchParams.get("subjectId") || undefined;

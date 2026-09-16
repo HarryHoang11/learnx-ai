@@ -11,8 +11,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
-import { generateQuizQuestion } from "@/services/quiz.service";
-import type { ApiResponse, Difficulty, GeneratedQuestion } from "@/types";
+import { AIOverloadedError } from "@/lib/ai/router";
+import { generateQuizQuestion, QuizQuestionError, toPublicQuestion } from "@/services/quiz.service";
+import type { ApiResponse, Difficulty, PublicQuestion } from "@/types";
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,6 +24,7 @@ export async function POST(req: NextRequest) {
     const subject = body.subject as string;
     const topic = body.topic as string;
     const difficulty = (body.difficulty as Difficulty) ?? "medium";
+    const sourceDocumentId = typeof body.sourceDocumentId === "string" ? body.sourceDocumentId : undefined;
 
     if (!subject || !topic) {
       return NextResponse.json<ApiResponse<never>>(
@@ -31,11 +33,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const question = await generateQuizQuestion(userId, subject, topic, difficulty);
+    const question = await generateQuizQuestion(userId, subject, topic, difficulty, sourceDocumentId);
 
-    return NextResponse.json<ApiResponse<GeneratedQuestion>>({ success: true, data: question });
+    return NextResponse.json<ApiResponse<PublicQuestion>>({ success: true, data: toPublicQuestion(question) });
   } catch (err) {
     console.error("[api/quiz/generate] Lỗi:", err);
+    if (err instanceof QuizQuestionError) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: err.message },
+        { status: err.status }
+      );
+    }
+    if (err instanceof AIOverloadedError) {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: err.message },
+        { status: 503 }
+      );
+    }
     return NextResponse.json<ApiResponse<never>>(
       { success: false, error: "Không thể sinh câu hỏi, thử lại sau." },
       { status: 500 }

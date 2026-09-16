@@ -16,7 +16,7 @@ import StateMessage from "@/components/ui/StateMessage";
 import SafeMath from "@/components/math/SafeMath";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 import { SUBJECTS, CUSTOM_SUBJECT_VALUE } from "@/lib/constants/subjects";
-import type { ApiResponse, GeneratedQuestion, SkillMasteryPoint } from "@/types";
+import type { ApiResponse, PublicQuestion, SkillMasteryPoint } from "@/types";
 
 type Phase = "subject_select" | "loading" | "in_progress" | "finished" | "error";
 
@@ -40,13 +40,14 @@ export default function DiagnosticPage() {
   const { t } = useLanguage();
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("subject_select");
-  const [selectedSubject, setSelectedSubject] = useState<string>("Toán");
+  const [selectedSubject, setSelectedSubject] = useState<string>("");
   const [customSubject, setCustomSubject] = useState<string>("");
   const [subjectStatus, setSubjectStatus] = useState<Map<string, SubjectStatus>>(new Map());
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
-  const [question, setQuestion] = useState<GeneratedQuestion | null>(null);
+  const [question, setQuestion] = useState<PublicQuestion | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
+  const [answerWasCorrect, setAnswerWasCorrect] = useState<boolean | null>(null);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [profile, setProfile] = useState<SkillMasteryPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -78,13 +79,14 @@ export default function DiagnosticPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subject: effectiveSubject }),
       });
-      const json: ApiResponse<{ assessmentId: string; question: GeneratedQuestion }> = await res.json();
+      const json: ApiResponse<{ assessmentId: string; question: PublicQuestion }> = await res.json();
       if (!json.success) throw new Error(json.error);
 
       setAssessmentId(json.data.assessmentId);
       setQuestion(json.data.question);
       setAnsweredCount(0);
       setSelected(null);
+      setAnswerWasCorrect(null);
       setPhase("in_progress");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("diagnostic.startFail"));
@@ -100,14 +102,15 @@ export default function DiagnosticPage() {
       const res = await fetch("/api/assessment/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assessmentId, question, selectedIndex: index }),
+        body: JSON.stringify({ assessmentId, questionId: question.id, selectedIndex: index }),
       });
       const json: ApiResponse<
-        { done: true; activity?: CompletionActivity } | { done: false; isCorrect: boolean; nextQuestion: GeneratedQuestion }
+        { done: true; activity?: CompletionActivity } | { done: false; isCorrect: boolean; nextQuestion: PublicQuestion }
       > = await res.json();
       if (!json.success) throw new Error(json.error);
 
       setAnsweredCount((c) => c + 1);
+      if (!json.data.done) setAnswerWasCorrect(json.data.isCorrect);
       if (json.data.done && json.data.activity) {
         setCompletion(json.data.activity);
       }
@@ -118,6 +121,7 @@ export default function DiagnosticPage() {
         } else {
           setQuestion(json.data.nextQuestion);
           setSelected(null);
+          setAnswerWasCorrect(null);
         }
       }, 700);
     } catch (err) {
@@ -129,7 +133,7 @@ export default function DiagnosticPage() {
   async function loadResult() {
     setPhase("loading");
     try {
-      const res = await fetch(`/api/assessment/result?subject=${encodeURIComponent(selectedSubject)}`);
+      const res = await fetch(`/api/assessment/result?subject=${encodeURIComponent(effectiveSubject)}`);
       const json: ApiResponse<{ profile: SkillMasteryPoint[]; weakTopics: string[] }> = await res.json();
       if (!json.success) throw new Error(json.error);
       setProfile(json.data.profile);
@@ -168,6 +172,7 @@ export default function DiagnosticPage() {
                 marginBottom: 14,
               }}
             >
+              <option value="">{t("diagnostic.chooseSubject")}</option>
               {AVAILABLE_SUBJECTS.map((s) => {
                 const status = subjectStatus.get(s.value);
                 const badge = status?.completed
@@ -219,7 +224,7 @@ export default function DiagnosticPage() {
 
       {phase === "in_progress" && question && (
         <>
-          <ProgressDots done={answeredCount} total={16} />
+          <ProgressDots done={answeredCount} total={15} />
           <Panel style={{ padding: "26px 26px" }}>
             <span
               style={{
@@ -249,12 +254,11 @@ export default function DiagnosticPage() {
             </div>
 
             {question.options.map((opt, i) => {
-              const isCorrectOpt = i === question.correctIndex;
               const isSelected = selected === i;
               let border = "var(--border)";
               let bg = "var(--panel-strong)";
               if (selected !== null) {
-                if (isCorrectOpt) {
+                if (isSelected && answerWasCorrect) {
                   border = "var(--cyan)";
                   bg = "var(--cyan-soft)";
                 } else if (isSelected) {

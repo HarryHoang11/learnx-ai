@@ -49,8 +49,8 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
-      const answer = await answerFromDocument(documentId, body.question);
-      return NextResponse.json<ApiResponse<{ answer: string }>>({ success: true, data: { answer } });
+      const result = await answerFromDocument(documentId, body.question);
+      return NextResponse.json<ApiResponse<typeof result>>({ success: true, data: result });
     }
 
     return NextResponse.json<ApiResponse<never>>(
