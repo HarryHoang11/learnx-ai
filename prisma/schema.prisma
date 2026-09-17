@@ -71,6 +71,9 @@ model User {
    createdExercises       Exercise[] @relation("ExerciseAuthor")
    exerciseAttempts       ExerciseAttempt[]
    quizQuestions          QuizQuestionCache[]
+   mistakeLogs            MistakeLog[]
+   learningArtifacts      LearningArtifact[]
+   learningSessions       LearningSession[]
 }
 
 model Account {
@@ -130,6 +133,7 @@ model LearningGoal {
   roadmaps     Roadmap[]
   roadmapLinks RoadmapResource[]
   studySessions StudySession[]
+  learningSessions LearningSession[]
 }
 
 model Assessment {
@@ -170,6 +174,11 @@ model QuizQuestionCache {
   questionText String
   options      Json
   correctIndex Int
+  // Vì sao đáp án đúng lại đúng — AI sinh cùng lúc với câu hỏi, KHÔNG
+  // gửi về client trước khi trả lời (tránh lộ đáp án). Chỉ trả lại
+  // trong response của submitQuizAnswer, và được lưu vào MistakeLog
+  // khi học sinh chọn sai để phục vụ "Targeted Practice".
+  explanation  String?
   createdAt    DateTime @default(now())
   sourceDocumentId String?
   user         User     @relation(fields: [userId], references: [id])
@@ -177,6 +186,30 @@ model QuizQuestionCache {
 
   @@index([questionId])
   @@index([sourceDocumentId])
+}
+
+// Ghi lại MỘT LẦN học sinh chọn sai (không phải mọi lượt làm bài — xem
+// Attempt cho lịch sử đầy đủ). Đây là input cho mistake-analysis: gộp
+// theo (subject, topic) để tìm "misconception" lặp lại, từ đó Roadmap
+// và Targeted Practice biết chính xác nên luyện lại gì, không chỉ dựa
+// vào % mastery chung chung.
+model MistakeLog {
+  id               String   @id @default(cuid())
+  userId           String
+  subject          String
+  topic            String
+  questionText     String
+  selectedAnswer   String
+  correctAnswer    String
+  explanation      String?
+  sourceDocumentId String?
+  createdAt        DateTime @default(now())
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceDocument Document? @relation("MistakeSource", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([userId, subject, topic])
+  @@index([userId, createdAt])
 }
 
 model LearningProgress {
@@ -240,6 +273,69 @@ model Document {
   chunks     DocumentChunk[]
   mindMaps   MindMap[]
   quizQuestionCaches QuizQuestionCache[] @relation("QuizQuestionSource")
+  mistakeLogs MistakeLog[] @relation("MistakeSource")
+  learningArtifacts LearningArtifact[]
+  learningSessions LearningSession[]
+}
+
+// Cache nội dung AI đã sinh theo NGUỒN cụ thể (Study Guide, và mở rộng
+// sau này: flashcards, FAQ, exam review...). Vì sao cần bảng riêng
+// thay vì generate lại mỗi lần mở trang: (1) tốn AI call vô ích khi
+// user chỉ đang xem lại, (2) nội dung có thể đổi giữa các lần gọi AI
+// dù nguồn không đổi — gây khó chịu khi user quay lại đọc tiếp.
+// `difficulty` mặc định "" (không dùng null) để unique constraint bên
+// dưới hoạt động đúng — Postgres coi NHIỀU NULL là khác nhau nên
+// không chặn trùng lặp được nếu để nullable.
+model LearningArtifact {
+  id               String   @id @default(cuid())
+  userId           String
+  sourceDocumentId String
+  type             String
+  difficulty       String   @default("")
+  content          String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceDocument Document @relation(fields: [sourceDocumentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sourceDocumentId, type, difficulty])
+  @@index([sourceDocumentId])
+}
+
+// ================================================================
+// LEARNING SESSION — nối goal/source/topic/hoạt động, cho completion
+// summary DỰA TRÊN DỮ LIỆU THẬT (không phải % tự khai như StudySession
+// — model đó phục vụ lịch học ĐÃ LÊN KẾ HOẠCH trước, khác mục đích).
+// ================================================================
+// Mạch tư duy: đây là "khung thời gian" (time window) — bắt đầu lúc
+// user chủ động bấm "Bắt đầu buổi học" ở Workspace, kết thúc khi bấm
+// "Hoàn thành". Service KHÔNG cần user tự báo cáo đã làm bao nhiêu
+// câu: completeSession() tự đếm lại từ Attempt (subject+topic+trong
+// khoảng startedAt..completedAt) và LearningActivity (XP trong cùng
+// khoảng), nên số liệu luôn khớp với những gì đã thực sự xảy ra —
+// không thể "gian lận" summary bằng cách tự điền số vào request.
+model LearningSession {
+  id                String    @id @default(cuid())
+  userId            String
+  learningGoalId    String?
+  sourceDocumentId  String?
+  subject           String
+  topic             String
+  status            String    @default("active")
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+  masteryBefore     Float?
+  masteryAfter      Float?
+  questionsAnswered Int       @default(0)
+  correctAnswers    Int       @default(0)
+  xpEarned          Int       @default(0)
+
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  learningGoal   LearningGoal? @relation(fields: [learningGoalId], references: [id], onDelete: SetNull)
+  sourceDocument Document?     @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
 }
 
 model DocumentChunk {

@@ -532,6 +532,109 @@ h3 {
   margin-bottom: 18px;
 }
 
+.workspace-guide-cached-note {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin: -10px 0 16px;
+}
+
+.workspace-session-bar {
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workspace-session-active {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid rgba(53, 208, 216, 0.35);
+  background: var(--cyan-soft);
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  color: var(--text);
+  flex-wrap: wrap;
+}
+
+.workspace-session-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 0 4px rgba(53, 208, 216, 0.2);
+  flex-shrink: 0;
+}
+
+.workspace-session-error {
+  font-size: 12.5px;
+  color: var(--rose);
+}
+
+.workspace-session-summary {
+  padding: 14px 16px;
+  border: 1px solid rgba(53, 208, 216, 0.3);
+  background: var(--panel);
+  border-radius: var(--radius-md);
+}
+
+.workspace-session-summary-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.workspace-session-summary-head strong {
+  color: var(--cyan);
+  font-size: 14px;
+}
+
+.workspace-session-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.workspace-session-dismiss:hover {
+  color: var(--text);
+}
+
+.workspace-session-summary > p {
+  color: var(--text-dim);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.workspace-session-stats {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.workspace-session-stats strong {
+  color: var(--text);
+}
+
+.workspace-flashcards {
+  margin-top: 20px;
+  max-width: 560px;
+}
+
+.workspace-flashcards-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+
 .workspace-reading-panel h2,
 .workspace-reading-panel h3 {
   margin-top: 24px;
@@ -554,6 +657,125 @@ h3 {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-dim);
+}
+
+.workspace-quiz-option--interactive {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--panel-strong);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.workspace-quiz-option--interactive:hover:not(:disabled) {
+  border-color: var(--cyan);
+  color: var(--text);
+}
+
+.workspace-quiz-option--interactive:disabled {
+  cursor: default;
+}
+
+.workspace-quiz-option--selected {
+  border-color: var(--cyan);
+  color: var(--text);
+  background: var(--cyan-soft);
+}
+
+.workspace-quiz-option--correct {
+  border-color: var(--cyan);
+  color: var(--text);
+  background: var(--cyan-soft);
+}
+
+.workspace-quiz-option--wrong {
+  border-color: var(--rose);
+  color: var(--text);
+  background: rgba(239, 106, 125, 0.12);
+}
+
+.workspace-quiz-result {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.workspace-quiz-result strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.workspace-quiz-result--correct {
+  border: 1px solid rgba(53, 208, 216, 0.35);
+  background: var(--cyan-soft);
+}
+
+.workspace-quiz-result--correct strong {
+  color: var(--cyan);
+}
+
+.workspace-quiz-result--wrong {
+  border: 1px solid rgba(239, 106, 125, 0.35);
+  background: rgba(239, 106, 125, 0.1);
+}
+
+.workspace-quiz-result--wrong strong {
+  color: var(--rose);
+}
+
+.workspace-mistakes-panel {
+  margin-top: 20px;
+}
+
+.workspace-mistakes-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.workspace-mistake-card {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.workspace-mistake-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.workspace-mistake-head strong {
+  font-size: 14.5px;
+  color: var(--text);
+}
+
+.workspace-mistake-head span {
+  font-size: 11.5px;
+  color: var(--amber);
+}
+
+.workspace-mistake-example {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.workspace-mistake-explanation {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  line-height: 1.5;
+  font-style: italic;
 }
 
 .workspace-muted,

@@ -9,6 +9,8 @@ import { prisma } from "@/lib/db/prisma";
 import { generateJSON } from "@/lib/ai/router";
 import { buildReviewPrompt } from "@/lib/ai/prompts";
 import { recordLearningActivity } from "@/services/learning-activity.service";
+import { updateMastery } from "@/services/assessment.service";
+import { syncRoadmapAfterMastery } from "@/services/roadmap.service";
 
 export interface ReviewItemInput {
   userId: string;
@@ -278,6 +280,34 @@ export async function submitReviewAttempt(input: ReviewAttemptInput): Promise<{
     sourceType: "review",
   });
 
+  // Đây chính là lỗ hổng đã phát hiện ở PHASE 5 audit: Review (SM-2)
+  // trước đây CHỈ cộng XP, không hề chạm tới LearningProgress/Roadmap
+  // — nghĩa là ôn tập bao nhiêu lần cũng không giúp Roadmap nhận ra
+  // học sinh đã "vững" lại 1 topic từng sai (hoặc ngược lại, vẫn đang
+  // yếu). Cập nhật CẢ HAI CHIỀU (đúng/sai), giống hệt cách quiz/
+  // exercise/diagnostic đều làm — không chỉ báo cáo lúc thành công.
+  // rating>=3 nghĩa là "nhớ đúng" (chuẩn SM-2: 1=Again, 2=Hard,
+  // 3=Good, 4=Easy — cùng quy ước với `correct: input.rating >= 3` ở
+  // ReviewAttempt phía trên). Chỉ chạy khi `subject` có giá trị thật
+  // — ReviewItem.subject là nullable, và updateMastery() cần đúng
+  // (subject, topic) để không tạo nhầm 1 dòng LearningProgress rác.
+  if (reviewItem.subject) {
+    const wasCorrect = input.rating >= 3;
+    try {
+      await updateMastery({
+        userId: input.userId,
+        subject: reviewItem.subject,
+        topic: reviewItem.topic,
+        isCorrect: wasCorrect,
+      });
+      if (wasCorrect) {
+        await syncRoadmapAfterMastery(input.userId, reviewItem.subject, reviewItem.topic);
+      }
+    } catch (masteryError) {
+      console.error("[review] Không thể cập nhật mastery/roadmap từ review:", masteryError);
+    }
+  }
+
   return { reviewItem: updated as ReviewItemData, schedule };
 }
 
@@ -393,8 +423,9 @@ async function generateReviewPrompt(params: {
 // --- 9) CREATE REVIEW FROM MISTAKE ---
 export async function createReviewFromMistake(params: {
   userId: string;
+  subject: string;
   topic: string;
-  concept: string;
+  concept?: string;
   question: string;
   userAnswer: string;
   correctAnswer: string;
@@ -409,7 +440,12 @@ export async function createReviewFromMistake(params: {
     userId: params.userId,
     topic: params.topic,
     concept: params.concept,
-    subject: params.topic,
+    // BUG CŨ: gán `subject: params.topic` (trùng lặp topic, sai hoàn
+    // toàn với "môn học" thật) — khiến submitReviewAttempt() không
+    // thể gọi updateMastery() được vì subject/topic không khớp với
+    // key thật trong LearningProgress. Giờ nhận đúng subject truyền
+    // vào (xem quiz.service.ts — nơi duy nhất gọi hàm này).
+    subject: params.subject,
     sourceType: params.sourceType,
     sourceId: params.sourceId,
     prompt,

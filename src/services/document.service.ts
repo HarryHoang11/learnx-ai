@@ -19,9 +19,9 @@
 //     summary null + ghi log. Chỉ chunk/embedding lỗi mới "failed".
 // ================================================================
 
-import { generateText } from "@/lib/ai/router";
+import { generateText, generateJSON } from "@/lib/ai/router";
 import { AIOverloadedError } from "@/lib/ai/router";
-import { buildDocumentSummaryPrompt, buildStudyGuidePrompt } from "@/lib/ai/prompts";
+import { buildDocumentSummaryPrompt, buildStudyGuidePrompt, buildFlashcardsPrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/db/prisma";
 import { saveChunkWithEmbedding, splitIntoChunks } from "@/lib/embeddings/vector";
 import { MAX_EXTRACTED_CHARS } from "@/lib/documents/extractText";
@@ -185,11 +185,14 @@ ${context}`,
   return { answer, citations };
 }
 
-export async function generateStudyGuide(
-  documentId: string,
-  userId: string,
-  difficulty: "beginner" | "intermediate" | "advanced" = "intermediate"
-): Promise<string> {
+const STUDY_GUIDE_ARTIFACT_TYPE = "study_guide";
+const FLASHCARDS_ARTIFACT_TYPE = "flashcards";
+const FLASHCARDS_COUNT = 12;
+
+// Dùng chung bởi generateStudyGuide + generateFlashcards — cả 2 đều
+// cần đúng 1 việc: gom summary + chunks (kèm page number) của 1
+// nguồn đã xử lý xong thành 1 khối text đưa cho AI.
+async function getSourceTextForArtifact(documentId: string, userId: string): Promise<string> {
   const document = await prisma.document.findFirst({
     where: { id: documentId, userId, status: "ready" },
     select: { summary: true },
@@ -202,10 +205,144 @@ export async function generateStudyGuide(
     take: 24,
     select: { content: true, chunkIndex: true, pageNumber: true },
   });
-  const sourceText = [
+  return [
     document.summary ? `SUMMARY:\n${document.summary}` : "",
     chunks.map((chunk) => `[${chunk.pageNumber ? `Page ${chunk.pageNumber}` : `Chunk ${chunk.chunkIndex}`}]\n${chunk.content}`).join("\n\n"),
   ].filter(Boolean).join("\n\n");
+}
+
+export async function generateStudyGuide(
+  documentId: string,
+  userId: string,
+  difficulty: "beginner" | "intermediate" | "advanced" = "intermediate",
+  options: { forceRegenerate?: boolean } = {}
+): Promise<{ content: string; cached: boolean; updatedAt: string }> {
+  // Cache trước — Study Guide không đổi giữa các lần mở lại cùng 1
+  // nguồn/độ khó, generate lại mỗi lần vừa tốn AI call vừa khiến nội
+  // dung trôi (AI không deterministic) dù nguồn không đổi.
+  if (!options.forceRegenerate) {
+    const cached = await prisma.learningArtifact.findUnique({
+      where: {
+        userId_sourceDocumentId_type_difficulty: {
+          userId,
+          sourceDocumentId: documentId,
+          type: STUDY_GUIDE_ARTIFACT_TYPE,
+          difficulty,
+        },
+      },
+      select: { content: true, updatedAt: true },
+    });
+    if (cached) {
+      return { content: cached.content, cached: true, updatedAt: cached.updatedAt.toISOString() };
+    }
+  }
+
+  const sourceText = await getSourceTextForArtifact(documentId, userId);
   const prompt = buildStudyGuidePrompt(sourceText, difficulty);
-  return generateText({ systemPrompt: prompt.system, userPrompt: prompt.user });
+  const content = await generateText({ systemPrompt: prompt.system, userPrompt: prompt.user });
+
+  const saved = await prisma.learningArtifact.upsert({
+    where: {
+      userId_sourceDocumentId_type_difficulty: {
+        userId,
+        sourceDocumentId: documentId,
+        type: STUDY_GUIDE_ARTIFACT_TYPE,
+        difficulty,
+      },
+    },
+    create: { userId, sourceDocumentId: documentId, type: STUDY_GUIDE_ARTIFACT_TYPE, difficulty, content },
+    update: { content },
+    select: { updatedAt: true },
+  });
+
+  return { content, cached: false, updatedAt: saved.updatedAt.toISOString() };
+}
+
+export interface FlashcardItem {
+  front: string;
+  back: string;
+}
+
+export async function generateFlashcards(
+  documentId: string,
+  userId: string,
+  options: { forceRegenerate?: boolean } = {}
+): Promise<{ cards: FlashcardItem[]; cached: boolean; updatedAt: string }> {
+  // Cùng chiến lược cache với Study Guide — flashcards không đổi lý
+  // do gì để sinh lại mỗi lần mở, chỉ khi user chủ động bấm "Tạo lại".
+  // Không có "difficulty" cho flashcards nên dùng "" (giá trị mặc
+  // định của cột — xem comment ở model LearningArtifact về lý do
+  // không dùng NULL cho unique constraint).
+  if (!options.forceRegenerate) {
+    const cached = await prisma.learningArtifact.findUnique({
+      where: {
+        userId_sourceDocumentId_type_difficulty: {
+          userId,
+          sourceDocumentId: documentId,
+          type: FLASHCARDS_ARTIFACT_TYPE,
+          difficulty: "",
+        },
+      },
+      select: { content: true, updatedAt: true },
+    });
+    if (cached) {
+      return { cards: parseFlashcardsContent(cached.content), cached: true, updatedAt: cached.updatedAt.toISOString() };
+    }
+  }
+
+  const sourceText = await getSourceTextForArtifact(documentId, userId);
+  const prompt = buildFlashcardsPrompt(sourceText, FLASHCARDS_COUNT);
+  const cards = await generateJSON<FlashcardItem[]>(
+    { systemPrompt: prompt.system, userPrompt: prompt.user, jsonMode: true },
+    (value) => normalizeFlashcards(value)
+  );
+  const content = JSON.stringify(cards);
+
+  const saved = await prisma.learningArtifact.upsert({
+    where: {
+      userId_sourceDocumentId_type_difficulty: {
+        userId,
+        sourceDocumentId: documentId,
+        type: FLASHCARDS_ARTIFACT_TYPE,
+        difficulty: "",
+      },
+    },
+    create: { userId, sourceDocumentId: documentId, type: FLASHCARDS_ARTIFACT_TYPE, difficulty: "", content },
+    update: { content },
+    select: { updatedAt: true },
+  });
+
+  return { cards, cached: false, updatedAt: saved.updatedAt.toISOString() };
+}
+
+function normalizeFlashcards(value: unknown): FlashcardItem[] {
+  const raw = value as { cards?: unknown };
+  if (!raw || !Array.isArray(raw.cards)) throw new Error("AI không trả về danh sách flashcards hợp lệ.");
+  const cards = raw.cards
+    .map((item) => {
+      const card = item as { front?: unknown; back?: unknown };
+      const front = typeof card.front === "string" ? card.front.trim() : "";
+      const back = typeof card.back === "string" ? card.back.trim() : "";
+      return front && back ? { front, back } : null;
+    })
+    .filter((card): card is FlashcardItem => card !== null);
+  if (cards.length === 0) throw new Error("AI không trả về flashcard nào hợp lệ.");
+  return cards;
+}
+
+// Content được lưu dạng JSON string trong LearningArtifact.content —
+// parse lại khi đọc từ cache. Nếu vì lý do gì đó dữ liệu cũ hỏng
+// (không phải JSON hợp lệ), coi như cache miss thay vì crash cả
+// request — an toàn hơn là tin tưởng tuyệt đối dữ liệu cũ trong DB.
+function parseFlashcardsContent(content: string): FlashcardItem[] {
+  try {
+    const parsed = JSON.parse(content) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item): item is FlashcardItem =>
+        !!item && typeof (item as FlashcardItem).front === "string" && typeof (item as FlashcardItem).back === "string"
+    );
+  } catch {
+    return [];
+  }
 }

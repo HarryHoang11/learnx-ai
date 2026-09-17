@@ -16,7 +16,16 @@ import { generateJSON } from "@/lib/ai/router";
 import { buildRoadmapPrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/db/prisma";
 import { getSkillProfile } from "@/services/assessment.service";
+import { applyMasteryToPlan } from "@/lib/roadmap/applyMasteryToPlan";
 import type { RoadmapPlan, RoadmapStatus, GoalWithRoadmap } from "@/types";
+
+// Ngưỡng mastery được coi là "vững" — dùng chung cho getGoalGap (biết
+// khi nào 1 topic hết là "gap") VÀ syncRoadmapAfterMastery (biết khi
+// nào đánh dấu topic "done" trên roadmap). Đặt ở đầu file vì cả 2 chỗ
+// dùng đều cần truy cập được, tránh forward-reference của `const` khi
+// một hằng số khác được định nghĩa sau lại cần dùng giá trị này ngay
+// ở top-level.
+export const GAP_TARGET_DEFAULT = 80;
 
 function normalizeRoadmap(value: unknown, targetMonths: number): RoadmapPlan[] {
   if (!Array.isArray(value)) throw new Error("AI không trả về danh sách roadmap hợp lệ.");
@@ -91,6 +100,54 @@ export async function generateRoadmap(params: {
   // note trong bản kế hoạch gốc ("AI phát hiện bạn tiến bộ nhanh...").
 
   return plan;
+}
+
+// ================================================================
+// SYNC ROADMAP AFTER MASTERY — phần "Roadmap tự cập nhật" trong flow
+// gốc ("Skill ↑ -> Roadmap tự cập nhật"), thay cho TODO cũ ở trên.
+// ================================================================
+// Mạch tư duy: gọi lại AI mỗi khi mastery đổi vừa tốn kém vừa không
+// cần thiết — plan (danh sách topic theo tháng) không cần đổi, chỉ
+// cần đổi TRẠNG THÁI của đúng topic vừa đạt ngưỡng. Logic đánh dấu
+// done + tự mở khoá tháng kế tiếp nằm ở applyMasteryToPlan() (hàm
+// thuần, có test riêng) — hàm dưới đây chỉ lo: tìm đúng (những) goal
+// ACTIVE có chứa topic này, đọc mastery mới nhất, rồi ghi lại nếu có
+// thay đổi. Được gọi NGAY SAU updateMastery() ở cả 3 nơi (quiz,
+// exercise, diagnostic) — best-effort, KHÔNG throw ra ngoài để không
+// làm hỏng luồng chấm bài chính nếu có lỗi (cùng nguyên tắc với
+// XP/LXP và MistakeLog).
+export const ROADMAP_MASTERY_THRESHOLD = GAP_TARGET_DEFAULT;
+
+export async function syncRoadmapAfterMastery(userId: string, subject: string, topic: string): Promise<void> {
+  // Chỉ goal đang ACTIVE mới cần đồng bộ — goal đã COMPLETED/ARCHIVED
+  // không cần cập nhật trạng thái topic nữa.
+  const activeGoals = await prisma.learningGoal.findMany({ where: { userId, status: "ACTIVE" } });
+  if (activeGoals.length === 0) return;
+
+  const progress = await prisma.learningProgress.findUnique({
+    where: { userId_subject_topic: { userId, subject, topic } },
+    select: { mastery: true },
+  });
+  if (!progress) return;
+  const masteryPercent = Math.round(progress.mastery * 100);
+  if (masteryPercent < ROADMAP_MASTERY_THRESHOLD) return;
+
+  for (const goal of activeGoals) {
+    const latest = await prisma.roadmap.findFirst({
+      where: { learningGoalId: goal.id },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!latest) continue;
+
+    const plan = latest.months as unknown as RoadmapPlan[];
+    const { plan: updatedPlan, changed } = applyMasteryToPlan(plan, topic, masteryPercent, ROADMAP_MASTERY_THRESHOLD);
+    if (!changed) continue;
+
+    await prisma.roadmap.update({
+      where: { id: latest.id },
+      data: { months: JSON.parse(JSON.stringify(updatedPlan)) },
+    });
+  }
 }
 
 // Lấy lộ trình MỚI NHẤT của user (mỗi lần generate tạo bản ghi mới,
@@ -281,8 +338,6 @@ export interface SkillGapItem {
   priority: "HIGH" | "MEDIUM" | "LOW";
   reason: "MASTERED" | "BIGGEST_GAP" | "NOT_ASSESSED" | "KEEP_BUILDING";
 }
-
-export const GAP_TARGET_DEFAULT = 80;
 
 export async function getGoalGap(userId: string, goalId: string): Promise<SkillGapItem[] | null> {
   const goal = await prisma.learningGoal.findFirst({ where: { id: goalId, userId } });

@@ -16,6 +16,7 @@ import { generateJSON } from "@/lib/ai/router";
 import { buildDiagnosticPrompt } from "@/lib/ai/prompts";
 import { updateMastery } from "@/services/assessment.service";
 import { recordLearningActivity } from "@/services/learning-activity.service";
+import { syncRoadmapAfterMastery } from "@/services/roadmap.service";
 import type { Difficulty } from "@/types";
 
 export interface DiagnosticConfig {
@@ -295,6 +296,23 @@ export async function evaluateDiagnosticResult(params: {
       topic: ans.topic,
       isCorrect: ans.isCorrect,
     });
+  }
+
+  // Đồng bộ Roadmap sau khi mastery đã cập nhật xong — best-effort,
+  // cùng nguyên tắc với quiz/exercise. Khử trùng theo (subject, topic)
+  // vì diagnostic có thể hỏi cùng 1 topic nhiều lần trong 1 phiên,
+  // không cần sync lặp lại cho cùng 1 cặp.
+  const syncedTopics = new Set<string>();
+  for (const ans of answers) {
+    if (!ans.isCorrect) continue;
+    const key = `${ans.subject}::${ans.topic}`;
+    if (syncedTopics.has(key)) continue;
+    syncedTopics.add(key);
+    try {
+      await syncRoadmapAfterMastery(userId, ans.subject, ans.topic);
+    } catch (roadmapError) {
+      console.error("[diagnostic] Không thể đồng bộ Roadmap:", roadmapError);
+    }
   }
 
   // Record learning activity

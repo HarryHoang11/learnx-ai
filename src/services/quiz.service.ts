@@ -13,12 +13,15 @@ import { buildQuestionGenPrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/db/prisma";
 import { updateMastery } from "@/services/assessment.service";
 import { recordLearningActivity } from "@/services/learning-activity.service";
+import { syncRoadmapAfterMastery } from "@/services/roadmap.service";
+import { createReviewFromMistake } from "@/services/spaced-repetition.service";
 import type { Difficulty, GeneratedQuestion, PublicQuestion } from "@/types";
 
 interface RawQuestionFromAI {
   text: string;
   options: string[];
   correctIndex: number;
+  explanation?: string;
 }
 
 const DIFFICULTIES = new Set<Difficulty>(["easy", "medium", "hard"]);
@@ -60,6 +63,13 @@ function normalizeGeneratedQuestion(raw: RawQuestionFromAI, input: {
     throw new QuizQuestionError("AI trả về đáp án đúng không hợp lệ.");
   }
 
+  // Explanation là "nice to have" cho mistake analysis — không chặn
+  // sinh câu hỏi nếu AI thi thoảng bỏ sót, chỉ fallback text chung.
+  const rawExplanation = typeof raw?.explanation === "string" ? raw.explanation.trim() : "";
+  const explanation = rawExplanation && rawExplanation.length <= 2_000
+    ? rawExplanation
+    : `Đáp án đúng là "${options[raw.correctIndex]}".`;
+
   return {
     id: crypto.randomUUID(),
     text,
@@ -68,11 +78,12 @@ function normalizeGeneratedQuestion(raw: RawQuestionFromAI, input: {
     difficulty: input.difficulty,
     subject: input.subject,
     topic: input.topic,
+    explanation,
   };
 }
 
 export function toPublicQuestion(question: GeneratedQuestion): PublicQuestion {
-  const { correctIndex: _correctIndex, ...publicQuestion } = question;
+  const { correctIndex: _correctIndex, explanation: _explanation, ...publicQuestion } = question;
   return publicQuestion;
 }
 
@@ -129,6 +140,7 @@ export async function generateQuizQuestion(
       questionText: question.text,
       options: question.options,
       correctIndex: question.correctIndex,
+      explanation: question.explanation,
       sourceDocumentId: sourceDocumentId ?? null,
     },
   });
@@ -158,6 +170,9 @@ export async function submitQuizAnswer(params: {
   topic: string;
   difficulty: string;
   xpEarned: number;
+  correctIndex: number;
+  correctAnswer: string;
+  explanation: string | null;
 }> {
   // Server-side verification: look up the cached question to verify
   // the correctIndex. This prevents cheating by modifying the
@@ -226,6 +241,65 @@ export async function submitQuizAnswer(params: {
     console.error("[quiz] Không thể ghi nhận XP/LXP cho câu hỏi:", activityError);
   }
 
+  // Ghi MistakeLog khi trả lời sai — best-effort, KHÔNG được để lỗi ở
+  // đây làm hỏng kết quả chấm bài đã lưu thành công ở transaction trên
+  // (cùng nguyên tắc với khối XP/LXP phía trên).
+  const options = Array.isArray(cached.options) ? (cached.options as unknown as string[]) : [];
+  const correctAnswer = options[cached.correctIndex] ?? "";
+  if (!isCorrect) {
+    try {
+      await prisma.mistakeLog.create({
+        data: {
+          userId: params.userId,
+          subject: cached.subject,
+          topic: cached.topic,
+          questionText: cached.questionText,
+          selectedAnswer: options[params.selectedIndex] ?? `#${params.selectedIndex}`,
+          correctAnswer,
+          explanation: cached.explanation,
+          sourceDocumentId: cached.sourceDocumentId,
+        },
+      });
+    } catch (mistakeError) {
+      console.error("[quiz] Không thể ghi MistakeLog:", mistakeError);
+    }
+
+    // Tự tạo Review item (spaced repetition) từ đúng câu vừa sai — đây
+    // là nguồn nội dung DUY NHẤT hiện có cho trang /review (trước đây
+    // không có gì tự động tạo ReviewItem, nên /review luôn trống).
+    // Dedup theo (userId, topic, sourceType, sourceId) nằm sẵn trong
+    // createReviewItem() — trả lời sai CÙNG 1 câu nhiều lần chỉ cập
+    // nhật lại 1 review item, không tạo trùng. Best-effort, không
+    // chặn kết quả chấm bài nếu lỗi.
+    try {
+      await createReviewFromMistake({
+        userId: params.userId,
+        subject: cached.subject,
+        topic: cached.topic,
+        question: cached.questionText,
+        userAnswer: options[params.selectedIndex] ?? `#${params.selectedIndex}`,
+        correctAnswer,
+        explanation: cached.explanation ?? `Đáp án đúng là "${correctAnswer}".`,
+        sourceType: "quiz",
+        sourceId: cached.questionId,
+      });
+    } catch (reviewError) {
+      console.error("[quiz] Không thể tạo Review item từ câu sai:", reviewError);
+    }
+  }
+
+  // Đồng bộ Roadmap khi mastery vừa đổi — best-effort, cùng nguyên
+  // tắc với XP/LXP và MistakeLog ở trên. Chỉ cần thử khi CÂU NÀY
+  // ĐÚNG (mastery chỉ có thể tăng lên ngưỡng "vững" sau 1 câu đúng,
+  // không cần tốn 1 query khi biết chắc sẽ không có gì thay đổi).
+  if (isCorrect) {
+    try {
+      await syncRoadmapAfterMastery(params.userId, cached.subject, cached.topic);
+    } catch (roadmapError) {
+      console.error("[quiz] Không thể đồng bộ Roadmap:", roadmapError);
+    }
+  }
+
   return {
     attemptId: attempt.id,
     isCorrect,
@@ -233,5 +307,8 @@ export async function submitQuizAnswer(params: {
     topic: cached.topic,
     difficulty: cached.difficulty,
     xpEarned,
+    correctIndex: cached.correctIndex,
+    correctAnswer,
+    explanation: cached.explanation,
   };
 }

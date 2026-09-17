@@ -19,11 +19,15 @@ export interface GeneratedQuestion {
   topic: string;
   options: string[];
   correctIndex: number;
+  // Vì sao đáp án đúng lại đúng — dùng để phản hồi sau khi trả lời và
+  // ghi vào MistakeLog khi sai. KHÔNG gửi về client trước khi trả lời.
+  explanation: string;
 }
 
-// Client chỉ cần text/options để render. Đáp án đúng luôn nằm trong
-// QuizQuestionCache ở server, không gửi về trình duyệt.
-export type PublicQuestion = Omit<GeneratedQuestion, "correctIndex">;
+// Client chỉ cần text/options để render. Đáp án đúng và giải thích
+// luôn nằm ở server, không gửi về trình duyệt trước khi trả lời
+// (tránh lộ đáp án qua network tab).
+export type PublicQuestion = Omit<GeneratedQuestion, "correctIndex" | "explanation">;
 
 // Kết quả 1 dòng trong hồ sơ năng lực — map trực tiếp từ LearningProgress
 // nhưng KHÔNG expose toàn bộ field DB (vd id nội bộ) ra frontend.

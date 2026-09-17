@@ -88,11 +88,13 @@ LUÔN trả về JSON THUẦN theo đúng schema sau, KHÔNG kèm markdown, KHÔ
 {
   "text": "nội dung câu hỏi",
   "options": ["A", "B", "C", "D"],
-  "correctIndex": 0
+  "correctIndex": 0,
+  "explanation": "giải thích ngắn gọn (1-3 câu) vì sao đáp án đúng là đúng, chỉ ra lỗi sai thường gặp nếu có"
 }
 ` + MATH_FORMAT_RULE,
     user: `Sinh 1 câu hỏi trắc nghiệm 4 đáp án, môn "${subject}", chủ đề "${topic}",
 độ khó "${difficulty}". Câu hỏi phải phù hợp trình độ học sinh phổ thông Việt Nam.
+"explanation" phải giúp học sinh hiểu được BẢN CHẤT lỗi sai điển hình cho chủ đề này (vd nhầm dấu, sai công thức, hiểu sai khái niệm) để dùng cho tính năng phân tích lỗi sai.
 ${sourceContext ? `Chỉ sử dụng kiến thức trong nguồn sau và bám sát nội dung nguồn:\n${sourceContext.slice(0, 18_000)}` : ""}`,
   };
 }
@@ -250,7 +252,22 @@ Mức độ: ${difficulty}. Nếu nguồn không có thông tin cho một mục,
   };
 }
 
-// --- MIND MAP: sinh mind map từ tóm tắt tài liệu ---
+// --- FLASHCARDS: sinh bộ thẻ ghi nhớ từ nguồn ---
+export function buildFlashcardsPrompt(sourceText: string, count: number): { system: string; user: string } {
+  return {
+    system: `Bạn là trợ lý tạo bộ thẻ ghi nhớ (flashcards) cho LearnX. Chỉ dùng thông tin trong nguồn được cung cấp, không bịa thêm kiến thức.
+LUÔN trả về JSON THUẦN theo đúng schema, KHÔNG kèm markdown, KHÔNG giải thích thêm:
+{
+  "cards": [
+    { "front": "thuật ngữ hoặc câu hỏi ngắn", "back": "định nghĩa/giải thích ngắn gọn" }
+  ]
+}
+` + MATH_FORMAT_RULE,
+    user: `Sinh đúng ${count} thẻ ghi nhớ từ nguồn sau, ưu tiên khái niệm/định nghĩa/công thức quan trọng nhất, mỗi thẻ độc lập không cần ngữ cảnh thẻ khác:\n${sourceText.slice(0, 30_000)}`,
+  };
+}
+
+
 export function buildMindMapPrompt(summary: string): { system: string; user: string } {
   return {
     system: `Bạn là AI tạo Mind Map cho LearnX.

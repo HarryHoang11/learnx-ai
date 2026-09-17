@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
     if (question && userAnswer && correctAnswer && explanation) {
       const reviewItem = await createReviewFromMistake({
         userId,
+        subject: subject || topic,
         topic,
         concept,
         question,

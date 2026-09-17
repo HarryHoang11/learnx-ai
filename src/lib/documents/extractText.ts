@@ -97,10 +97,32 @@ function strategyErrorMessage(strategy: string, err: unknown): string {
   return `${strategy}: ${message}`;
 }
 
+// `pdf-parse` bundle một bản pdfjs cũ (v1.10.100) giữ state ở biến
+// module-level `PDFJS` (xem node_modules/pdf-parse/lib/pdf-parse.js).
+// Bản pdfjs cũ này KHÔNG an toàn khi nhiều `PDF(buffer)` chạy đồng thời:
+// hai request song song có thể đọc chéo state của nhau, dẫn tới trả
+// nhầm text của tài liệu khác (đã bắt được ở Test 7). Vì đây là bug
+// nằm trong thư viện bên thứ ba (không thể sửa trực tiếp và sẽ mất
+// khi `npm install` lại), cách khắc phục đúng ở tầng ứng dụng là ép
+// mọi lời gọi Strategy A chạy TUẦN TỰ (một hàng đợi toàn cục), trong
+// khi Strategy B (pdfjs-dist hiện đại, mỗi lần gọi tạo document object
+// riêng — an toàn concurrency) vẫn chạy song song bình thường.
+let pdfParseQueue: Promise<unknown> = Promise.resolve();
+
+function runExclusive<T>(task: () => Promise<T>): Promise<T> {
+  const result = pdfParseQueue.then(task, task);
+  // Giữ queue "sống" dù task lỗi, để request tiếp theo không bị kẹt.
+  pdfParseQueue = result.then(
+    () => undefined,
+    () => undefined
+  );
+  return result;
+}
+
 async function extractPdfPages(buffer: Buffer): Promise<{ pages: PdfPage[]; pageCount: number }> {
   // Strategy A: pdf-parse (nhẹ, đủ với đa số PDF xuất từ Word/print).
   try {
-    return await extractPdfPagesViaPdfParse(buffer);
+    return await runExclusive(() => extractPdfPagesViaPdfParse(buffer));
   } catch (errA) {
     // Strategy B: pdfjs-dist hiện đại — xử lý được xref stream nén,
     // object stream... mà pdf-parse 1.1.1 (pdf.js cũ) bó tay ("bad XRef

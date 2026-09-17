@@ -13,6 +13,7 @@ import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import { updateMastery } from "@/services/assessment.service";
 import { recordLearningActivity } from "@/services/learning-activity.service";
+import { syncRoadmapAfterMastery } from "@/services/roadmap.service";
 import type { ApiResponse } from "@/types";
 
 export const EXERCISE_DIFFICULTIES = ["easy", "medium", "hard"] as const;
@@ -170,6 +171,16 @@ export async function submitExerciseAttempt(
 
     // Mastery cập nhật mỗi lần nộp (đúng/sai đều là tín hiệu học).
     await updateMastery({ userId, subject: exercise.subject, topic: exercise.topic, isCorrect });
+
+    // Đồng bộ Roadmap khi mastery vừa đổi — best-effort, không chặn
+    // kết quả chấm bài nếu lỗi (cùng nguyên tắc với quiz.service.ts).
+    if (isCorrect) {
+      try {
+        await syncRoadmapAfterMastery(userId, exercise.subject, exercise.topic);
+      } catch (roadmapError) {
+        console.error("[exercise] Không thể đồng bộ Roadmap:", roadmapError);
+      }
+    }
 
     // XP: CHỈ lần đúng đầu tiên. Nộp sai hoặc nộp đúng lặp lại = 0 XP.
     let xpEarned = 0;
