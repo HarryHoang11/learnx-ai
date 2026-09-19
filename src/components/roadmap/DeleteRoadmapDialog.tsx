@@ -47,7 +47,7 @@ export default function DeleteRoadmapDialog({ goalTitle, deleting, onCancel, onC
             disabled={deleting}
             style={{
               background: "var(--rose, #f87171)",
-              color: "#1a0a0a",
+              color: "var(--on-accent)",
               border: "none",
               borderRadius: 10,
               padding: "9px 18px",

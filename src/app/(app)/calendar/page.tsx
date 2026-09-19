@@ -330,7 +330,7 @@ function MonthCalendarView({ days, onOpenDay }: { days: CalendarDayDto[]; onOpen
               </div>
               <div style={{ marginTop: "auto", padding: "4px 8px 8px", display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center", justifyContent: "center" }}>
                 {day.isLearned && day.isCurrentMonth && (
-                  <span style={{ fontSize: 10, background: "var(--cyan)", color: "#0a0e16", padding: "2px 6px", borderRadius: 4, fontWeight: 600 }}>
+                  <span style={{ fontSize: 10, background: "var(--cyan)", color: "var(--on-accent)", padding: "2px 6px", borderRadius: 4, fontWeight: 600 }}>
                     ✓
                   </span>
                 )}

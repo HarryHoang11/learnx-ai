@@ -111,7 +111,7 @@ export default function ProfileHeader({ profile, onPhotoUpdated }: ProfileHeader
       >
         {uploadingCover && (
           <div className="photo-upload-overlay">
-            <span className="spinner" />
+            <span className="spinner-ring" />
           </div>
         )}
 
@@ -152,7 +152,7 @@ export default function ProfileHeader({ profile, onPhotoUpdated }: ProfileHeader
 
               {uploadingAvatar && (
                 <div className="photo-upload-overlay photo-upload-overlay--round">
-                  <span className="spinner" />
+                  <span className="spinner-ring" />
                 </div>
               )}
             </div>

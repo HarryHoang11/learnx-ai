@@ -33,7 +33,7 @@ export default function AuthCard({ title, subtitle, children }: { title: string;
               fontFamily: "var(--font-space-grotesk), sans-serif",
               fontWeight: 700,
               fontSize: 17,
-              color: "#0a0e16",
+              color: "var(--on-accent)",
             }}
           >
             X

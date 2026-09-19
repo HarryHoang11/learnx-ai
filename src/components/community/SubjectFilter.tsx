@@ -125,7 +125,7 @@ function SubjectFilter({
                     padding: "2px 6px",
                     borderRadius: 99,
                     background: "var(--indigo)",
-                    color: "#0a0e16",
+                    color: "var(--on-accent)",
                     fontWeight: 700,
                   }}>
                     {t("com.selected")}

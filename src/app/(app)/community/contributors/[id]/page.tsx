@@ -67,7 +67,7 @@ export default function ContributorProfilePage() {
             {user.image ? (
               <img src={user.image} alt="" style={{ width: 80, height: 80, borderRadius: "50%", border: "3px solid var(--border)" }} />
             ) : (
-              <div style={{ width: 80, height: 80, borderRadius: "50%", background: "linear-gradient(135deg, var(--indigo), var(--cyan))", display: "flex", alignItems: "center", justifyContent: "center", color: "#0a0e16", fontWeight: 700, fontSize: 28 }}>
+              <div style={{ width: 80, height: 80, borderRadius: "50%", background: "linear-gradient(135deg, var(--indigo), var(--cyan))", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-accent)", fontWeight: 700, fontSize: 28 }}>
                 {(user.name || user.nickname || "?")[0].toUpperCase()}
               </div>
             )}

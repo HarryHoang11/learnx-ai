@@ -90,7 +90,7 @@ export default function LeaderboardPage() {
                   borderRadius: 8,
                   border: "1px solid var(--border)",
                   background: period === p ? "var(--indigo)" : "var(--panel-strong)",
-                  color: period === p ? "#0a0e16" : "var(--text)",
+                  color: period === p ? "var(--on-accent)" : "var(--text)",
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: "pointer",

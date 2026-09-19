@@ -115,7 +115,7 @@ export default function ReportModal({
           <button
             className="btn-secondary"
             onClick={handleSubmit}
-            style={{ background: "var(--rose)", borderColor: "var(--rose)", color: "#0a0e16" }}
+            style={{ background: "var(--rose)", borderColor: "var(--rose)", color: "var(--on-accent)" }}
             disabled={!reportReason || disabled}
           >
             {t("com.report.submit")}

@@ -170,7 +170,7 @@ export default function ProgressPage() {
                 borderRadius: 12,
                 padding: "14px 16px",
                 fontSize: 13.5,
-                color: "#d7d3fb",
+                color: "var(--indigo-strong)",
               }}
             >
               {insight}

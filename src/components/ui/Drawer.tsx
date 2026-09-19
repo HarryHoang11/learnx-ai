@@ -78,7 +78,7 @@ export default function Drawer({
           ...openStyles[position],
           width: "100%",
           height: "100%",
-          background: "#0e1422",
+          background: "var(--surface-elevated)",
           border: "none",
           borderRadius: 0,
           boxShadow: "0 24px 60px rgba(0, 0, 0, 0.65)",

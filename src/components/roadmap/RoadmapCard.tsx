@@ -86,7 +86,7 @@ export default function RoadmapCard({
                 right: 0,
                 top: "100%",
                 marginTop: 4,
-                background: "#10141f",
+                background: "var(--surface-elevated)",
                 border: "1px solid var(--border)",
                 borderRadius: 10,
                 minWidth: 170,
@@ -133,7 +133,7 @@ export default function RoadmapCard({
       </div>
 
       <div>
-        <div style={{ height: 6, borderRadius: 4, background: "#0e1420", overflow: "hidden" }}>
+        <div style={{ height: 6, borderRadius: 4, background: "var(--panel-strong)", overflow: "hidden" }}>
           <div
             style={{
               height: "100%",

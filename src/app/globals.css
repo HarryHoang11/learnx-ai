@@ -19,17 +19,99 @@
   --text-faint: #616e85;
   --indigo: #7c6cf0;
   --indigo-soft: rgba(124, 108, 240, 0.16);
+  /* Text-on-soft-indigo-background cần sáng hơn --indigo gốc để đủ
+     tương phản (tím/indigo đọc "tối" hơn cyan/amber/rose ở cùng độ
+     sáng) — trước đây hardcode #a395fc ngay trong .badge--indigo,
+     không theme hoá được. */
+  --indigo-strong: #a395fc;
   --cyan: #35d0d8;
   --cyan-soft: rgba(53, 208, 216, 0.14);
   --amber: #f0a941;
   --amber-soft: rgba(240, 169, 65, 0.15);
   --rose: #ef6a7d;
+  /* Chữ/icon vẽ TRÊN gradient cyan→indigo (nút CTA chính, avatar chữ
+     cái đầu, logo "X"...) — gradient này giữ nguyên độ bão hoà ở CẢ
+     2 theme (brand accent, không đổi theo dark/light), nên màu chữ
+     tương phản với nó cũng phải CỐ ĐỊNH, không alias theo --bg (nếu
+     alias, --bg đổi sang trắng ở light mode sẽ kéo theo màu chữ sai). */
+  --on-accent: #0a0e16;
   --radius-lg: 16px;
   --radius-md: 11px;
   --radius-sm: 8px;
+  /* Bề mặt "nổi" phía trên nội dung (modal/tooltip/toast) — trước đây
+     3 nơi dùng 3 mã hex GẦN GIỐNG NHƯNG KHÁC NHAU (#10141f, #0e1422,
+     #141a28), bypass hoàn toàn hệ token, nên sẽ đứng yên (dark) khi
+     light mode bật — gộp lại 1 token duy nhất để nhất quán và theme
+     hoá được. */
+  --surface-elevated: #10141f;
+  /* Hover cho các bề mặt "phẳng" (btn-secondary, dropdown item...) —
+     tách riêng khỏi --panel-strong (dùng cho trạng thái TĨNH) để có
+     1 nấc đậm hơn khi hover, mà vẫn theo đúng chiều overlay của từng
+     theme (trắng-mờ-trên-nền-tối / tối-mờ-trên-nền-sáng). Trước đây
+     hardcode rgba(255,255,255,X) thẳng trong rule hover — đúng nền
+     tối thì được, nhưng làm light mode gần như vô hình. */
+  --panel-hover: rgba(255, 255, 255, 0.12);
+  --border-hover: rgba(255, 255, 255, 0.2);
   /* Typography tokens — code/math dùng stack riêng, không để mỗi
      component tự chọn font (tránh chữ vỡ, icon ô vuông). */
   --font-code: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ================================================================
+   LIGHT MODE — không phải đảo màu, thiết kế riêng theo yêu cầu:
+   background sáng nhẹ (không trắng gắt), card có border/shadow rõ
+   thay vì dựa vào lớp phủ trắng-trên-nền-tối như dark mode, contrast
+   đủ cho text. Toàn bộ phần còn lại của file KHÔNG cần sửa gì thêm —
+   mọi component chỉ tham chiếu var(--token), nên đổi giá trị ở đây
+   là đủ (đúng tinh thần comment gốc của :root phía trên).
+   ================================================================ */
+:root[data-theme="light"] {
+  --bg: #f5f6fb;
+  /* Dark mode dùng lớp phủ TRẮNG mờ trên nền tối để tạo card sáng hơn
+     nền; light mode ngược lại cần lớp phủ TỐI mờ trên nền sáng để tạo
+     card khác biệt — cùng cơ chế, đổi chiều overlay. */
+  --panel: rgba(15, 23, 42, 0.04);
+  --panel-strong: rgba(15, 23, 42, 0.065);
+  --border: rgba(15, 23, 42, 0.11);
+  --border-soft: rgba(15, 23, 42, 0.07);
+  --text: #171b26;
+  --text-dim: #57607a;
+  --text-faint: #8991a8;
+  /* Cyan/amber/rose gốc được chọn để nổi bật TRÊN NỀN TỐI — dùng
+     nguyên trên nền sáng sẽ nhạt, thiếu tương phản cho text/icon.
+     Light mode cần bản ĐẬM hơn cho những chỗ dùng làm màu chữ/icon,
+     trong khi bản gốc (--cyan/--amber/--rose) vẫn giữ để dùng cho
+     background/gradient nơi độ bão hoà cao mới đẹp. */
+  --indigo: #6a4fe0;
+  --indigo-soft: rgba(106, 79, 224, 0.09);
+  --indigo-strong: #4e35c4;
+  --cyan: #0f8b93;
+  --cyan-soft: rgba(15, 139, 147, 0.1);
+  --amber: #b5790f;
+  --amber-soft: rgba(181, 121, 15, 0.12);
+  --rose: #c93854;
+  --surface-elevated: #ffffff;
+  --panel-hover: rgba(15, 23, 42, 0.09);
+  --border-hover: rgba(15, 23, 42, 0.18);
+}
+
+/* Tôn trọng prefers-reduced-motion TOÀN APP — thay vì phải rà từng
+   component tự thêm exception (4 chỗ đã có sẵn trước đây chỉ phủ
+   sidebar/skeleton/toast/modal), rule tổng quát này rút TẤT CẢ
+   animation/transition xuống gần như tức thời cho mọi phần tử, mọi
+   trang. Trạng thái cuối (hover/focus/active) vẫn áp dụng bình
+   thường — chỉ bỏ phần chuyển động giữa 2 trạng thái. Không xoá các
+   rule cụ thể cũ (vô hại khi trùng, một số còn tắt hẳn animation lặp
+   vô hạn như spinner/skeleton mà riêng rút ngắn duration chưa đủ). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 * {
@@ -106,7 +188,7 @@ h3 {
 .btn-primary {
   background: linear-gradient(135deg, var(--indigo), var(--cyan));
   border: none;
-  color: #0a0e16;
+  color: var(--on-accent);
   padding: 11px 22px;
   border-radius: var(--radius-md);
   font-weight: 600;
@@ -1100,7 +1182,7 @@ h3 {
 }
 
 .modal-card {
-  background: #10141f;
+  background: var(--surface-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 26px;
@@ -1114,7 +1196,7 @@ h3 {
    — tách riêng khỏi .modal-card để KHÔNG ảnh hưởng EditProfileModal
    (form ngắn, hợp lý ở 440px) và các modal hiện có khác. */
 .modal-card-wide {
-  background: #10141f;
+  background: var(--surface-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   width: 100%;
@@ -1246,7 +1328,7 @@ h3 {
 .profile-avatar-initials {
   font-size: 32px;
   font-weight: 700;
-  color: #0a0e16;
+  color: var(--on-accent);
 }
 
 .photo-edit-btn {
@@ -1300,7 +1382,7 @@ h3 {
   border-radius: 50%;
 }
 
-.spinner {
+.spinner-ring {
   width: 22px;
   height: 22px;
   border: 3px solid rgba(255, 255, 255, 0.25);
@@ -1512,7 +1594,7 @@ select:focus {
   justify-content: center;
   background: linear-gradient(135deg, var(--indigo), var(--cyan));
   box-shadow: 0 0 24px rgba(124, 108, 240, 0.45), inset 0 0 0 3px rgba(255, 255, 255, 0.18);
-  color: #0a0e16;
+  color: var(--on-accent);
 }
 
 .level-hero__badge-num {
@@ -1570,7 +1652,7 @@ select:focus {
   border-radius: 99px;
   font-size: 12px;
   font-weight: 700;
-  color: #0a0e16;
+  color: var(--on-accent);
   background: linear-gradient(135deg, var(--cyan), #7cf0e6);
   animation: gain-pop 0.45s ease;
 }
@@ -1722,7 +1804,7 @@ select:focus {
   font-family: var(--font-space-grotesk), sans-serif;
   font-weight: 700;
   font-size: 15px;
-  color: #0a0e16;
+  color: var(--on-accent);
   transition: transform 150ms ease;
 }
 
@@ -1818,7 +1900,7 @@ input:focus-visible {
 .tooltip {
   position: absolute;
   z-index: 100;
-  background: #0e1422;
+  background: var(--surface-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 8px 12px;
@@ -1885,30 +1967,116 @@ input:focus-visible {
 /* ================================================================
    MATH RENDERING (KaTeX) — dark mode + mobile
    ================================================================ */
+/* Block math (display mode, $$...$$): container phải TỰ CAO theo nội
+   dung — KHÔNG bao giờ overflow-y:hidden (bug cũ: cắt mất numerator/
+   denominator của phân số cao, đặc biệt phân số lồng nhau). Chỉ cho
+   scroll NGANG khi công thức quá rộng (ma trận, phương trình dài),
+   không giới hạn chiều cao/scale nhỏ chữ để "vừa 1 dòng". */
 .math-block {
-  margin: 10px 0;
-  padding: 6px 2px;
+  margin: 14px 0;
+  padding: 4px 2px 10px;
+  max-width: 100%;
   overflow-x: auto;
-  overflow-y: hidden;
-  line-height: 1.4;
+  overflow-y: visible;
 }
 
 .math-block > .katex-display {
   margin: 0;
+  /* KaTeX tự tính chiều cao chính xác theo nội dung (numerator +
+     denominator + padding riêng của từng ký hiệu) — không ép
+     line-height cố định đè lên, tránh cắt phân số lồng nhau/tổng/tích. */
+  line-height: normal;
 }
 
+/* Inline math ($...$) nằm giữa dòng văn bản: không cho tự xuống dòng
+   giữa chừng 1 công thức, nhưng vẫn cho cả dòng văn bản chứa nó xuống
+   dòng bình thường ở nơi khác — line-height của PARAGRAPH bao quanh
+   giữ nguyên (không đổi theo KaTeX) nhờ font-size gần 1em thay vì to
+   hẳn lên như trước đây từng gây lệch dòng. */
 .math-inline {
   white-space: nowrap;
+  display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
+  vertical-align: middle;
 }
 
 .math-inline .katex {
   font-size: 1.03em;
+  white-space: nowrap;
+}
+
+/* Mobile: cho phép scroll ngang RIÊNG cho từng công thức thay vì kéo
+   giãn/thu nhỏ chữ toán — đúng yêu cầu "equation container tự thích
+   nghi", không phá layout toàn trang. */
+@media (max-width: 640px) {
+  .math-block {
+    padding-bottom: 12px;
+  }
+  .math-block::-webkit-scrollbar,
+  .math-inline::-webkit-scrollbar {
+    height: 4px;
+  }
 }
 
 /* Code dùng token thống nhất thay vì fontFamily monospace rời rạc */
 code,
 pre {
   font-family: var(--font-code);
+}
+
+.code-block-wrapper {
+  margin: 8px 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  /* Không dùng fixed height cho khối chứa code — chiều cao luôn theo
+     nội dung thật, chỉ scroll NGANG khi 1 dòng code quá dài. */
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 10px;
+  background: var(--panel-strong);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.code-block-lang {
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.code-copy-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.code-copy-btn:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.code-block-pre {
+  background: var(--panel);
+  padding: 12px 14px;
+  margin: 0;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.55;
+  /* Cho phép scroll ngang RIÊNG trong code block khi dòng dài, không
+     làm cả trang bị scroll ngang (đúng yêu cầu responsive/mobile). */
+  max-width: 100%;
 }
 
 /* ================================================================
@@ -1947,7 +2115,7 @@ pre {
   padding: 12px 14px;
   border-radius: var(--radius-md);
   font-size: 13.5px;
-  background: #141a28;
+  background: var(--surface-elevated);
   border: 1px solid var(--border);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
@@ -2002,22 +2170,84 @@ pre {
    ================================================================ */
 
 .btn-primary {
-  transition: opacity 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+  /* Đã gộp với block "BUTTON MICRO-INTERACTIONS" phía trên — trước
+     đây có 2 rule .btn-primary/.btn-secondary tách rời làm transition
+     bị GHI ĐÈ một phần (bản sau chỉ khai lại background/border-color,
+     xoá mất "transform" khỏi danh sách transition của .btn-secondary
+     -> hiệu ứng nhấc lên khi hover bị GIẬT thay vì mượt). */
+  box-shadow: none;
 }
 
 .btn-primary:hover:not(:disabled) {
   opacity: 0.92;
   box-shadow: 0 4px 18px rgba(124, 108, 240, 0.35);
-  transform: translateY(-1px);
-}
-
-.btn-secondary {
-  transition: background 150ms ease, border-color 150ms ease;
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--panel-hover);
+  border-color: var(--border-hover);
+}
+
+/* Nút Logout — icon + text, cùng ngôn ngữ hover/focus với btn-secondary
+   nhưng nhỏ gọn hơn để vừa Topbar. */
+.logout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 7px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.logout-btn:hover:not(:disabled) {
+  background: var(--panel-hover);
+  border-color: var(--rose);
+  color: var(--rose);
+}
+
+.logout-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.logout-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.logout-btn .spinner {
+  color: var(--rose);
+}
+
+/* Nút chuyển Dark/Light — icon tròn nhỏ cạnh LanguageSwitcher. */
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.theme-toggle-btn:hover {
+  background: var(--panel-hover);
+  border-color: var(--cyan);
+  color: var(--cyan);
+  transform: rotate(15deg);
+}
+
+.theme-toggle-btn:active {
+  transform: scale(0.9);
 }
 
 .btn-ghost {
@@ -2106,11 +2336,6 @@ pre {
   animation: spin 1s linear infinite;
 }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 /* --------- Badges --------- */
 .badge {
   display: inline-flex;
@@ -2126,7 +2351,7 @@ pre {
 
 .badge--indigo {
   background: var(--indigo-soft);
-  color: #a395fc;
+  color: var(--indigo-strong);
   border: 1px solid rgba(124, 108, 240, 0.3);
 }
 
@@ -2188,7 +2413,7 @@ pre {
 
 .modal-content {
   width: 100%;
-  background: #0e1422;
+  background: var(--surface-elevated);
   border: 1px solid var(--border);
   border-radius: 16px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);

@@ -75,7 +75,7 @@ export default function ContributorLeaderboard({
                 borderRadius: 8,
                 border: "1px solid var(--border)",
                 background: period === p ? "var(--indigo)" : "var(--panel-strong)",
-                color: period === p ? "#0a0e16" : "var(--text)",
+                color: period === p ? "var(--on-accent)" : "var(--text)",
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: "pointer",
@@ -148,7 +148,7 @@ export default function ContributorLeaderboard({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "#0a0e16",
+                    color: "var(--on-accent)",
                     fontWeight: 700,
                     fontSize: 14,
                   }}>

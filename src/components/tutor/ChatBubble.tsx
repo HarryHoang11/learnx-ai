@@ -34,7 +34,16 @@ export default function ChatBubble({ role, content, tag }: ChatBubbleProps) {
         lineHeight: 1.55,
         background: isUser ? "var(--indigo-soft)" : "var(--panel-strong)",
         border: isUser ? "1px solid rgba(124,108,240,0.3)" : "1px solid var(--border)",
-        whiteSpace: "pre-wrap",
+        // `pre-wrap` chỉ đúng cho tin nhắn USER (text thuần, giữ
+        // nguyên dấu xuống dòng người dùng đã gõ). Áp lên CẢ nhánh AI
+        // (đã qua MarkdownLite -> HTML thật, có <p>/<br>/list riêng)
+        // là bug: 2 cơ chế xuống dòng chồng lên nhau (literal "\n" từ
+        // pre-wrap + block element của HTML) gây sai line-height đoạn
+        // văn xen công thức toán, và xung đột với `white-space: nowrap`
+        // của .math-inline (globals.css) — đúng loại "conflicting
+        // white-space" cần audit. Nhánh AI để mặc định "normal", để
+        // HTML/KaTeX tự kiểm soát spacing.
+        whiteSpace: isUser ? "pre-wrap" : "normal",
       }}
     >
       {tag && (

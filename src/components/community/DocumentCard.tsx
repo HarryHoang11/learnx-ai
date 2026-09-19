@@ -189,7 +189,7 @@ export default function CommunityDocumentCard({
 {owner.image ? (
               <img src={owner.image} alt={owner.name || ""} style={{ width: 28, height: 28, borderRadius: "50%" }} />
             ) : (
-            <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg, var(--indigo), var(--cyan))", display: "flex", alignItems: "center", justifyContent: "center", color: "#0a0e16", fontWeight: 700, fontSize: 12 }}>
+            <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg, var(--indigo), var(--cyan))", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-accent)", fontWeight: 700, fontSize: 12 }}>
               {(owner.name || owner.nickname || "?")[0].toUpperCase()}
             </div>
           )}

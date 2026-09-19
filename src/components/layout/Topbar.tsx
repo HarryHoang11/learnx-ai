@@ -12,14 +12,33 @@
 
 "use client";
 
+import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
-import { Menu } from "lucide-react";
+import { Menu, LogOut, Loader2, Sun, Moon } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
 import { useLanguage } from "@/components/providers/LanguageProvider";
+import { useTheme } from "@/components/providers/ThemeProvider";
 import type { Language } from "@/lib/i18n/dictionary";
 
 interface TopbarProps {
   onMenuClick?: () => void;
+}
+
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  const { t } = useLanguage();
+  const isLight = theme === "light";
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      className="theme-toggle-btn"
+      aria-label={isLight ? t("topbar.switchToDark") : t("topbar.switchToLight")}
+      title={isLight ? t("topbar.switchToDark") : t("topbar.switchToLight")}
+    >
+      {isLight ? <Moon size={16} aria-hidden="true" /> : <Sun size={16} aria-hidden="true" />}
+    </button>
+  );
 }
 
 function LanguageSwitcher() {
@@ -59,6 +78,20 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   const { t } = useLanguage();
   const name = session?.user?.name ?? session?.user?.email ?? t("topbar.student");
   const image = session?.user?.image;
+  // Chống double-submit: signOut() gọi API + điều hướng, có độ trễ
+  // mạng thật — không chặn nút trong lúc chờ thì user có thể bấm 2-3
+  // lần liên tiếp, gửi nhiều request signOut song song không cần thiết.
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  function handleLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    // Không cần .finally reset về false: signOut({callbackUrl}) điều
+    // hướng rời trang ngay khi thành công, nên component này unmount
+    // trước khi có cơ hội bấm lại; nếu mạng lỗi (Promise reject), giữ
+    // nguyên loading mãi thực chất an toàn hơn cho-phép double-submit.
+    void signOut({ callbackUrl: "/login" });
+  }
 
   return (
     <header className="topbar">
@@ -76,6 +109,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
 
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginLeft: "auto" }}>
         <LanguageSwitcher />
+        <ThemeToggle />
         <span
           style={{
             fontSize: 13,
@@ -94,11 +128,18 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
 
         <button
           type="button"
-          onClick={() => signOut({ callbackUrl: "/login" })}
-          className="btn-secondary"
-          style={{ fontSize: 12.5, padding: "7px 12px" }}
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className="logout-btn"
+          aria-label={t("topbar.logout")}
+          aria-busy={loggingOut}
         >
-          {t("topbar.logout")}
+          {loggingOut ? (
+            <Loader2 size={15} className="spinner" aria-hidden="true" />
+          ) : (
+            <LogOut size={15} aria-hidden="true" />
+          )}
+          <span>{loggingOut ? t("topbar.loggingOut") : t("topbar.logout")}</span>
         </button>
       </div>
     </header>

@@ -12,7 +12,9 @@
 // khác cố ý so với CommonMark để không bóp méo ký hiệu hàm.
 // ================================================================
 
-import type { ReactNode } from "react";
+"use client";
+
+import { useState, type ReactNode } from "react";
 import katex from "katex";
 // Import tương đối (không dùng alias @/) vì vitest của project chưa
 // cấu hình resolve alias — Next.js build vẫn resolve bình thường.
@@ -20,6 +22,28 @@ import { splitMathSegments } from "../math/SafeMath";
 
 interface MarkdownLiteProps {
   content: string;
+}
+
+// Copy button cho code block — tự viết bằng Clipboard API + emoji/ký
+// tự Unicode (✓/⧉) thay vì thêm icon library mới, giữ đúng triết lý
+// "không thêm dependency" của file này. State "copied" tự tắt sau 1.5s.
+function CodeCopyButton({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="code-copy-btn"
+      aria-label={copied ? "Đã sao chép" : "Sao chép code"}
+      onClick={() => {
+        navigator.clipboard?.writeText(code).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }).catch(() => {});
+      }}
+    >
+      {copied ? "✓ Đã chép" : "⧉ Copy"}
+    </button>
+  );
 }
 
 export type InlineToken =
@@ -193,9 +217,10 @@ export default function MarkdownLite({ content }: MarkdownLiteProps) {
     const line = lines[i];
     const trimmed = line.trim();
 
-    // Code block ```...```
+    // Code block ```lang ... ```
     if (trimmed.startsWith("```")) {
       flushList();
+      const language = trimmed.slice(3).trim(); // vd "js", "python", hoặc rỗng
       const codeLines: string[] = [];
       i++;
       while (i < lines.length && !lines[i].trim().startsWith("```")) {
@@ -203,22 +228,17 @@ export default function MarkdownLite({ content }: MarkdownLiteProps) {
         i++;
       }
       i++; // bỏ qua dòng ``` đóng
+      const codeText = codeLines.join("\n");
       blocks.push(
-        <pre
-          key={`code-${blocks.length}`}
-          style={{
-            background: "var(--panel-strong)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            padding: "12px 14px",
-            overflowX: "auto",
-            fontSize: 13,
-            fontFamily: "monospace",
-            margin: "8px 0 14px",
-          }}
-        >
-          <code>{codeLines.join("\n")}</code>
-        </pre>
+        <div key={`code-${blocks.length}`} className="code-block-wrapper">
+          <div className="code-block-header">
+            <span className="code-block-lang">{language || "code"}</span>
+            <CodeCopyButton code={codeText} />
+          </div>
+          <pre className="code-block-pre">
+            <code>{codeText}</code>
+          </pre>
+        </div>
       );
       continue;
     }

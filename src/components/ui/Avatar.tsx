@@ -59,7 +59,7 @@ export default function Avatar({ src, name, size, ringColor }: AvatarProps) {
         justifyContent: "center",
         fontSize: Math.max(11, size * 0.38),
         fontWeight: 700,
-        color: "#0a0e16",
+        color: "var(--on-accent)",
       }}
     >
       {initials}

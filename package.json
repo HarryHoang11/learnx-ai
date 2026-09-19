@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint src",
     "test": "vitest run",
@@ -27,7 +27,7 @@
     "lucide-react": "^1.45.0",
     "mammoth": "^1.12.2",
     "next": "^16.3.4",
-    "next-auth": "5.0.0-beta.32",
+    "next-auth": "5.0.0-beta.25",
     "pdf-parse": "^1.1.1",
     "pdfjs-dist": "^6.3.289",
     "pdfkit": "^0.20.2",

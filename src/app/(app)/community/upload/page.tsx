@@ -206,7 +206,7 @@ export default function CommunityUploadPage() {
         <>
           <Panel style={{ marginBottom: 24, borderColor: "var(--cyan)", background: "var(--cyan-soft)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <div style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--cyan)", display: "flex", alignItems: "center", justifyContent: "center", color: "#0a0e16", fontSize: 24, fontWeight: 700 }}>✓</div>
+              <div style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--cyan)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-accent)", fontSize: 24, fontWeight: 700 }}>✓</div>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 600 }}>Tải lên thành công!</div>
                 <div style={{ color: "var(--text-dim)", marginTop: 4 }}>Tài liệu của bạn đang được xử lý. AI sẽ tạo tóm tắt và đánh giá chất lượng.</div>
