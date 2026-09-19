@@ -25,52 +25,57 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ type: string }> },
 ) {
-  const { type: rawType } = await params;
-  const type = rawType as PhotoType;
+  try {
+    const { type: rawType } = await params;
+    const type = rawType as PhotoType;
 
-  if (type !== "avatar" && type !== "cover") {
-    return NextResponse.json(
-      { success: false, error: "Loại ảnh không hợp lệ." },
-      { status: 400 },
-    );
+    if (type !== "avatar" && type !== "cover") {
+      return NextResponse.json(
+        { success: false, error: "Loại ảnh không hợp lệ." },
+        { status: 400 },
+      );
+    }
+
+    const userId = await getCurrentUserId();
+
+    if (!userId) {
+      return unauthorizedResponse();
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        avatarData: true,
+        avatarMimeType: true,
+        coverData: true,
+        coverMimeType: true,
+      },
+    });
+
+    const data = type === "avatar" ? user?.avatarData : user?.coverData;
+
+    const mimeType =
+      type === "avatar" ? user?.avatarMimeType : user?.coverMimeType;
+
+    if (!data || !mimeType) {
+      return NextResponse.json(
+        { success: false, error: "Chưa có ảnh." },
+        { status: 404 },
+      );
+    }
+
+    // "private": ảnh gắn với tài khoản đăng nhập, không cho shared cache
+    // (proxy/CDN công cộng) lưu chung. "max-age=0, must-revalidate":
+    // vẫn cho trình duyệt cache theo URL (đã có "?v=" cache-buster ở
+    // route upload) nhưng luôn revalidate nếu URL không đổi.
+    return new NextResponse(new Uint8Array(data), {
+      headers: {
+        "Content-Type": mimeType,
+        "Cache-Control": "private, max-age=0, must-revalidate",
+      },
+    });
+  } catch (err) {
+    console.error("[api/profile/photo] Lỗi:", err);
+    return NextResponse.json({ success: false, error: "Không thể tải ảnh." }, { status: 500 });
   }
-
-  const userId = await getCurrentUserId();
-
-  if (!userId) {
-    return unauthorizedResponse();
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      avatarData: true,
-      avatarMimeType: true,
-      coverData: true,
-      coverMimeType: true,
-    },
-  });
-
-  const data = type === "avatar" ? user?.avatarData : user?.coverData;
-
-  const mimeType =
-    type === "avatar" ? user?.avatarMimeType : user?.coverMimeType;
-
-  if (!data || !mimeType) {
-    return NextResponse.json(
-      { success: false, error: "Chưa có ảnh." },
-      { status: 404 },
-    );
-  }
-  
-  // "private": ảnh gắn với tài khoản đăng nhập, không cho shared cache
-  // (proxy/CDN công cộng) lưu chung. "max-age=0, must-revalidate":
-  // vẫn cho trình duyệt cache theo URL (đã có "?v=" cache-buster ở
-  // route upload) nhưng luôn revalidate nếu URL không đổi.
-  return new NextResponse(new Uint8Array(data), {
-    headers: {
-      "Content-Type": mimeType,
-      "Cache-Control": "private, max-age=0, must-revalidate",
-    },
-  });
 }

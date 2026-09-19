@@ -98,13 +98,15 @@ export async function generateRoadmap(params: {
   // tháng hiện tại (vd làm đủ quiz + đạt mastery > ngưỡng), gọi lại
   // generateRoadmap() để AI "đẩy sớm" topic tháng sau lên, đúng như
   // note trong bản kế hoạch gốc ("AI phát hiện bạn tiến bộ nhanh...").
+  // ĐÃ GIẢI QUYẾT bên dưới bằng syncRoadmapAfterMastery() — xem đó,
+  // không cần gọi lại AI, chỉ cần cập nhật trạng thái topic có sẵn.
 
   return plan;
 }
 
 // ================================================================
 // SYNC ROADMAP AFTER MASTERY — phần "Roadmap tự cập nhật" trong flow
-// gốc ("Skill ↑ -> Roadmap tự cập nhật"), thay cho TODO cũ ở trên.
+// gốc ("Skill ↑ -> Roadmap tự cập nhật"), giải quyết TODO ở trên.
 // ================================================================
 // Mạch tư duy: gọi lại AI mỗi khi mastery đổi vừa tốn kém vừa không
 // cần thiết — plan (danh sách topic theo tháng) không cần đổi, chỉ

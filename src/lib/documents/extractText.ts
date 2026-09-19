@@ -97,41 +97,31 @@ function strategyErrorMessage(strategy: string, err: unknown): string {
   return `${strategy}: ${message}`;
 }
 
-// `pdf-parse` bundle một bản pdfjs cũ (v1.10.100) giữ state ở biến
-// module-level `PDFJS` (xem node_modules/pdf-parse/lib/pdf-parse.js).
-// Bản pdfjs cũ này KHÔNG an toàn khi nhiều `PDF(buffer)` chạy đồng thời:
-// hai request song song có thể đọc chéo state của nhau, dẫn tới trả
-// nhầm text của tài liệu khác (đã bắt được ở Test 7). Vì đây là bug
-// nằm trong thư viện bên thứ ba (không thể sửa trực tiếp và sẽ mất
-// khi `npm install` lại), cách khắc phục đúng ở tầng ứng dụng là ép
-// mọi lời gọi Strategy A chạy TUẦN TỰ (một hàng đợi toàn cục), trong
-// khi Strategy B (pdfjs-dist hiện đại, mỗi lần gọi tạo document object
-// riêng — an toàn concurrency) vẫn chạy song song bình thường.
-let pdfParseQueue: Promise<unknown> = Promise.resolve();
-
-function runExclusive<T>(task: () => Promise<T>): Promise<T> {
-  const result = pdfParseQueue.then(task, task);
-  // Giữ queue "sống" dù task lỗi, để request tiếp theo không bị kẹt.
-  pdfParseQueue = result.then(
-    () => undefined,
-    () => undefined
-  );
-  return result;
-}
-
+// ================================================================
+// STRATEGY ORDER — pdfjs-dist (B) trước, pdf-parse (A) sau
+// ================================================================
+// ĐÃ THỰC NGHIỆM XÁC NHẬN (không phải suy đoán): pdf-parse bundle bản
+// pdf.js v1.10.100 cực cũ có cache nội bộ Ở TẦNG THƯ VIỆN (không phải
+// module cache của Node — đã thử xoá require.cache hoàn toàn, vẫn lỗi)
+// khiến lần gọi SAU trả về NHẦM nội dung của lần gọi TRƯỚC, xảy ra
+// NGAY CẢ KHI GỌI TUẦN TỰ CÓ DELAY (không phải race condition — hàng
+// đợi runExclusive từng thêm vào đây KHÔNG giải quyết được vấn đề này
+// và đã bị gỡ bỏ vì tạo cảm giác an toàn giả). Đây là bug NGHIÊM
+// TRỌNG: trên server production tái sử dụng process (serverless warm
+// start), 2 user upload PDF gần nhau có thể nhận NHẦM nội dung của
+// nhau. pdfjs-dist (Strategy B) tạo document object độc lập mỗi lần
+// gọi (`pdf.destroy()` trong finally) — đã verify KHÔNG có hiện tượng
+// này. Vì vậy đổi B thành CHIẾN LƯỢC CHÍNH; A chỉ còn là fallback
+// hiếm khi B không đọc được structure (xref nén cũ...), chấp nhận rủi
+// ro tồn dư ở nhánh fallback vì tần suất B fail rất thấp trong thực tế.
 async function extractPdfPages(buffer: Buffer): Promise<{ pages: PdfPage[]; pageCount: number }> {
-  // Strategy A: pdf-parse (nhẹ, đủ với đa số PDF xuất từ Word/print).
   try {
-    return await runExclusive(() => extractPdfPagesViaPdfParse(buffer));
-  } catch (errA) {
-    // Strategy B: pdfjs-dist hiện đại — xử lý được xref stream nén,
-    // object stream... mà pdf-parse 1.1.1 (pdf.js cũ) bó tay ("bad XRef
-    // entry"...). Đây là fallback, không phải parser thứ hai chạy song
-    // song — chỉ tốn chi phí khi A đã fail.
+    return await extractPdfPagesViaPdfJs(buffer);
+  } catch (errB) {
     try {
-      return await extractPdfPagesViaPdfJs(buffer);
-    } catch (errB) {
-      const message = `${strategyErrorMessage("A", errA)} | ${strategyErrorMessage("B", errB)}`;
+      return await extractPdfPagesViaPdfParse(buffer);
+    } catch (errA) {
+      const message = `${strategyErrorMessage("B", errB)} | ${strategyErrorMessage("A", errA)}`;
       throw new DocumentProcessingError(classifyPdfFailure(errB), "TEXT_EXTRACTION", message);
     }
   }
