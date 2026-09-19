@@ -10,13 +10,19 @@
 
 :root {
   --bg: #0a0e16;
-  --panel: rgba(255, 255, 255, 0.045);
-  --panel-strong: rgba(255, 255, 255, 0.07);
-  --border: rgba(255, 255, 255, 0.09);
-  --border-soft: rgba(255, 255, 255, 0.06);
-  --text: #eef1f7;
-  --text-dim: #9aa4b8;
-  --text-faint: #616e85;
+  /* ---- Bảng màu/bề mặt đồng bộ theo mockup thiết kế (a.txt) ----
+     Mockup dùng panel là 1 lớp KÍNH XANH-ĐEN bán trong
+     rgba(21,27,40,.72) + viền hơi ngả xanh (rgba(201,211,255,.12)),
+     thay vì lớp phủ trắng mờ rgba(255,255,255,.045) như trước — trên
+     nền #0a0e16 thì lớp phủ trắng cho ra màu xám đục, còn lớp kính
+     xanh giữ được "chất" glassmorphism của mockup. */
+  --panel: rgba(21, 27, 40, 0.72);
+  --panel-strong: rgba(27, 34, 51, 0.88);
+  --border: rgba(201, 211, 255, 0.12);
+  --border-soft: rgba(201, 211, 255, 0.08);
+  --text: #f5f7ff;
+  --text-dim: #94a0b8;
+  --text-faint: #68748c;
   --indigo: #7c6cf0;
   --indigo-soft: rgba(124, 108, 240, 0.16);
   /* Text-on-soft-indigo-background cần sáng hơn --indigo gốc để đủ
@@ -26,16 +32,22 @@
   --indigo-strong: #a395fc;
   --cyan: #35d0d8;
   --cyan-soft: rgba(53, 208, 216, 0.14);
-  --amber: #f0a941;
-  --amber-soft: rgba(240, 169, 65, 0.15);
-  --rose: #ef6a7d;
+  --amber: #f5c76a;
+  --amber-soft: rgba(245, 199, 106, 0.15);
+  --rose: #f07c91;
+  /* Mockup tách "thành công/hoàn thành" thành 1 sắc thái RIÊNG màu
+     xanh lá (--green) chứ không dùng chung cyan như trước — nhờ vậy
+     badge "Hoàn thành"/"Mastered" không còn bị lẫn với các nhãn mang
+     tính thông tin (vốn dùng cyan) khi nhìn cùng lúc trên 1 màn hình. */
+  --green: #65d6a3;
+  --green-soft: rgba(101, 214, 163, 0.13);
   /* Chữ/icon vẽ TRÊN gradient cyan→indigo (nút CTA chính, avatar chữ
      cái đầu, logo "X"...) — gradient này giữ nguyên độ bão hoà ở CẢ
      2 theme (brand accent, không đổi theo dark/light), nên màu chữ
      tương phản với nó cũng phải CỐ ĐỊNH, không alias theo --bg (nếu
      alias, --bg đổi sang trắng ở light mode sẽ kéo theo màu chữ sai). */
-  --on-accent: #0a0e16;
-  --radius-lg: 16px;
+  --on-accent: #09101d;
+  --radius-lg: 18px;
   --radius-md: 11px;
   --radius-sm: 8px;
   /* Bề mặt "nổi" phía trên nội dung (modal/tooltip/toast) — trước đây
@@ -50,8 +62,8 @@
      theme (trắng-mờ-trên-nền-tối / tối-mờ-trên-nền-sáng). Trước đây
      hardcode rgba(255,255,255,X) thẳng trong rule hover — đúng nền
      tối thì được, nhưng làm light mode gần như vô hình. */
-  --panel-hover: rgba(255, 255, 255, 0.12);
-  --border-hover: rgba(255, 255, 255, 0.2);
+  --panel-hover: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(201, 211, 255, 0.2);
   /* Typography tokens — code/math dùng stack riêng, không để mỗi
      component tự chọn font (tránh chữ vỡ, icon ô vuông). */
   --font-code: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -90,6 +102,11 @@
   --amber: #b5790f;
   --amber-soft: rgba(181, 121, 15, 0.12);
   --rose: #c93854;
+  /* Bản đậm hơn của --green cho light mode, cùng lý do như cyan/amber/
+     rose phía trên: #65d6a3 trên nền sáng bị nhạt, không đủ tương phản
+     khi dùng làm màu chữ/icon. */
+  --green: #0d8f63;
+  --green-soft: rgba(13, 143, 99, 0.1);
   --surface-elevated: #ffffff;
   --panel-hover: rgba(15, 23, 42, 0.09);
   --border-hover: rgba(15, 23, 42, 0.18);
@@ -166,7 +183,12 @@ h3 {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
   padding: 22px 24px;
-  backdrop-filter: blur(6px);
+  /* Mockup coi panel là 1 tấm kính DÀY nổi trên nền: blur 18px + bóng
+     sâu 55px. Trước đây chỉ blur 6px và không có bóng nên card trông
+     phẳng, gần như dán liền vào nền — đây là khác biệt thị giác lớn
+     nhất giữa bản cũ và mockup. */
+  backdrop-filter: blur(18px);
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.22);
 }
 
 /* --------- Thanh tiến trình / mastery bar dùng nhiều nơi --------- */
@@ -1784,8 +1806,12 @@ select:focus {
 
 .sidebar-link--active {
   color: var(--text);
-  background: var(--panel-strong);
+  /* Mockup: mục đang chọn dùng gradient ngang indigo→cyan rất nhẹ cộng
+     1 vạch cyan 2px ở mép trái (box-shadow inset) làm "điểm neo" thị
+     giác — nhìn ra ngay đang ở trang nào, rõ hơn kiểu chỉ đổi nền. */
+  background: linear-gradient(90deg, rgba(124, 108, 240, 0.25), rgba(53, 208, 216, 0.08));
   border-color: var(--border);
+  box-shadow: inset 2px 0 var(--cyan);
 }
 
 .sidebar-link:focus-visible {
@@ -1794,9 +1820,9 @@ select:focus {
 }
 
 .sidebar-logo {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  width: 32px;
+  height: 32px;
+  border-radius: 11px;
   background: linear-gradient(135deg, var(--indigo), var(--cyan));
   display: flex;
   align-items: center;
@@ -1805,6 +1831,9 @@ select:focus {
   font-weight: 700;
   font-size: 15px;
   color: var(--on-accent);
+  /* Bóng màu theo gradient thương hiệu (mockup) thay vì bóng đen —
+     logo trông "phát sáng" thay vì bị viền tối. */
+  box-shadow: 0 8px 25px rgba(124, 108, 240, 0.3);
   transition: transform 150ms ease;
 }
 
@@ -1824,6 +1853,11 @@ a:hover .sidebar-logo {
   margin-bottom: 24px;
   padding: 10px 0;
   background: linear-gradient(var(--bg) 70%, transparent);
+  /* Mockup: topbar là dải kính mờ có 1 đường kẻ MẢNH dưới chân, tạo
+     ranh giới rõ giữa thanh điều hướng và nội dung cuộn bên dưới.
+     Giữ nguyên gradient cũ (nó vẫn cần để nội dung cuộn qua không bị
+     cắt đột ngột) và chỉ thêm hairline cho khớp mockup. */
+  border-bottom: 1px solid var(--border-soft);
 }
 
 /* --------- Page entrance: stagger nhẹ, không lạm dụng --------- */
@@ -2380,9 +2414,9 @@ pre {
 }
 
 .badge--success {
-  background: rgba(53, 208, 216, 0.15);
-  color: var(--cyan);
-  border: 1px solid rgba(53, 208, 216, 0.3);
+  background: var(--green-soft);
+  color: var(--green);
+  border: 1px solid rgba(101, 214, 163, 0.3);
 }
 
 .badge--warning {

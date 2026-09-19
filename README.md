@@ -33,7 +33,7 @@ prisma/
 
 src/
 ├── auth.ts                    Cấu hình NextAuth v5 trung tâm (Google + Credentials)
-├── middleware.ts               Bảo vệ trang riêng tư, redirect /login nếu chưa đăng nhập
+├── proxy.ts                    Bảo vệ trang riêng tư, redirect /login nếu chưa đăng nhập (Next.js 16: thay cho middleware.ts)
 │
 ├── app/
 │   ├── layout.tsx              Root layout: font, SessionProvider, suppressHydrationWarning (cả <html> lẫn <body>)
@@ -128,7 +128,7 @@ Dùng **NextAuth v5 (Auth.js)**, cấu hình tập trung tại `src/auth.ts`:
 - **Email + Password** — provider `Credentials`, mật khẩu hash bằng `bcryptjs` (cost factor 12), lưu ở `User.passwordHash`. Đăng ký qua `POST /api/auth/register`, sau đó tự `signIn("credentials", ...)`. Form đăng ký có trường **Xác nhận mật khẩu**, validate khớp ở client trước khi gọi API. Cả 2 ô mật khẩu (Login lẫn Register) dùng chung component `components/auth/PasswordInput.tsx` có nút mắt hiện/ẩn.
 - Session dùng chiến lược **JWT** (không phải database session) — đây là yêu cầu bắt buộc của Auth.js khi có Credentials provider cùng lúc với OAuth provider.
 - `PrismaAdapter` vẫn được dùng để lưu `User`/`Account` vào Postgres khi đăng nhập Google.
-- `src/middleware.ts` chặn mọi trang trong `(app)` nếu chưa đăng nhập (redirect `/login`), nhưng **không** chặn `/api/**` — API tự trả JSON `401` qua `unauthorizedResponse()` (`lib/auth/session.ts`), vì `fetch()` ở client cần nhận JSON chứ không phải một redirect HTML.
+- `src/proxy.ts` (Next.js 16 đổi tên từ `middleware.ts`) chặn mọi trang trong `(app)` nếu chưa đăng nhập (redirect `/login`), nhưng **không** chặn `/api/**` — API tự trả JSON `401` qua `unauthorizedResponse()` (`lib/auth/session.ts`), vì `fetch()` ở client cần nhận JSON chứ không phải một redirect HTML.
 - Không còn "demo user" hard-code — mọi route đều lấy `userId` thật từ session qua `getCurrentUserId()`.
 
 Đăng xuất: nút trong `Topbar.tsx`, gọi `signOut()` của `next-auth/react`.
@@ -172,16 +172,18 @@ Model chia làm 2 nhóm:
 
 ---
 
-## 6. AI (AI Provider Router: Gemini → Groq → OpenRouter)
+## 6. AI (AI Provider Router: Gemini → Groq → DeepSeek → Qwen → OpenRouter)
 
-- `lib/ai/router.ts` — **AI Provider Router**, điểm gọi AI DUY NHẤT mà toàn bộ service/route dùng (`generateText`, `generateJSON`, `AIOverloadedError` — giữ NGUYÊN chữ ký so với bản chỉ-dùng-Gemini trước đây). Thứ tự provider: **Gemini (chính) → Groq (fallback 1) → OpenRouter (fallback cuối)**.
+- `lib/ai/router.ts` — **AI Provider Router**, điểm gọi AI DUY NHẤT mà toàn bộ service/route dùng (`generateText`, `generateJSON`, `AIOverloadedError` — giữ NGUYÊN chữ ký so với bản chỉ-dùng-Gemini trước đây). Thứ tự provider: **Gemini (chính) → Groq (fallback 1) → DeepSeek (fallback 2) → Qwen (fallback 3) → OpenRouter (fallback cuối)** — khai báo 1 nguồn duy nhất ở `DEFAULT_AI_PROVIDERS` (export để test khoá lại đúng thứ tự).
   - Mỗi provider tối đa **1 retry** (transient error: timeout/429/5xx/network) trước khi router chuyển sang provider tiếp theo. Lỗi do API key sai (`401/403`) chuyển provider ngay không retry. Lỗi do request sai (`400`, input không hợp lệ) ném thẳng ra, **không fallback** (provider khác cũng sẽ fail giống hệt).
   - Provider thiếu API key bị **skip tự động** (không crash app) — kiểm tra qua `isConfigured()` của từng provider.
-  - Timeout riêng từng provider: Gemini 12s, Groq 8s, OpenRouter 12s (`lib/ai/providers/timeout.ts`) — không để request treo vô hạn.
-  - Nếu cả 3 provider đều fail, ném `AIOverloadedError` — các route AI (`roadmap/generate`, `assessment/start`, `ai/chat`, `ai/hint`, `analytics`) bắt riêng lỗi này để trả **HTTP 503** kèm message tiếng Việt.
+  - Timeout riêng từng provider: Gemini 12s, Groq 8s, DeepSeek 12s, Qwen 12s, OpenRouter 12s (`lib/ai/providers/timeout.ts`) — không để request treo vô hạn.
+  - Nếu cả 5 provider đều fail, ném `AIOverloadedError` — các route AI (`roadmap/generate`, `assessment/start`, `ai/chat`, `ai/hint`, `analytics`) bắt riêng lỗi này để trả **HTTP 503** kèm message tiếng Việt.
   - Response mỗi provider được normalize về chung 1 format `AIResponse { content, provider, model, usage? }` (`lib/ai/types.ts`) — service phía trên không biết/không cần biết đang chạy provider nào.
   - Log dạng `[AI] Trying provider: gemini`, `[AI] gemini thất bại...`, `[AI] Bỏ qua provider "groq": thiếu API key.` — KHÔNG log API key/token.
-- `lib/ai/providers/gemini.provider.ts`, `groq.provider.ts`, `openrouter.provider.ts` — implementation riêng từng provider theo interface `AIProvider` (`lib/ai/types.ts`). Groq/OpenRouter dùng thẳng `fetch` tới API tương thích OpenAI (`lib/ai/providers/openaiCompatible.ts`), **không thêm SDK mới**.
+- `lib/ai/providers/gemini.provider.ts`, `groq.provider.ts`, `deepseek.provider.ts`, `qwen.provider.ts`, `openrouter.provider.ts` — implementation riêng từng provider theo interface `AIProvider` (`lib/ai/types.ts`). Groq/DeepSeek/Qwen/OpenRouter dùng thẳng `fetch` tới API tương thích OpenAI (`lib/ai/providers/openaiCompatible.ts`), **không thêm SDK mới** (DeepSeek/Qwen chỉ mô tả config khác nhau: base URL, env var, timeout).
+  - **DeepSeek**: base URL mặc định `https://api.deepseek.com` (đổi bằng `DEEPSEEK_BASE_URL` khi đi qua gateway nội bộ), model mặc định `deepseek-flash` (đổi bằng `DEEPSEEK_MODEL`) — chọn model Flash vì đây là provider dự phòng, cần rẻ/nhanh/concurrency cao; cả 2 model DeepSeek hiện tại đều hỗ trợ JSON Output nên `jsonMode` hoạt động.
+  - **Qwen** (Alibaba Cloud Model Studio / DashScope compatible-mode): base URL **BẮT BUỘC lấy từ `QWEN_BASE_URL`**, KHÔNG hardcode vì DashScope có endpoint khác nhau theo region (Singapore / Beijing / US / Hong Kong / workspace-dedicated) và API key cũng theo region — dùng key region A với endpoint region B sẽ bị `401`. Thiếu key **hoặc** thiếu base URL thì provider bị **skip** (không đoán region thay người dùng). Model mặc định `qwen-flash`, đổi bằng `QWEN_MODEL`.
 - `lib/ai/gemini.ts` — chỉ còn giữ SDK client Gemini thô (`client`, `MODEL_NAME`, `callWithRetry`) dùng bởi `GeminiProvider` **và** `lib/embeddings/vector.ts`. Model đọc từ `GEMINI_MODEL` trong `.env`, mặc định `gemini-flash-latest`.
 - `lib/ai/prompts.ts` — toàn bộ system prompt: Socratic Tutor (3 cấp độ gợi ý), sinh câu hỏi trắc nghiệm, sinh roadmap, tóm tắt tài liệu.
 - `lib/embeddings/vector.ts` — embedding dùng **`gemini-embedding-001`** (đọc từ `GEMINI_EMBEDDING_MODEL` trong `.env`), thay cho `text-embedding-004` đã bị Google **shutdown hoàn toàn ngày 14/1/2026**. `gemini-embedding-001` trả vector 3072 chiều mặc định, nhưng cột DB cố định `vector(768)` (khớp model cũ) — code **cắt vector về 768 chiều đầu rồi chuẩn hoá lại (L2-normalize)**, đây là cách dùng chính thức Google khuyến nghị cho model hỗ trợ Matryoshka Representation Learning (MRL), không phải hack. Dùng đúng `taskType` (`RETRIEVAL_DOCUMENT` khi lưu chunk, `RETRIEVAL_QUERY` khi tìm kiếm) để cải thiện độ chính xác similarity search.
@@ -194,7 +196,7 @@ Model chia làm 2 nhóm:
   - Ảnh (`.png`/`.jpg`/`.webp`): **chưa hỗ trợ** (cần OCR, ngoài phạm vi hiện tại) — ném `UnsupportedFileTypeError`, route trả `400` rõ ràng.
   - File PDF/DOCX bị mã hoá (đặt mật khẩu) hoặc hỏng: thư viện parse sẽ throw, route bắt lỗi và trả `400` "Không thể đọc nội dung file này" — đây là giới hạn kỹ thuật bình thường, không phải bug.
 - `lib/storage/dbUpload.ts` — validate + đọc avatar/cover thành `Buffer`, lưu thẳng vào cột `Bytes` (`avatarData`/`coverData`) trong Postgres qua `api/profile/photo/route.ts`; ảnh được serve lại qua `GET /api/profile/photo/[type]`, KHÔNG còn ghi ra `public/uploads/` như bản trước.
-- `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_EMBEDDING_MODEL`, `GROQ_API_KEY`, `GROQ_MODEL`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `APP_URL` (optional, dùng cho header `HTTP-Referer` khi gọi OpenRouter) đọc trực tiếp từ `process.env`.
+- `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_EMBEDDING_MODEL`, `GROQ_API_KEY`, `GROQ_MODEL`, `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL`, `QWEN_API_KEY`, `QWEN_BASE_URL`, `QWEN_MODEL`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `APP_URL` (optional, dùng cho header `HTTP-Referer` khi gọi OpenRouter) đọc trực tiếp từ `process.env`. Toàn bộ key chỉ được đọc ở **server** (provider chỉ import trong `lib/ai/router.ts` → service/route handler) và chỉ gửi đi trong header `Authorization`, KHÔNG bao giờ trả về response hay ghi vào log.
 
 ---
 
@@ -357,7 +359,7 @@ npm run dev
   khớp trong 1 PR riêng.
 - Script `npm run lint` hỏng sẵn (Next 16 bỏ `next lint`) — kiểm tra bằng
   `npx eslint <file>` trực tiếp; nên đổi script sang `eslint .`.
-- Cảnh báo `middleware` deprecated (Next 16 muốn `proxy`) — chưa migrate vì rủi ro auth.
+- Đã migrate `middleware.ts` -> `proxy.ts` theo Next.js 16 (chỉ đổi tên file, giữ nguyên 100% logic auth/matcher). Lưu ý: KHÔNG được tồn tại đồng thời cả 2 file — Next.js 16 ném lỗi E900 ngay khi dựng route manifest và làm MỌI route (kể cả `/`) trả 404 dạng HTML.
 - Review submissions UI: API `/api/review/*` đầy đủ nhưng chưa có trang `/review`
   riêng — dashboard hiện dẫn sang `/practice` để ôn.
 - Chưa có minimap cho Mind Map (ghi rõ là optional).
