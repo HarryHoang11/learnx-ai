@@ -52,6 +52,58 @@ export type InlineToken =
   | { kind: "italic"; text: string }
   | { kind: "code"; text: string };
 
+// Gom display math nhiều dòng ($$...$$, \[...\]) thành 1 "siêu dòng" để
+// parser dòng-theo-dòng không cắt vỡ công thức. Hàm thuần túy — test
+// được bằng vitest. Code block ```...``` được tôn trọng: math delimiter
+// bên trong code KHÔNG gom (đó là code mẫu, không phải công thức).
+export function mergeDisplayMathLines(content: string): string {
+  const lines = content.split("\n");
+  const out: string[] = [];
+  let buffer: string[] | null = null;
+  let closer: "$$" | "\\]" | null = null;
+  let inCodeBlock = false;
+
+  const openerOf = (trimmed: string): "$$" | "\\[" | null => {
+    if (trimmed.startsWith("$$") && !trimmed.slice(2).includes("$$")) return "$$";
+    if (trimmed.includes("\\[") && !trimmed.includes("\\]")) return "\\[";
+    return null;
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("```")) {
+      inCodeBlock = !inCodeBlock;
+      if (buffer) out.push(buffer.join("\n"));
+      buffer = null;
+      closer = null;
+      out.push(line);
+      continue;
+    }
+    if (inCodeBlock) {
+      out.push(line);
+      continue;
+    }
+    if (!buffer) {
+      const opener = openerOf(trimmed);
+      if (opener) {
+        buffer = [line];
+        closer = opener === "$$" ? "$$" : "\\]";
+      } else {
+        out.push(line);
+      }
+      continue;
+    }
+    buffer.push(line);
+    if (closer === "$$" ? trimmed.includes("$$") : trimmed.includes("\\]")) {
+      out.push(buffer.join("\n"));
+      buffer = null;
+      closer = null;
+    }
+  }
+  if (buffer) out.push(buffer.join("\n"));
+  return out.join("\n");
+}
+
 // Tách inline thành token (hàm thuần túy — test được bằng vitest).
 // Thứ tự ưu tiên: code > bold > italic có biên. Italic yêu cầu mở `*`
 // ở ĐẦU chuỗi hoặc sau whitespace, và đóng `*` không dính chữ/số —
@@ -194,7 +246,9 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
 }
 
 export default function MarkdownLite({ content }: MarkdownLiteProps) {
-  const lines = content.split("\n");
+  // Gom display math nhiều dòng THÀNH 1 siêu dòng trước khi parser
+  // dòng-theo-dòng chạy (mergeDisplayMathLines tôn trọng code block).
+  const lines = mergeDisplayMathLines(content).split("\n");
   const blocks: ReactNode[] = [];
 
   let i = 0;

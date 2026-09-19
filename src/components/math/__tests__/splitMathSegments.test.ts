@@ -40,6 +40,17 @@ describe("splitMathSegments", () => {
     expect(money.every((s) => s.type === "text")).toBe(true);
   });
 
+  it("nhận ký hiệu đơn $x$ là math (yêu cầu Workspace)", () => {
+    const segs = splitMathSegments("Xét $x$ và $MB$ trong tam giác");
+    expect(segs.filter((s) => s.type === "math")).toHaveLength(2);
+    expect(segs[1]).toEqual({ type: "math", content: "x", display: false });
+  });
+
+  it("không nhầm tiền tệ có cặp $ thành math", () => {
+    const price = splitMathSegments("Giá $50,000$ hôm nay");
+    expect(price.every((s) => s.type === "text")).toBe(true);
+  });
+
   it("chuỗi rỗng cho mảng rỗng", () => {
     expect(splitMathSegments("")).toEqual([]);
   });

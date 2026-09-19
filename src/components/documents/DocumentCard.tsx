@@ -24,22 +24,27 @@ interface DocumentCardProps {
   retrying: boolean;
 }
 
-// Preview 2-3 dòng: cắt theo ký tự (đơn giản, đủ dùng) rồi giới hạn
-// chiều cao bằng CSS line-clamp — tránh 1 tài liệu có summary dài phá
-// vỡ chiều cao đều nhau của các card khác trong danh sách.
+// Preview ngắn 1–3 dòng cho card gọn: loại bỏ math LaTeX khỏi preview
+// TRƯỚC khi cắt (tránh cắt giữa công thức), còn Markdown THẬT chỉ render
+// trong modal chi tiết. Luôn giữ nguyên công thức — preview chỉ là text.
 const PREVIEW_MAX_CHARS = 220;
 
-function previewText(summary: string): string {
-  // Bỏ heading Markdown (##, **) khỏi preview cho gọn — chỉ cần đọc
-  // lướt nội dung, không cần thấy ký tự markdown thô trong 2-3 dòng
-  // preview (Markdown thật sự chỉ hiển thị đẹp trong modal chi tiết).
-  const plain = summary
+export function plainPreviewText(summary: string): string {
+  const noMath = summary
+    .replace(/\$\$[\s\S]+?\$\$/g, " ")
+    .replace(/\\\[[\s\S]+?\\\]/g, " ")
+    .replace(/\\\([\s\S]+?\\\)/g, " ")
+    .replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, "$1/$2");
+  const plain = noMath
     .replace(/^#{1,3}\s+/gm, "")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/[-*•]\s+/g, "")
     .replace(/\n+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
-  return plain.length > PREVIEW_MAX_CHARS ? `${plain.slice(0, PREVIEW_MAX_CHARS)}...` : plain;
+  return plain.length > PREVIEW_MAX_CHARS
+    ? `${plain.slice(0, PREVIEW_MAX_CHARS).trimEnd()}...`
+    : plain;
 }
 
 const FORMATS = [
@@ -140,7 +145,7 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
       {doc.status === "ready" && doc.summary && (
         <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>
           <span style={{ color: "var(--text-faint)" }}>{t("doc.summaryLabel")} </span>
-          {previewText(doc.summary)}
+          {plainPreviewText(doc.summary)}
         </div>
       )}
 

@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ClipboardCheck, FileText, Layers, MessageCircle, Network, Play, RotateCcw, Route, Send, Sparkles } from "lucide-react";
+import { BookOpen, Download, FileText, MessageCircle, Network, Play, RotateCcw, Route, Send, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import MarkdownLite from "@/components/documents/MarkdownLite";
+import { plainPreviewText } from "@/components/documents/DocumentCard";
 import EmptyState from "@/components/ui/EmptyState";
 import StateMessage from "@/components/ui/StateMessage";
 import { useLanguage } from "@/components/providers/LanguageProvider";

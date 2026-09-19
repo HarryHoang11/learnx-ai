@@ -267,10 +267,10 @@ export function buildDocumentSummaryPrompt(rawText: string): { system: string; u
 - (bullet point từng ý chính, càng cụ thể càng tốt)
 
 ## Công thức
-(CHỈ thêm mục này nếu tài liệu thực sự có công thức toán/lý/hoá — viết công thức trong code block hoặc LaTeX đơn giản vd $x^2 + y^2 = z^2$. Nếu tài liệu không có công thức nào, BỎ HẲN mục này, không bịa ra.)
+(CHỈ thêm mục này nếu tài liệu thực sự có công thức toán/lý/hoá — viết công thức display dạng khối $$...$$ riêng dòng, KHÔNG dùng \\[ \\]. Nếu tài liệu không có công thức nào, BỎ HẲN mục này, không bịa ra.)
 
 ## Kết luận
-(1-2 câu chốt lại điều học sinh cần nhớ nhất)`,
+(1-2 câu chốt lại điều học sinh cần nhớ nhất)` + MATH_FORMAT_RULE,
     user: rawText.slice(0, 12000), // cắt bớt nếu tài liệu quá dài, tránh vượt context window
   };
 }
