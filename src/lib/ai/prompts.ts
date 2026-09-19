@@ -71,6 +71,44 @@ Trình bày lời giải hoàn chỉnh, rõ ràng từng bước theo chuẩn s�
   return baseRules + "\n" + (levelRules[hintLevel] ?? levelRules[0]);
 }
 
+// --- AI TUTOR: câu hỏi gợi ý theo NGỮ CẢNH (khối "CÂU HỎI GỢI Ý") ---
+// Input là những gì ĐÃ CÓ THẬT trong DB của user: chủ đề đang học, tóm tắt
+// tài liệu đang chọn làm nguồn (nếu có), các chủ đề yếu nhất (mastery thấp)
+// và các chủ đề vừa làm sai gần đây — xem services/tutor-context.service.ts
+// (hàm suggestQuestions). Nhờ vậy câu hỏi gợi ý bám đúng trình độ người học
+// thay vì một danh sách cứng dùng chung cho mọi người.
+//
+// Ràng buộc ĐÚNG theo nơi gọi: service parse kết quả bằng normalizeQuestions
+// nên JSON trả về BẮT BUỘC có mảng "questions" (phần tử là string); service
+// chỉ lấy tối đa MAX_QUESTIONS = 3 câu đầu — vì vậy prompt yêu cầu đúng 3 câu.
+export function buildSuggestedQuestionsPrompt(params: {
+  topic: string;
+  documentSummary: string | null;
+  weakTopics: string[];
+  recentMistakes: string[];
+}): { system: string; user: string } {
+  return {
+    system: `Bạn là AI Gia sư của LearnX (“Học cùng AI, không chỉ hỏi AI”).
+Nhiệm vụ: gợi ý 3 câu hỏi mà CHÍNH HỌC SINH nên hỏi AI Gia sư về chủ đề đang học.
+LUÔN trả về JSON THUẦN theo đúng schema sau, KHÔNG kèm markdown, KHÔNG giải thích thêm:
+{
+  "questions": ["câu hỏi 1", "câu hỏi 2", "câu hỏi 3"]
+}
+Nguyên tắc cho từng câu hỏi:
+- Viết bằng tiếng Việt, giọng thân thiện, mỗi câu 1 dòng, ngắn gọn.
+- Là câu hỏi mở, khuyến khích hiểu BẢN CHẤT (vì sao, khác nhau thế nào, khi nào dùng) — KHÔNG hỏi vặt kiểu tra cứu định nghĩa.
+- 3 câu phải KHÁC NHAU về góc tiếp cận: (1) khái niệm/bản chất, (2) ví dụ hoặc vận dụng, (3) lỗi thường gặp.
+- Ưu tiên các chủ đề học sinh còn yếu và vừa làm sai gần đây khi chúng liên quan tới chủ đề đang học.
+- KHÔNG bịa kiến thức nằm ngoài chủ đề và tài liệu nguồn đã cho.` + MATH_FORMAT_RULE,
+    user: `Chủ đề đang học: ${params.topic}
+${params.documentSummary ? `Tóm tắt tài liệu đang dùng làm nguồn:\n${params.documentSummary.slice(0, 4000)}` : "Chưa có tài liệu nguồn nào được chọn."}
+${params.weakTopics.length ? `Các chủ đề học sinh còn yếu (mastery thấp nhất): ${params.weakTopics.join(", ")}` : "Chưa có dữ liệu điểm yếu."}
+${params.recentMistakes.length ? `Các chủ đề học sinh vừa làm sai gần đây: ${params.recentMistakes.join(", ")}` : "Chưa có log lỗi sai gần đây."}
+
+Hãy tạo 3 câu hỏi gợi ý phù hợp nhất cho học sinh này.`,
+  };
+}
+
 // --- DIAGNOSTIC / QUIZ: sinh câu hỏi trắc nghiệm theo độ khó ---
 // Dùng chung cho cả Diagnostic Test (assessment) và Quiz luyện tập,
 // vì bản chất đều là "sinh 1 câu hỏi trắc nghiệm theo (subject, topic,

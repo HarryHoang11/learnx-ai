@@ -5,9 +5,13 @@
 // side panel) cùng tham chiếu MỘT định nghĩa, tránh lệch kiểu.
 // ================================================================
 
-import type { TutorMode } from "@/lib/ai/prompts";
-
-export type { TutorMode };
+// 6 chế độ đồng hành của AI Gia sư — khai báo tại ĐÂY (module kiểu dùng chung
+// của tutor), các component con (TutorModeBar, TutorSidePanel) import lại từ
+// "./types" để chỉ có MỘT định nghĩa duy nhất. Đây là kiểu của TẦNG UI
+// (chọn chế độ hiển thị/gửi lên API), không phải kiểu của prompt AI — nên
+// không đặt trong lib/ai/prompts.ts (nơi đó chỉ có buildSocraticPrompt dùng
+// hintLevel dạng số).
+export type TutorMode = "explain" | "hint" | "askback" | "socratic" | "example" | "summary";
 
 export interface Citation {
   documentId: string;

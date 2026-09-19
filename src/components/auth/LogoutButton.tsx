@@ -39,7 +39,7 @@ export default function LogoutButton({ className = "", variant = "topbar" }: Log
         ) : (
           <LogOut size={16} aria-hidden="true" />
         )}
-        <span>{loggingOut ? t("auth.loggingOut") || "Đang đăng xuất..." : t("topbar.logout")}</span>
+        <span>{loggingOut ? t("topbar.loggingOut") : t("topbar.logout")}</span>
       </button>
     );
   }
@@ -65,7 +65,7 @@ export default function LogoutButton({ className = "", variant = "topbar" }: Log
       ) : (
         <LogOut size={14} aria-hidden="true" />
       )}
-      <span>{loggingOut ? t("auth.loggingOut") || "Đang đăng xuất..." : t("topbar.logout")}</span>
+      <span>{loggingOut ? t("topbar.loggingOut") : t("topbar.logout")}</span>
     </button>
   );
 }
