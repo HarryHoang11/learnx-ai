@@ -9,7 +9,7 @@
 // (`@/lib/ai/gemini` -> `@/lib/ai/router`), KHÔNG cần sửa gì khác vì
 // generateText()/generateJSON()/AIOverloadedError giữ NGUYÊN chữ ký.
 //
-// THỨ TỰ PROVIDER: Gemini -> Groq -> OpenRouter (đúng yêu cầu). Provider
+// THỨ TỰ PROVIDER: Gemini -> Groq -> DeepSeek -> Qwen -> OpenRouter. Provider
 // thiếu API key bị SKIP (không throw), không phải lỗi.
 //
 // VÌ SAO EMBEDDING (lib/embeddings/vector.ts) KHÔNG đi qua router này:
@@ -26,6 +26,8 @@
 
 import { geminiProvider } from "./providers/gemini.provider";
 import { groqProvider } from "./providers/groq.provider";
+import { deepseekProvider } from "./providers/deepseek.provider";
+import { qwenProvider } from "./providers/qwen.provider";
 import { openrouterProvider } from "./providers/openrouter.provider";
 import { AIProvider, AIResponse, GenerateOptions, ProviderError, AIOverloadedError } from "./types";
 
@@ -116,7 +118,7 @@ export function createAIRouter(providers: AIProvider[]) {
 
     const lastMessage = lastError instanceof Error ? lastError.message : String(lastError);
     throw new AIOverloadedError(
-      `Tất cả AI provider (Gemini, Groq, OpenRouter) đều không khả dụng, vui lòng thử lại sau ít phút. Lỗi cuối: ${lastMessage}`
+      `Tất cả AI provider (Gemini, Groq, DeepSeek, Qwen, OpenRouter) đều không khả dụng, vui lòng thử lại sau ít phút. Lỗi cuối: ${lastMessage}`
     );
   }
 
@@ -134,7 +136,27 @@ export function createAIRouter(providers: AIProvider[]) {
   return { generate, generateJSON };
 }
 
-const defaultRouter = createAIRouter([geminiProvider, groqProvider, openrouterProvider]);
+// Thứ tự fallback của router MẶC ĐỊNH — export để (a) test khoá lại ĐÚNG
+// thứ tự này (một provider bị timeout/rate-limit/model-404/API error thì
+// router tự chuyển sang provider kế tiếp, không retry vô hạn), và (b) chỗ
+// nào cần biết "hệ thống đang có những provider nào" thì đọc 1 nguồn duy
+// nhất thay vì import lẻ từng file provider.
+//
+// Thứ tự này KHÔNG phải thứ hạng chất lượng model, mà là thứ hạng
+// "độ sẵn sàng cho use case của LearnX": Gemini (chính, có embedding cùng
+// nhà) -> Groq (nhanh, độ trễ thấp cho tutor/quiz) -> DeepSeek (rẻ, JSON
+// output tốt) -> Qwen (đa dạng model, có region riêng) -> OpenRouter (chợ
+// model, nhiều model dự phòng nhất). Provider thiếu API key bị SKIP hoàn
+// toàn, không tính là fail.
+export const DEFAULT_AI_PROVIDERS: readonly AIProvider[] = [
+  geminiProvider,
+  groqProvider,
+  deepseekProvider,
+  qwenProvider,
+  openrouterProvider,
+];
+
+const defaultRouter = createAIRouter([...DEFAULT_AI_PROVIDERS]);
 
 // ----------------------------------------------------------------
 // API CÔNG KHAI — giữ NGUYÊN chữ ký so với lib/ai/gemini.ts bản cũ để
