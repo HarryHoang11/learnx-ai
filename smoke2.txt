@@ -1,0 +1,7 @@
+﻿200  /api/tutor/context
+200  /api/diagnostic/status
+200  /api/practice/mistakes
+200  /api/learning-session/active
+404  /api/roadmap
+200  /api/mindmap
+200  /api/documents

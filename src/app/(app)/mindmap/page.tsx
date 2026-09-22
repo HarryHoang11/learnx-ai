@@ -20,6 +20,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import Skeleton from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
 import { useLanguage } from "@/components/providers/LanguageProvider";
+import MindMapExportModal from "@/components/mindmap/MindMapExportModal";
 import type { ApiResponse } from "@/types";
 
 interface MindNode {
@@ -82,6 +83,7 @@ function MindMapPageInner() {
   const [dirty, setDirty] = useState(false);
   const [editLabel, setEditLabel] = useState("");
   const [editDesc, setEditDesc] = useState("");
+  const [exportOpen, setExportOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -258,30 +260,18 @@ function MindMapPageInner() {
     }
   }
 
-  function exportJSON() {
-    if (!record) return;
+  // Dữ liệu export lấy từ STATE đang hiển thị (không đọc lại DB) để file
+  // khớp đúng những gì người dùng thấy, kể cả thay đổi chưa bấm Lưu.
+  const exportData = useMemo<MindMapData>(() => {
     const edgeSet = new Map<string, MindEdge>();
     for (const n of nodes) {
       if (n.parentId) {
         const key = `${n.parentId}->${n.id}`;
-        if (!edgeSet.has(key)) {
-          edgeSet.set(key, { id: key, source: n.parentId, target: n.id });
-        }
+        if (!edgeSet.has(key)) edgeSet.set(key, { id: key, source: n.parentId, target: n.id });
       }
     }
-    const edges = Array.from(edgeSet.values());
-    const blob = new Blob([JSON.stringify({ title: record.title, nodes, edges }, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${record.title.replace(/[\\/:*?"<>|]/g, "_")}.mindmap.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
+    return { version: 1, nodes, edges: Array.from(edgeSet.values()) };
+  }, [nodes]);
 
   const query = search.trim().toLowerCase();
 
@@ -315,7 +305,9 @@ function MindMapPageInner() {
             margin: "5px 0",
             borderRadius: depth === 0 ? 14 : 10,
             background: isSelected ? "var(--indigo-soft)" : "var(--panel-strong)",
-            border: `1px solid ${isSelected ? "var(--indigo)" : isHit ? "var(--cyan)" : "var(--border)"}`,
+            borderTop: `1px solid ${isSelected ? "var(--indigo)" : isHit ? "var(--cyan)" : "var(--border)"}`,
+            borderRight: `1px solid ${isSelected ? "var(--indigo)" : isHit ? "var(--cyan)" : "var(--border)"}`,
+            borderBottom: `1px solid ${isSelected ? "var(--indigo)" : isHit ? "var(--cyan)" : "var(--border)"}`,
             borderLeft: `3px solid ${color}`,
             fontSize: depth === 0 ? 15 : 13.5,
             fontWeight: depth === 0 ? 700 : 500,
@@ -457,7 +449,7 @@ function MindMapPageInner() {
           <button className="btn-secondary" onClick={() => setZoom((z) => Math.min(1.6, +(z + 0.1).toFixed(2)))} aria-label={t("mm.zoomIn")}>
             +
           </button>
-          <button className="btn-secondary" onClick={exportJSON}>
+          <button className="btn-secondary" onClick={() => setExportOpen(true)}>
             {t("mm.export")}
           </button>
           <button className="btn-primary" onClick={save} disabled={saving || !dirty}>
@@ -530,6 +522,14 @@ function MindMapPageInner() {
           )}
         </Panel>
       </div>
+
+      <MindMapExportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        title={record.title}
+        data={exportData}
+        collapsed={collapsed}
+      />
     </section>
   );
 }

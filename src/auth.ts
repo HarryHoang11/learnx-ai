@@ -26,6 +26,47 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/prisma";
 
+// ----------------------------------------------------------------
+// CHẨN ĐOÁN LỖI CẤU HÌNH Ở PRODUCTION
+// ----------------------------------------------------------------
+// Auth.js bắt buộc phải có AUTH_SECRET (hoặc NEXTAUTH_SECRET) khi
+// NODE_ENV=production — thiếu biến này, `assertConfig()` trả lỗi
+// MissingSecret cho MỌI request vào /api/auth/*, tức toàn bộ endpoint
+// đăng nhập/session trả HTTP 500 trong khi phần còn lại của app (page,
+// API khác) vẫn chạy bình thường. Đây là kiểu lỗi dễ bị chẩn đoán nhầm
+// thành "server sập", nên log thẳng TÊN biến còn thiếu ra Runtime Logs
+// của Vercel. KHÔNG in giá trị của bất kỳ biến nào (tránh lộ secret).
+const hasAuthSecret = !!(process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET);
+if (!hasAuthSecret && process.env.NODE_ENV === "production") {
+  // eslint-disable-next-line no-console
+  console.error(
+    "[auth] THIẾU AUTH_SECRET: mọi endpoint /api/auth/* sẽ trả HTTP 500 (MissingSecret). " +
+      "Thêm AUTH_SECRET vào Environment Variables của môi trường Production rồi redeploy. " +
+      "Tạo giá trị bằng: openssl rand -base64 32"
+  );
+}
+
+// Cùng họ lỗi trên: Auth.js chỉ tin `Host` header khi có 1 trong các dấu
+// hiệu AUTH_URL / AUTH_TRUST_HOST / VERCEL / CF_PAGES, HOẶC khi đang chạy
+// dev. Vercel/Cloudflare tự set biến nên không cần làm gì; nhưng self-host
+// (`next start` sau Docker/Nginx/VPS) mà quên AUTH_URL sẽ hỏng y hệt
+// MissingSecret — log sẵn hướng dẫn để khỏi mất thời gian dò.
+const hasTrustedHostSignal = !!(
+  process.env.AUTH_URL ||
+  process.env.NEXTAUTH_URL ||
+  process.env.AUTH_TRUST_HOST ||
+  process.env.VERCEL ||
+  process.env.CF_PAGES
+);
+if (!hasTrustedHostSignal && process.env.NODE_ENV === "production") {
+  // eslint-disable-next-line no-console
+  console.error(
+    "[auth] Không có AUTH_URL/AUTH_TRUST_HOST: khi self-host production, Auth.js sẽ từ chối Host header " +
+      "(UntrustedHost -> /api/auth/* trả HTTP 500). Set AUTH_URL=https://<domain-cua-ban> hoặc AUTH_TRUST_HOST=true. " +
+      "(Trên Vercel/Cloudflare không cần, nền tảng tự set biến tương ứng.)"
+  );
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },

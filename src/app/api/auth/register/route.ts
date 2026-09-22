@@ -17,8 +17,23 @@ import type { ApiResponse } from "@/types";
 const MIN_PASSWORD_LENGTH = 8;
 
 export async function POST(req: NextRequest) {
+  // Parse body RIÊNG khỏi try chính: body sai định dạng JSON là lỗi của
+  // client (400), không phải lỗi hệ thống — nếu để `req.json()` ném vào
+  // catch chung thì client nhận 500 "Không thể đăng ký" và rất dễ bị
+  // chẩn đoán nhầm thành server sập.
+  const body = (await req.json().catch(() => null)) as {
+    email?: unknown;
+    password?: unknown;
+    name?: unknown;
+  } | null;
+  if (!body) {
+    return NextResponse.json<ApiResponse<never>>(
+      { success: false, error: "Dữ liệu gửi lên không phải JSON hợp lệ." },
+      { status: 400 }
+    );
+  }
+
   try {
-    const body = await req.json();
     const email = (body.email as string | undefined)?.trim().toLowerCase();
     const password = body.password as string | undefined;
     const name = (body.name as string | undefined)?.trim();

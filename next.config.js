@@ -1,16 +1,70 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // experimental.serverActions không cần bật thủ công ở Next 14 vì đã stable.
-  // Để trống config vì MVP không cần custom webpack/rewrite gì đặc biệt —
-  // tránh thêm cấu hình không dùng tới, giữ file dễ đọc cho người mới join dự án.
-
-  // Tắt Next.js Dev Indicator (logo "N" Next.js tự nổi góc dưới-trái khi
-  // chạy `next dev`) — đây chính là nguồn gốc chữ "N"/error-like badge
-  // xuất hiện trên UI mà audit PHASE 6 yêu cầu tìm. KHÔNG phải bug của
-  // LearnX, cũng KHÔNG xuất hiện ở production build (`next start`) —
-  // Next.js tự loại bỏ nó khi build production. Tắt hẳn ở đây để môi
-  // trường dev cũng sạch, tránh nhầm lẫn nó là lỗi thật lần nữa.
+  // Next.js Dev Indicator (logo "N" tự nổi góc dưới-trái khi `next dev`) —
+  // tắt hẳn để môi trường dev cũng sạch; Next.js tự loại bỏ nó khi build
+  // production nên không ảnh hưởng Vercel.
   devIndicators: false,
+
+  // Các package CHỈ chạy được ở server (đọc file bằng `fs`, dùng worker,
+  // native addon...). Nếu để Next.js bundle chúng vào server chunk, đường
+  // dẫn file nội bộ của package (pdfkit cần .afm/.ttf, pdf-parse cần file
+  // test, pdfjs-dist cần worker) sẽ SAI sau khi build -> route 500 trên
+  // Vercel dù chạy tốt ở local. Khai báo ở đây để Next giữ chúng là
+  // external require, đọc thẳng từ node_modules trong runtime.
+  serverExternalPackages: ["pdfkit", "pdf-parse", "pdfjs-dist", "mammoth", "jszip", "docx"],
+
+  // Font Noto Sans (hỗ trợ tiếng Việt + ký hiệu toán) được đọc bằng
+  // `fs.readFileSync` với đường dẫn ghép runtime -> bộ trace file của
+  // Next.js KHÔNG tự phát hiện. Thiếu khai báo này, PDF trên Vercel sẽ
+  // rơi vào fallback Helvetica (mất dấu tiếng Việt) thay vì render đúng
+  // font đã commit trong repo.
+  outputFileTracingIncludes: {
+    "/api/**": ["./src/fonts/**"],
+  },
 };
+
+// ----------------------------------------------------------------
+// BUILD-TIME ENV CHECK
+// ----------------------------------------------------------------
+// Chạy khi Next nạp config (build/start), bao gồm cả build trên Vercel.
+// Chỉ CẢNH BÁO tên biến còn thiếu — KHÔNG throw (không làm sập build) và
+// KHÔNG in giá trị (không lộ secret ra log). Lý do tồn tại: thiếu
+// AUTH_SECRET ở production khiến MỌI endpoint /api/auth/* trả 500
+// (Auth.js ném MissingSecret) trong khi phần còn lại của app vẫn chạy —
+// triệu chứng rất dễ bị chẩn đoán nhầm thành "server sập".
+const REQUIRED_PRODUCTION_ENV = [
+  "DATABASE_URL", // Prisma -> Postgres/pgvector
+  "AUTH_SECRET", // ký session JWT của Auth.js
+];
+const OPTIONAL_ENV = [
+  "GEMINI_API_KEY", // provider AI chính
+  "GROQ_API_KEY", // fallback 1
+  "OPENROUTER_API_KEY", // fallback cuối
+  "GOOGLE_CLIENT_ID", // chỉ cần nếu dùng đăng nhập Google
+  "GOOGLE_CLIENT_SECRET",
+];
+
+function reportMissingEnv() {
+  const missingRequired = REQUIRED_PRODUCTION_ENV.filter((name) => !process.env[name]);
+  const missingOptional = OPTIONAL_ENV.filter((name) => !process.env[name]);
+
+  if (missingRequired.length > 0) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `\n[env] THIẾU BIẾN BẮT BUỘC: ${missingRequired.join(", ")}\n` +
+        `[env] Hậu quả: ${missingRequired.includes("AUTH_SECRET") ? "mọi endpoint /api/auth/* sẽ trả HTTP 500 (đăng nhập không dùng được) — " : ""}` +
+        `${missingRequired.includes("DATABASE_URL") ? "mọi API đọc/ghi DB sẽ trả HTTP 500. " : ""}\n` +
+        `[env] Cách sửa: thêm các biến trên vào Vercel > Project > Settings > Environment Variables (Production) rồi Redeploy.\n`
+    );
+  }
+  if (missingOptional.length > 0) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[env] Biến tuỳ chọn chưa set: ${missingOptional.join(", ")} — tính năng tương ứng sẽ bị tắt/bỏ qua, app vẫn chạy.`
+    );
+  }
+}
+
+reportMissingEnv();
 
 module.exports = nextConfig;

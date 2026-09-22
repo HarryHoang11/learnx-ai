@@ -1,5 +1,20 @@
+# --- Secrets: KHÔNG bao giờ commit file env thật (chỉ .env.example có placeholder) ---
 /.env
-/.env.example
+/.env.local
+/.env*.local
+
+# --- Dependencies ---
 /node_modules
-/.next
 node_modules/
+
+# --- Build output: Next.js + TypeScript incremental info ---
+/.next
+/out
+/build
+tsconfig.tsbuildinfo
+
+# --- Vercel + file upload local + file tạm khi debug ---
+.vercel
+/public/uploads
+*.log
+*-out.txt

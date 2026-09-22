@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Download, FileText, MessageCircle, Network, Play, RotateCcw, Route, Send, Sparkles, X } from "lucide-react";
+import { BookOpen, ClipboardCheck, FileText, Layers, MessageCircle, Network, Play, RotateCcw, Route, Send, Sparkles } from "lucide-react";
 import Link from "next/link";
 import MarkdownLite from "@/components/documents/MarkdownLite";
+import SummaryDrawer from "@/components/documents/SummaryDrawer";
 import { plainPreviewText } from "@/components/documents/DocumentCard";
 import EmptyState from "@/components/ui/EmptyState";
 import StateMessage from "@/components/ui/StateMessage";
@@ -105,6 +106,9 @@ export default function WorkspacePage() {
   const [loading, setLoading] = useState(true);
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Drawer đọc tóm tắt đầy đủ: Workspace chỉ hiện preview 1–3 dòng để
+  // gọn, nội dung Markdown/LaTeX dài nằm sau nút "Xem tóm tắt".
+  const [showSummary, setShowSummary] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -398,6 +402,7 @@ export default function WorkspacePage() {
                   className={`workspace-source ${selected?.id === document.id ? "workspace-source--selected" : ""}`}
                   onClick={() => {
                     setSelectedId(document.id);
+                    setShowSummary(false);
                     setAnswer(null);
                     setStudyGuide(null);
                     setGuideCached(false);
@@ -492,7 +497,20 @@ export default function WorkspacePage() {
                       {t("workspace.guideCachedNote")} {new Date(guideUpdatedAt).toLocaleString()}
                     </p>
                   )}
-                  {studyGuide ? <MarkdownLite content={studyGuide} /> : selected.summary ? <MarkdownLite content={selected.summary} /> : <p className="workspace-muted">{t("workspace.noSummary")}</p>}
+                  {studyGuide ? (
+                    <MarkdownLite content={studyGuide} />
+                  ) : selected.summary ? (
+                    <>
+                      <p className="workspace-muted">{plainPreviewText(selected.summary)}</p>
+                      <div style={{ marginTop: 10 }}>
+                        <button type="button" className="btn-secondary" onClick={() => setShowSummary(true)}>
+                          <BookOpen size={14} /> {t("doc.viewSummary")}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="workspace-muted">{t("workspace.noSummary")}</p>
+                  )}
                   {quiz && (
                     <div className="workspace-quiz">
                       <div className="workspace-reading-heading"><span>{targetedTopic ? `${t("workspace.targetedPractice")}: ${targetedTopic}` : t("workspace.quiz")}</span><span>{quiz.difficulty}</span></div>
@@ -603,6 +621,15 @@ export default function WorkspacePage() {
             ))}
           </div>
         </section>
+      )}
+
+      {showSummary && selected?.summary && (
+        <SummaryDrawer
+          documentId={selected.id}
+          fileName={selected.fileName}
+          summary={selected.summary}
+          onClose={() => setShowSummary(false)}
+        />
       )}
     </section>
   );

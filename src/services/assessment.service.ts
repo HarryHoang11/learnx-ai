@@ -139,6 +139,12 @@ export async function getAssessmentHistoryBySubject(userId: string): Promise<
     lastMastery: number;
   }>
 > {
+  // LƯU Ý: phải QUALIFY mọi cột bằng alias `a.` — cả `Attempt` lẫn
+  // `LearningProgress` đều có cột `subject`, nên `SELECT subject ... GROUP BY
+  // subject` khiến Postgres báo lỗi 42702 "column reference subject is
+  // ambiguous" (đã từng làm endpoint này trả HTTP 500). Cuối cùng ép
+  // `::float8` để Prisma trả về number thật (ROUND trên numeric trả Decimal,
+  // không khớp kiểu `lastMastery: number` mà phía client dùng làm số).
   const rows = await prisma.$queryRaw<
     Array<{
       subject: string;
@@ -146,16 +152,16 @@ export async function getAssessmentHistoryBySubject(userId: string): Promise<
       completedAt: Date | null;
       lastMastery: number;
     }>
-  >`SELECT subject,
-     bool_or(status = 'completed' OR "completedAt" IS NOT NULL) as completed,
-     max("completedAt") as "completedAt",
-     COALESCE(ROUND(MAX(lp.mastery) * 100), 0) as "lastMastery"
+  >`SELECT a.subject,
+     bool_or(a.status = 'completed' OR a."completedAt" IS NOT NULL) as completed,
+     max(a."completedAt") as "completedAt",
+     COALESCE(ROUND(MAX(lp.mastery) * 100), 0)::float8 as "lastMastery"
    FROM "Assessment" a
    LEFT JOIN "Attempt" att ON att."assessmentId" = a.id
    LEFT JOIN "LearningProgress" lp ON lp."userId" = a."userId" AND lp.subject = a.subject
    WHERE a."userId" = ${userId}
      AND a.subject IS NOT NULL
-   GROUP BY subject`;
+   GROUP BY a.subject`;
 
   return rows;
 }
