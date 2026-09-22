@@ -320,9 +320,15 @@ Logic export tách khỏi `page.tsx` thành service thuần trong `src/lib/mindm
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | ⬜ | Cần nếu dùng đăng nhập Google |
 | `AUTH_URL` / `AUTH_TRUST_HOST` | ❌ trên Vercel | Vercel tự set `VERCEL=1` nên Host được tin |
 
-4. Google OAuth: thêm `https://<domain>/api/auth/callback/google` vào Authorized redirect URIs.
-5. Sau khi đổi biến môi trường **phải Redeploy** (biến chỉ được nạp lúc build/runtime mới).
-6. `next.config.js` in cảnh báo `[env] THIẾU BIẾN BẮT BUỘC: ...` ngay trong build log nếu thiếu biến —
+4. **Áp migration lên DB production** (một lần sau mỗi đợt có migration mới) — Vercel KHÔNG tự chạy bước này:
+   ```bash
+   DATABASE_URL="<direct-connection-string>" npm run db:migrate
+   npx prisma migrate status   # xác nhận "Database schema is up to date!"
+   ```
+   Thiếu bước này, mọi API dùng bảng mới sẽ trả HTTP 500 (`The table public.X does not exist`).
+5. Google OAuth: thêm `https://<domain>/api/auth/callback/google` vào Authorized redirect URIs.
+6. Sau khi đổi biến môi trường **phải Redeploy** (biến chỉ được nạp lúc build/runtime mới).
+7. `next.config.js` in cảnh báo `[env] THIẾU BIẾN BẮT BUỘC: ...` ngay trong build log nếu thiếu biến —
    đọc Build Logs trước khi đọc Runtime Logs.
 
 Cấu hình trong `next.config.js` đã xử lý 3 vấn đề đặc thù serverless:
@@ -382,12 +388,12 @@ Sau khi thêm/sửa model trong `prisma/schema.prisma`, phải chạy `npx prism
 - `Raw query failed. Code 42702: column reference "..." is ambiguous`: lỗi SQL do JOIN nhiều bảng cùng tên cột —
   phải qualify alias (`a.subject`). Đã gặp và sửa ở `getAssessmentHistoryBySubject()` (`/api/diagnostic/status`).
 
-### 3. `prisma generate` báo EPERM trên Windows
+### 4. `prisma generate` báo EPERM trên Windows
 
 Xảy ra khi tiến trình `next dev`/`next start` cũ còn giữ file DLL của query engine. Tắt process Node còn sót rồi
 chạy lại `npm run db:generate`. Không ảnh hưởng Vercel (môi trường build sạch).
 
-### 4. AI trả 503 / "tất cả AI provider đều không khả dụng"
+### 5. AI trả 503 / "tất cả AI provider đều không khả dụng"
 
 Đây là hành vi **đúng** khi mọi provider fail (không phải app crash). Kiểm tra theo thứ tự:
 
@@ -398,26 +404,26 @@ chạy lại `npm run db:generate`. Không ảnh hưởng Vercel (môi trường
 - Log `[AI] Trying provider: ...` trong Runtime Logs cho biết router đã thử tới provider nào.
 - Lỗi **embedding** (RAG) không có fallback (cố ý, xem mục AI Architecture) — chỉ Gemini khớp cột `vector(768)`.
 
-### 5. `operator does not exist: vector <-> vector` hoặc tìm kiếm tài liệu ra kết quả sai
+### 6. `operator does not exist: vector <-> vector` hoặc tìm kiếm tài liệu ra kết quả sai
 
 Extension `pgvector` chưa bật, hoặc số chiều vector không khớp: cột DB là `vector(768)`, code cắt vector về 768 chiều
 (`EMBEDDING_DIMENSIONS`). Muốn đổi số chiều phải sửa **cả** schema/migration **và** tạo lại toàn bộ embedding cũ.
 
-### 6. Upload tài liệu báo `[PDF_PARSE_FAILED]` / `[PDF_NO_TEXT_LAYER]`
+### 7. Upload tài liệu báo `[PDF_PARSE_FAILED]` / `[PDF_NO_TEXT_LAYER]`
 
 - `PDF_CORRUPTED`/`PDF_PARSE_FAILED`: PDF dùng xref stream nén mà `pdf-parse` không đọc được → pipeline tự chuyển sang
   `pdfjs-dist`; nếu vẫn lỗi thì file hỏng thật.
 - `PDF_NO_TEXT_LAYER`: PDF scan/ảnh (không có text layer) → cần OCR, hiện chưa tích hợp. Ảnh `.png/.jpg/.webp` không
   được nhận làm tài liệu.
 
-### 7. Vercel báo "Server Problem" nhưng local chạy tốt
+### 8. Vercel báo "Server Problem" nhưng local chạy tốt
 
 Nguyên nhân phổ biến theo thứ tự: (1) thiếu biến môi trường (mục 1) — đọc Build Logs để thấy cảnh báo `[env]`;
 (2) package server-only bị bundle (đã khai báo `serverExternalPackages`); (3) route dùng `fs`/`path` rơi vào Edge
 runtime (route cần Node đã khai báo `export const runtime = "nodejs"`, ví dụ `/api/mindmap/export`); (4) DB connection
 (mục 2). Runtime Logs của deployment chứa stack trace thật — đối chiếu với 4 nhóm trên.
 
-### 8. Các lỗi đã sửa — đừng "sửa" lại lần nữa
+### 9. Các lỗi đã sửa — đừng "sửa" lại lần nữa
 
 - **"Updating a style property during rerender (border + borderLeft)"**: node mind map set đủ 4 longhand
   (`borderTop/Right/Bottom/Left`) trong cùng 1 style object, không trộn `border` shorthand với longhand.
@@ -426,7 +432,7 @@ runtime (route cần Node đã khai báo `export const runtime = "nodejs"`, ví 
 - **`middleware.ts` + `proxy.ts` cùng tồn tại**: chỉ còn `src/proxy.ts` (Next 16 đổi tên `middleware` → `proxy`).
 - **Cảnh báo Next.js "stale version"**: `next` đã lên bản patch mới nhất `16.3.5`.
 
-### 9. Khác biệt đã biết (chưa xử lý, có lý do)
+### 10. Khác biệt đã biết (chưa xử lý, có lý do)
 
 - `eslint-config-next` vẫn ở nhánh 14 trong khi `next` là 16: bản 16 yêu cầu **ESLint 9 + flat config**
   (`eslint.config.mjs`), còn repo đang dùng ESLint 8 + `.eslintrc.json`. `npm run lint` hiện chạy được (0 error,

@@ -1,9 +1,0 @@
-﻿
-> C:\Users\Admin\AppData\Local\Temp\e2e2-err.log:1:[api/mindmap/export] Error: Error: Incomplete 
-or corrupt PNG file
-  C:\Users\Admin\AppData\Local\Temp\e2e2-err.log:2:    at l 
-(D:\learnx-ai\.next\server\chunks\_20qq56t._.js:1:1337)
-  C:\Users\Admin\AppData\Local\Temp\e2e2-err.log:3:    at async Z 
-(D:\learnx-ai\.next\server\chunks\_20qq56t._.js:1:5023)
-
-
