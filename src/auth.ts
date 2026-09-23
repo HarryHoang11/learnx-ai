@@ -27,49 +27,109 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/prisma";
 
 // ----------------------------------------------------------------
-// CHẨN ĐOÁN LỖI CẤU HÌNH Ở PRODUCTION
+// CHUẨN HOÁ ENV + CHẨN ĐOÁN LỖI CẤU HÌNH Ở PRODUCTION
 // ----------------------------------------------------------------
-// Auth.js bắt buộc phải có AUTH_SECRET (hoặc NEXTAUTH_SECRET) khi
-// NODE_ENV=production — thiếu biến này, `assertConfig()` trả lỗi
-// MissingSecret cho MỌI request vào /api/auth/*, tức toàn bộ endpoint
-// đăng nhập/session trả HTTP 500 trong khi phần còn lại của app (page,
-// API khác) vẫn chạy bình thường. Đây là kiểu lỗi dễ bị chẩn đoán nhầm
-// thành "server sập", nên log thẳng TÊN biến còn thiếu ra Runtime Logs
-// của Vercel. KHÔNG in giá trị của bất kỳ biến nào (tránh lộ secret).
-const hasAuthSecret = !!(process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET);
-if (!hasAuthSecret && process.env.NODE_ENV === "production") {
-  // eslint-disable-next-line no-console
-  console.error(
-    "[auth] THIẾU AUTH_SECRET: mọi endpoint /api/auth/* sẽ trả HTTP 500 (MissingSecret). " +
-      "Thêm AUTH_SECRET vào Environment Variables của môi trường Production rồi redeploy. " +
-      "Tạo giá trị bằng: openssl rand -base64 32"
-  );
+// Auth.js assert config theo thứ tự (1) trustHost -> (2) secret, và CẢ HAI
+// đều ném AuthError kind "Configuration": mọi request /api/auth/* trả HTTP
+// 500 với body chung chung "There was a problem with the server
+// configuration" — KHÔNG nói thiếu gì, nên rất dễ chẩn đoán nhầm là "server
+// sập" (triệu chứng thực tế: /api/auth/providers|session|error = 500, các
+// page và API khác vẫn chạy, invocation chỉ vài chục ms và không gọi ra
+// ngoài vì fail ngay ở bước assert).
+//
+// Vì vậy ở đây chuẩn hoá + quyết định TƯỜNG MINH:
+//   1. Coi chuỗi RỖNG như "chưa set". Auth.js dùng `??` nên `AUTH_URL=""`
+//      vẫn bị tính là "có set" -> `!!""` = false -> trustHost = false ->
+//      UntrustedHost (500) NGAY CẢ TRÊN VERCEL. Đây là cái bẫy thật: dán
+//      template env vào dashboard với dòng `AUTH_URL=""` là dính.
+//   2. Chỉ nhận AUTH_URL khi là URL tuyệt đối hợp lệ (thiếu scheme như
+//      "domain.vercel.app" sẽ làm `new URL()` throw trong MỖI request).
+//   3. getAuthConfigIssues() để route handler trả JSON nói rõ THIẾU BIẾN
+//      NÀO (chỉ tên biến — không bao giờ in giá trị/secret).
+function readEnv(...names: string[]): string | undefined {
+  for (const name of names) {
+    const value = process.env[name];
+    // Trả về giá trị GỐC (không trim) để không làm đổi key material của
+    // secret; chỉ dùng trim() để phát hiện biến rỗng/toàn khoảng trắng.
+    if (typeof value === "string" && value.trim() !== "") return value;
+  }
+  return undefined;
 }
 
-// Cùng họ lỗi trên: Auth.js chỉ tin `Host` header khi có 1 trong các dấu
-// hiệu AUTH_URL / AUTH_TRUST_HOST / VERCEL / CF_PAGES, HOẶC khi đang chạy
-// dev. Vercel/Cloudflare tự set biến nên không cần làm gì; nhưng self-host
-// (`next start` sau Docker/Nginx/VPS) mà quên AUTH_URL sẽ hỏng y hệt
-// MissingSecret — log sẵn hướng dẫn để khỏi mất thời gian dò.
-const hasTrustedHostSignal = !!(
-  process.env.AUTH_URL ||
-  process.env.NEXTAUTH_URL ||
-  process.env.AUTH_TRUST_HOST ||
-  process.env.VERCEL ||
-  process.env.CF_PAGES
-);
-if (!hasTrustedHostSignal && process.env.NODE_ENV === "production") {
-  // eslint-disable-next-line no-console
+const authSecret = readEnv("AUTH_SECRET", "NEXTAUTH_SECRET");
+
+function readPublicUrl(): string | undefined {
+  const raw = readEnv("AUTH_URL", "NEXTAUTH_URL");
+  if (!raw) return undefined;
+  try {
+    const parsed = new URL(raw.trim());
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") return raw;
+  } catch {
+    // rơi xuống log bên dưới (không in giá trị)
+  }
   console.error(
-    "[auth] Không có AUTH_URL/AUTH_TRUST_HOST: khi self-host production, Auth.js sẽ từ chối Host header " +
-      "(UntrustedHost -> /api/auth/* trả HTTP 500). Set AUTH_URL=https://<domain-cua-ban> hoặc AUTH_TRUST_HOST=true. " +
-      "(Trên Vercel/Cloudflare không cần, nền tảng tự set biến tương ứng.)"
+    "[auth] AUTH_URL/NEXTAUTH_URL không phải URL tuyệt đối hợp lệ (cần dạng https://domain) — tạm bỏ qua biến này."
+  );
+  return undefined;
+}
+
+const publicAuthUrl = readPublicUrl();
+const trustHostFlag = readEnv("AUTH_TRUST_HOST");
+
+/**
+ * Auth.js chỉ tin `Host` header khi biết chắc app nằm sau proxy tin cậy.
+ * Ta tự quyết định thay vì phó mặc auto-detect (`??` + chuỗi rỗng = tắt
+ * trust âm thầm):
+ *   - AUTH_TRUST_HOST=true|1         -> tin (opt-in cho self-host sau proxy)
+ *   - AUTH_URL hợp lệ                -> tin (URL công khai đã xác định)
+ *   - VERCEL / CF_PAGES              -> tin (nền tảng tự quản lý Host header)
+ *   - NODE_ENV != production (dev)   -> tin (giữ nguyên hành vi Auth.js)
+ */
+function resolveTrustHost(): boolean {
+  if (trustHostFlag && !/^(false|0|no)$/i.test(trustHostFlag.trim())) return true;
+  if (publicAuthUrl) return true;
+  if (readEnv("VERCEL", "CF_PAGES")) return true;
+  return process.env.NODE_ENV !== "production";
+}
+
+const trustHost = resolveTrustHost();
+
+/**
+ * Các vấn đề cấu hình khiến Auth.js không thể phục vụ /api/auth/*.
+ * CHỈ trả về mô tả + TÊN biến môi trường cần thêm — tuyệt đối không kèm
+ * giá trị (không lộ secret ra HTTP response hay log).
+ */
+export function getAuthConfigIssues(): string[] {
+  const issues: string[] = [];
+  if (!authSecret) {
+    issues.push("thiếu AUTH_SECRET (secret dùng để ký session JWT)");
+  }
+  if (!trustHost) {
+    issues.push("thiếu AUTH_URL hoặc AUTH_TRUST_HOST (self-host production cần 1 trong 2)");
+  }
+  return issues;
+}
+
+const authConfigIssues = getAuthConfigIssues();
+if (authConfigIssues.length > 0 && process.env.NODE_ENV === "production") {
+  console.error(
+    `[auth] CẤU HÌNH AUTH.JS CHƯA ĐẦY ĐỦ -> mọi endpoint /api/auth/* sẽ lỗi:\n - ${authConfigIssues.join(
+      "\n - "
+    )}\n Cách sửa: Vercel > Project > Settings > Environment Variables (Production) rồi Redeploy.` +
+      (authSecret ? "" : " Tạo AUTH_SECRET bằng: openssl rand -base64 32")
   );
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
+  // Truyền tường minh 2 giá trị mà Auth.js assert trước mọi thứ khác:
+  // secret (đã chuẩn hoá: "" -> undefined) và trustHost (đã tự quyết định).
+  // Nhờ đó config không còn phụ thuộc vào auto-detect dựa trên `??` — nơi
+  // một biến env RỖNG có thể âm thầm tắt trust và làm 500 toàn bộ
+  // /api/auth/*. Giá trị vẫn lấy từ env, KHÔNG hardcode.
+  secret: authSecret,
+  trustHost,
   pages: {
     signIn: "/login",
   },

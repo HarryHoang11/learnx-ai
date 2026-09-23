@@ -353,16 +353,50 @@ curl -i https://<domain>/api/mindmap        # 401 JSON (đúng: chưa đăng nh�
 
 ### 1. `/api/auth/*` trả 500, app hiện "Server Problem" / `ClientFetchError`
 
-Đây là lỗi đã được audit và xác định **root cause** bằng cách tái hiện local:
+Đây là lỗi đã được audit và xác định **root cause** bằng cách tái hiện local. Triệu chứng đặc trưng:
 
-| Triệu chứng | Nguyên nhân | Cách sửa |
+```text
+GET /api/auth/providers → 500   body: {"message":"There was a problem with the server configuration..."}
+GET /api/auth/session   → 500   (client log: ClientFetchError)
+GET /api/auth/error     → 500
+GET /api/profile        → 401   (hệ quả: auth() không trả được session)
+GET /login              → 200 • middleware/proxy → 200
+Vercel log: invocation 10–105ms, KHÔNG có outgoing external API call
+```
+
+Body trên là AuthError kind **"Configuration"** của Auth.js: nó fail ngay ở `assertConfig()` — TRƯỚC khi đọc
+provider và TRƯỚC khi tạo session, nên không gọi ra ngoài (giải thích vì sao invocation chỉ vài chục ms).
+Chỉ có **2 nguyên nhân khả thi**, và code hiện tại đã xử lý + tự báo rõ nguyên nhân nào:
+
+| Nguyên nhân | Dấu hiệu sau khi deploy bản có guard | Cách sửa |
 |---|---|---|
-| `/api/auth/session`, `/api/auth/csrf`, `/api/auth/providers` = 500, nhưng `/login` = 200 và `/api/mindmap` = 401 JSON | **Thiếu `AUTH_SECRET`** trong Environment Variables → Auth.js ném `MissingSecret` cho mọi request auth | Thêm `AUTH_SECRET` (`openssl rand -base64 32`) vào Vercel → Redeploy. Runtime log có dòng `[auth] THIẾU AUTH_SECRET...` |
-| Cùng triệu chứng khi self-host (Docker/VPS, không phải Vercel) | **Thiếu `AUTH_URL`/`AUTH_TRUST_HOST`** → Auth.js ném `UntrustedHost` | Set `AUTH_URL=https://<domain>` hoặc `AUTH_TRUST_HOST=true`. Vercel/Cloudflare không cần (nền tảng tự set biến) |
+| **1. Thiếu `AUTH_SECRET`** → Auth.js ném `MissingSecret` | `/api/auth/*` trả **503** JSON: `"…thiếu AUTH_SECRET (secret dùng để ký session JWT)"` | Thêm `AUTH_SECRET` (giá trị `openssl rand -base64 32`) vào Environment Variables của **đúng môi trường Production** → Redeploy |
+| **2. `trustHost` bị tắt** → Auth.js ném `UntrustedHost`. Xảy ra khi self-host production thiếu `AUTH_URL`, hoặc khi biến `AUTH_URL`/`AUTH_TRUST_HOST` tồn tại với **giá trị rỗng** (`AUTH_URL=""` — Auth.js dùng `??` nên chuỗi rỗng vẫn tính là "có set") | `/api/auth/*` trả **503** JSON: `"…thiếu AUTH_URL hoặc AUTH_TRUST_HOST"` | Set `AUTH_URL="https://<domain>"` hoặc `AUTH_TRUST_HOST="true"` (và **xoá** biến rỗng nếu có) |
 | Đăng nhập xong quay lại trang login | Redirect URI Google sai | Thêm `https://<domain>/api/auth/callback/google` vào Authorized redirect URIs |
+| Sửa env trên Vercel nhưng lỗi không đổi | Env chỉ được nạp cho deployment MỚI | **Redeploy** sau khi sửa biến |
 
-Cách phân biệt nhanh: lỗi `MissingSecret`/`UntrustedHost` **chỉ** ảnh hưởng `/api/auth/*`; nếu **mọi** API đều 500
-thì nghi DB (mục 2). Log lỗi thật nằm ở Vercel → Deployment → **Runtime Logs** (tìm `[auth][error]`).
+**Vì sao lỗi chỉ ảnh hưởng `/api/auth/*`:** `assertConfig()` chỉ chạy trong Auth.js route handler. Còn `auth()`
+(dùng bởi mọi API khác qua `getCurrentUserId()`) không ném lỗi ra ngoài mà trả `null` → các API đó trả **401**.
+Nghĩa là "`/api/auth/*` 500 + `/api/profile` 401" **không phải 2 lỗi khác nhau** — cùng một lỗi cấu hình.
+
+**Code đã sửa để không phải đoán:**
+
+- `src/auth.ts`: coi **chuỗi rỗng = chưa set** (tránh bẫy `AUTH_URL=""` → `trustHost=false` → UntrustedHost
+  ngay cả trên Vercel); chỉ nhận `AUTH_URL` khi là URL tuyệt đối hợp lệ; **tự quyết định `trustHost`**
+  (`AUTH_TRUST_HOST` hợp lệ / `AUTH_URL` hợp lệ / `VERCEL` / `CF_PAGES` / dev) và truyền tường minh
+  `secret` + `trustHost` vào `NextAuth()`.
+- `src/app/api/auth/[...nextauth]/route.ts`: guard chặn trước Auth.js → trả **503 JSON nêu đúng TÊN biến còn thiếu**
+  (không bao giờ kèm giá trị) + log `[auth] CẤU HÌNH AUTH.JS CHƯA ĐẦY ĐỦ`. Khi cấu hình đầy đủ, request đi thẳng
+  vào Auth.js như cũ (Google OAuth / Credentials / PrismaAdapter / JWT không đổi).
+- `.env.example`: bỏ 2 dòng `AUTH_URL=""` / `AUTH_TRUST_HOST=""` + cảnh báo không tạo biến env rỗng.
+
+**Kiểm chứng local trên bản production build:**
+
+| Kịch bản | Trước | Sau |
+|---|---|---|
+| `VERCEL=1` + `AUTH_URL=""` + `AUTH_TRUST_HOST=""` + có secret | 500 (UntrustedHost) | **200** cho `/api/auth/providers|session|csrf`; providers liệt kê đủ `google` + `credentials` |
+| `VERCEL=1` + không có `AUTH_SECRET` | 500 chung chung | **503** JSON `thiếu AUTH_SECRET…` (không lộ giá trị) + log runtime rõ ràng |
+| Config chuẩn — luồng credentials | — | providers 200 → csrf 200 → login 302 → session 200 (`user.id`) → **`/api/profile` 200** → `/api/mindmap` 200 |
 
 ### 2. API 500 kèm `The table public.X does not exist` (bảng chưa được tạo)
 
