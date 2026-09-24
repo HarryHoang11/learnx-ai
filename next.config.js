@@ -33,8 +33,10 @@ const nextConfig = {
 // (Auth.js ném MissingSecret) trong khi phần còn lại của app vẫn chạy —
 // triệu chứng rất dễ bị chẩn đoán nhầm thành "server sập".
 const REQUIRED_PRODUCTION_ENV = [
-  "DATABASE_URL", // Prisma -> Postgres/pgvector
-  "AUTH_SECRET", // ký session JWT của Auth.js
+  "DATABASE_URL", // Prisma -> Postgres/pgvector (đồng thời là nguồn dẫn xuất secret dự phòng cho Auth.js)
+];
+const RECOMMENDED_PRODUCTION_ENV = [
+  "AUTH_SECRET", // ký session JWT — nên set riêng; thiếu thì src/auth.ts tự dẫn xuất từ DATABASE_URL
 ];
 const OPTIONAL_ENV = [
   "GEMINI_API_KEY", // provider AI chính
@@ -46,15 +48,23 @@ const OPTIONAL_ENV = [
 
 function reportMissingEnv() {
   const missingRequired = REQUIRED_PRODUCTION_ENV.filter((name) => !process.env[name]);
+  const missingRecommended = RECOMMENDED_PRODUCTION_ENV.filter((name) => !process.env[name]);
   const missingOptional = OPTIONAL_ENV.filter((name) => !process.env[name]);
 
   if (missingRequired.length > 0) {
     // eslint-disable-next-line no-console
     console.warn(
       `\n[env] THIẾU BIẾN BẮT BUỘC: ${missingRequired.join(", ")}\n` +
-        `[env] Hậu quả: ${missingRequired.includes("AUTH_SECRET") ? "mọi endpoint /api/auth/* sẽ trả HTTP 500 (đăng nhập không dùng được) — " : ""}` +
-        `${missingRequired.includes("DATABASE_URL") ? "mọi API đọc/ghi DB sẽ trả HTTP 500. " : ""}\n` +
+        `[env] Hậu quả: mọi API đọc/ghi DB (và cả /api/auth/* vì Auth.js không có secret dự phòng) sẽ trả HTTP 500.\n` +
         `[env] Cách sửa: thêm các biến trên vào Vercel > Project > Settings > Environment Variables (Production) rồi Redeploy.\n`
+    );
+  }
+  if (missingRecommended.length > 0) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `\n[env] KHUYẾN NGHỊ SET: ${missingRecommended.join(", ")}\n` +
+        `[env] Không set cũng KHÔNG hỏng: src/auth.ts sẽ dẫn xuất secret ký session từ DATABASE_URL\n` +
+        `[env] (kèm cảnh báo trong Runtime Logs). Set AUTH_SECRET=<chuỗi ngẫu nhiên> để tách khoá ký session khỏi credential DB.\n`
     );
   }
   if (missingOptional.length > 0) {

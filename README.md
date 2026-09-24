@@ -140,9 +140,13 @@ Danh sách **thực tế code đọc** (`process.env.*`). Không commit file `.e
 ```dotenv
 # ---- Bắt buộc ----
 DATABASE_URL=your_postgres_connection_string
+
+# ---- Khuyến nghị set (Auth.js dùng để ký session JWT) ----
+# Không set vẫn chạy: src/auth.ts tự dẫn xuất secret từ DATABASE_URL và ghi
+# cảnh báo vào Runtime Logs. Set riêng để tách khoá ký session khỏi credential DB.
 AUTH_SECRET=your_random_secret            # openssl rand -base64 32
 
-# ---- Bắt buộc khi self-host production (Vercel/Cloudflare tự set biến nền tảng) ----
+# ---- Chỉ cần khi self-host production (Vercel/Cloudflare tự set biến nền tảng) ----
 AUTH_URL=your_public_app_url              # hoặc AUTH_TRUST_HOST=true
 AUTH_TRUST_HOST=true
 
@@ -299,8 +303,11 @@ Logic export tách khỏi `page.tsx` thành service thuần trong `src/lib/mindm
   trả userId (tránh lỗi P2003 khi DB đổi/reset mà cookie cũ vẫn hợp lệ) và trả `401` JSON chuẩn hoá.
 - `src/proxy.ts` chặn **page** chưa đăng nhập (redirect `/login`); **API không bị redirect** để client luôn
   nhận JSON 401 thay vì HTML của trang login.
-- Cần `AUTH_SECRET` ở production; self-host ngoài Vercel/Cloudflare cần thêm `AUTH_URL` (hoặc
-  `AUTH_TRUST_HOST=true`) — xem [Troubleshooting](#troubleshooting).
+- `AUTH_SECRET` nên được set ở production (khoá ký session JWT). Nếu thiếu, `src/auth.ts` **tự dẫn xuất
+  secret dự phòng** từ `DATABASE_URL` (SHA-256 + domain separator, bỏ query string để không đổi khoá khi
+  chỉnh tham số pool) và ghi cảnh báo trong Runtime Logs — nhờ vậy `/api/auth/*` vẫn chạy thay vì 500.
+  Set `AUTH_SECRET` để tách khoá ký session khỏi credential DB (best practice). Self-host ngoài
+  Vercel/Cloudflare cần thêm `AUTH_URL` (hoặc `AUTH_TRUST_HOST=true`).
 
 
 ## Deployment
@@ -314,7 +321,7 @@ Logic export tách khỏi `page.tsx` thành service thuần trong `src/lib/mindm
 | Biến | Bắt buộc | Nếu thiếu thì sao |
 |---|---|---|
 | `DATABASE_URL` | ✅ | Mọi API đọc/ghi DB trả HTTP 500 |
-| `AUTH_SECRET` | ✅ | **Mọi** `/api/auth/*` trả HTTP 500 (đăng nhập hỏng) — log runtime ghi rõ `[auth] THIẾU AUTH_SECRET` |
+| `AUTH_SECRET` | ⬜ (khuyến nghị) | Thiếu thì `src/auth.ts` dẫn xuất secret từ `DATABASE_URL` → auth vẫn chạy; set riêng để tách khoá ký session khỏi credential DB |
 | `GEMINI_API_KEY` | ⬜ (nên có) | RAG/embedding không chạy, AI phải dựa vào fallback |
 | `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY`, `QWEN_API_KEY` | ⬜ | Provider tương ứng bị bỏ qua |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | ⬜ | Cần nếu dùng đăng nhập Google |
@@ -368,10 +375,10 @@ Body trên là AuthError kind **"Configuration"** của Auth.js: nó fail ngay �
 provider và TRƯỚC khi tạo session, nên không gọi ra ngoài (giải thích vì sao invocation chỉ vài chục ms).
 Chỉ có **2 nguyên nhân khả thi**, và code hiện tại đã xử lý + tự báo rõ nguyên nhân nào:
 
-| Nguyên nhân | Dấu hiệu sau khi deploy bản có guard | Cách sửa |
+| Nguyên nhân | Dấu hiệu | Cách xử lý |
 |---|---|---|
-| **1. Thiếu `AUTH_SECRET`** → Auth.js ném `MissingSecret` | `/api/auth/*` trả **503** JSON: `"…thiếu AUTH_SECRET (secret dùng để ký session JWT)"` | Thêm `AUTH_SECRET` (giá trị `openssl rand -base64 32`) vào Environment Variables của **đúng môi trường Production** → Redeploy |
-| **2. `trustHost` bị tắt** → Auth.js ném `UntrustedHost`. Xảy ra khi self-host production thiếu `AUTH_URL`, hoặc khi biến `AUTH_URL`/`AUTH_TRUST_HOST` tồn tại với **giá trị rỗng** (`AUTH_URL=""` — Auth.js dùng `??` nên chuỗi rỗng vẫn tính là "có set") | `/api/auth/*` trả **503** JSON: `"…thiếu AUTH_URL hoặc AUTH_TRUST_HOST"` | Set `AUTH_URL="https://<domain>"` hoặc `AUTH_TRUST_HOST="true"` (và **xoá** biến rỗng nếu có) |
+| **Thiếu `AUTH_SECRET`** → Auth.js ném `MissingSecret`. **Đã được xử lý tự động**: `src/auth.ts` dẫn xuất secret ký session từ `DATABASE_URL` (kèm cảnh báo `[auth] AUTH_SECRET ... chưa được set — đang dùng secret DẪN XUẤT` trong Runtime Logs) | Trước fix: mọi `/api/auth/*` = 500. Sau fix: **200** bình thường; nếu **cả** `DATABASE_URL` cũng thiếu → **503** JSON nói rõ | Không bắt buộc để app chạy. Nên set `AUTH_SECRET` (`openssl rand -base64 32`) để tách khoá ký session khỏi credential DB — lưu ý đổi `DATABASE_URL` (user/password/host) sẽ làm session cũ hết hiệu lực |
+| **`trustHost` bị tắt** → Auth.js ném `UntrustedHost`. Xảy ra khi self-host production thiếu `AUTH_URL`, hoặc khi biến `AUTH_URL`/`AUTH_TRUST_HOST` tồn tại với **giá trị rỗng** (`AUTH_URL=""` — Auth.js dùng `??` nên chuỗi rỗng vẫn tính là "có set") | `/api/auth/*` trả **503** JSON: `"…thiếu AUTH_URL hoặc AUTH_TRUST_HOST"` | Set `AUTH_URL="https://<domain>"` hoặc `AUTH_TRUST_HOST="true"` (và **xoá** biến rỗng nếu có) |
 | Đăng nhập xong quay lại trang login | Redirect URI Google sai | Thêm `https://<domain>/api/auth/callback/google` vào Authorized redirect URIs |
 | Sửa env trên Vercel nhưng lỗi không đổi | Env chỉ được nạp cho deployment MỚI | **Redeploy** sau khi sửa biến |
 
@@ -395,7 +402,8 @@ Nghĩa là "`/api/auth/*` 500 + `/api/profile` 401" **không phải 2 lỗi khá
 | Kịch bản | Trước | Sau |
 |---|---|---|
 | `VERCEL=1` + `AUTH_URL=""` + `AUTH_TRUST_HOST=""` + có secret | 500 (UntrustedHost) | **200** cho `/api/auth/providers|session|csrf`; providers liệt kê đủ `google` + `credentials` |
-| `VERCEL=1` + không có `AUTH_SECRET` | 500 chung chung | **503** JSON `thiếu AUTH_SECRET…` (không lộ giá trị) + log runtime rõ ràng |
+| `VERCEL=1` + không có `AUTH_SECRET` (có `DATABASE_URL`) | 500 chung chung | **200** cho `providers/session/csrf/error` nhờ secret dẫn xuất + log cảnh báo rõ ràng |
+| Không có `AUTH_SECRET` **và** không có `DATABASE_URL` | 500 chung chung | **503** JSON nói rõ (`cần AUTH_SECRET hoặc DATABASE_URL`) |
 | Config chuẩn — luồng credentials | — | providers 200 → csrf 200 → login 302 → session 200 (`user.id`) → **`/api/profile` 200** → `/api/mindmap` 200 |
 
 ### 2. API 500 kèm `The table public.X does not exist` (bảng chưa được tạo)

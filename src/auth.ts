@@ -24,6 +24,7 @@ import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 
 // ----------------------------------------------------------------
@@ -56,7 +57,60 @@ function readEnv(...names: string[]): string | undefined {
   return undefined;
 }
 
-const authSecret = readEnv("AUTH_SECRET", "NEXTAUTH_SECRET");
+const authSecretFromEnv = readEnv("AUTH_SECRET", "NEXTAUTH_SECRET");
+
+/**
+ * Secret DẪN XUẤT — phương án dự phòng để production không sập vì thiếu
+ * biến môi trường.
+ *
+ * Vì sao cần: Auth.js BẮT BUỘC có secret khi NODE_ENV=production; thiếu nó
+ * thì `assertConfig()` ném `MissingSecret` cho MỌI request /api/auth/* →
+ * /api/auth/providers|session|error trả 500 (trước đây) trong khi toàn bộ
+ * phần còn lại của app vẫn chạy, còn /api/profile chỉ trả 401 vì `auth()`
+ * trả null. Đây là lỗi cấu hình platform, nhưng để app không "chết đứng"
+ * khi chưa kịp thêm biến, ta dẫn xuất khoá ký session từ một bí mật ĐÃ CÓ
+ * trong môi trường (DATABASE_URL) thay vì hardcode hay dùng giá trị giả.
+ *
+ * Vì sao là DATABASE_URL: đây là biến duy nhất bắt buộc phải có để app chạy
+ * được (thiếu nó thì mọi API DB đã hỏng trước cả auth); mật khẩu trong đó
+ * là bí mật thật, cùng mức ảnh hưởng với việc ký được session (ai có
+ * credential DB thì đã đọc/ghi được toàn bộ dữ liệu user).
+ *
+ * QUAN TRỌNG: AUTH_SECRET luôn được ưu tiên — set biến đó là tự động thoát
+ * khỏi chế độ dự phòng (chỉ làm session cũ hết hiệu lực, user đăng nhập lại).
+ * Phần query string bị BỎ khi băm: chính code này (lib/db/prisma.ts) và tài
+ * liệu deploy hay thêm `?connection_limit=1&pgbouncer=true`, nếu tính cả
+ * query thì mỗi lần chỉnh tham số pool sẽ vô tình đổi khoá và logout toàn bộ
+ * người dùng đang đăng nhập.
+ */
+function deriveSecretFromDatabaseUrl(): string | undefined {
+  const raw = readEnv("DATABASE_URL");
+  if (!raw) return undefined;
+
+  let keyMaterial = raw;
+  try {
+    const parsed = new URL(raw);
+    keyMaterial = `${parsed.protocol}//${parsed.username}:${parsed.password}@${parsed.host}${parsed.pathname}`;
+  } catch {
+    // URL không parse được → băm nguyên chuỗi, vẫn hơn là không có secret.
+  }
+
+  return createHash("sha256")
+    .update(`learnx-authjs-session-secret-v1\u0000${keyMaterial}`)
+    .digest("base64");
+}
+
+const derivedAuthSecret = authSecretFromEnv ? undefined : deriveSecretFromDatabaseUrl();
+const authSecret = authSecretFromEnv ?? derivedAuthSecret;
+
+if (derivedAuthSecret) {
+  console.warn(
+    "[auth] AUTH_SECRET (và NEXTAUTH_SECRET) chưa được set — đang dùng secret DẪN XUẤT từ DATABASE_URL " +
+      "để /api/auth/* hoạt động. Nên set AUTH_SECRET=<chuỗi ngẫu nhiên> trong Environment Variables " +
+      "để tách khoá ký session khỏi credential DB. Lưu ý: đổi user/password/host trong DATABASE_URL " +
+      "sẽ làm toàn bộ session hiện tại hết hiệu lực (người dùng chỉ cần đăng nhập lại)."
+  );
+}
 
 function readPublicUrl(): string | undefined {
   const raw = readEnv("AUTH_URL", "NEXTAUTH_URL");
@@ -102,7 +156,9 @@ const trustHost = resolveTrustHost();
 export function getAuthConfigIssues(): string[] {
   const issues: string[] = [];
   if (!authSecret) {
-    issues.push("thiếu AUTH_SECRET (secret dùng để ký session JWT)");
+    issues.push(
+      "thiếu AUTH_SECRET và không thể dẫn xuất secret dự phòng (cần AUTH_SECRET hoặc DATABASE_URL)"
+    );
   }
   if (!trustHost) {
     issues.push("thiếu AUTH_URL hoặc AUTH_TRUST_HOST (self-host production cần 1 trong 2)");
@@ -135,8 +191,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   providers: [
     Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      // Nhận CẢ 2 quy ước tên biến đang tồn tại ngoài thực tế:
+      // GOOGLE_CLIENT_ID/SECRET (đang dùng trong .env của project) và
+      // AUTH_GOOGLE_ID/SECRET (quy ước auto-infer của Auth.js v5). Auth.js
+      // cũng tự điền từ AUTH_GOOGLE_* khi clientId undefined, nhưng ghi rõ
+      // ở đây để người deploy biết chính xác biến nào được đọc.
+      clientId: process.env.GOOGLE_CLIENT_ID ?? process.env.AUTH_GOOGLE_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? process.env.AUTH_GOOGLE_SECRET,
     }),
     Credentials({
       name: "credentials",
