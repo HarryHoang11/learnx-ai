@@ -24,6 +24,31 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /**
+ * Nguồn connection string hợp lệ, theo thứ tự ưu tiên. Vì sao nhận nhiều
+ * tên: tuỳ cách tạo DB trên platform, biến được inject với tên KHÁC nhau —
+ * Vercel Postgres/Neon đặt `POSTGRES_PRISMA_URL` (pooled, dùng cho runtime),
+ * `POSTGRES_URL`, `DATABASE_URL_UNPOOLED`/`POSTGRES_URL_NON_POOLING` (direct,
+ * dùng cho migration). Code cũ chỉ đọc `DATABASE_URL`, nên khi platform chỉ
+ * inject `POSTGRES_URL` thì Prisma chết dù credential có sẵn trong môi trường.
+ * `src/auth.ts` cũng dùng hàm này để dẫn xuất secret ký session.
+ */
+const DATABASE_URL_ENV_NAMES = [
+  "DATABASE_URL",
+  "POSTGRES_PRISMA_URL",
+  "POSTGRES_URL",
+  "DATABASE_URL_UNPOOLED",
+  "POSTGRES_URL_NON_POOLING",
+] as const;
+
+export function resolveDatabaseUrl(): string | undefined {
+  for (const name of DATABASE_URL_ENV_NAMES) {
+    const value = process.env[name];
+    if (typeof value === "string" && value.trim() !== "") return value;
+  }
+  return undefined;
+}
+
+/**
  * Vercel/AWS Lambda đều chạy code trong tiến trình "dùng 1 lần rồi có
  * thể bị đóng" — không phải server truyền thống giữ connection lâu dài.
  */
@@ -80,7 +105,7 @@ function withServerlessPooling(url: string): string {
   }
 }
 
-const datasourceUrl = withServerlessPooling(process.env.DATABASE_URL ?? "");
+const datasourceUrl = withServerlessPooling(resolveDatabaseUrl() ?? "");
 
 export const prisma =
   globalForPrisma.prisma ??

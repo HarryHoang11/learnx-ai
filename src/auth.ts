@@ -25,7 +25,7 @@ import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { createHash } from "node:crypto";
-import { prisma } from "@/lib/db/prisma";
+import { prisma, resolveDatabaseUrl } from "@/lib/db/prisma";
 
 // ----------------------------------------------------------------
 // CHUẨN HOÁ ENV + CHẨN ĐOÁN LỖI CẤU HÌNH Ở PRODUCTION
@@ -84,7 +84,7 @@ const authSecretFromEnv = readEnv("AUTH_SECRET", "NEXTAUTH_SECRET");
  * người dùng đang đăng nhập.
  */
 function deriveSecretFromDatabaseUrl(): string | undefined {
-  const raw = readEnv("DATABASE_URL");
+  const raw = resolveDatabaseUrl();
   if (!raw) return undefined;
 
   let keyMaterial = raw;
@@ -157,7 +157,8 @@ export function getAuthConfigIssues(): string[] {
   const issues: string[] = [];
   if (!authSecret) {
     issues.push(
-      "thiếu AUTH_SECRET và không thể dẫn xuất secret dự phòng (cần AUTH_SECRET hoặc DATABASE_URL)"
+      "không tìm thấy khoá ký session: cần AUTH_SECRET hoặc một biến connection string DB " +
+        "(DATABASE_URL / POSTGRES_PRISMA_URL / POSTGRES_URL) để dẫn xuất secret dự phòng"
     );
   }
   if (!trustHost) {

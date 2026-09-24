@@ -33,10 +33,12 @@ const nextConfig = {
 // (Auth.js ném MissingSecret) trong khi phần còn lại của app vẫn chạy —
 // triệu chứng rất dễ bị chẩn đoán nhầm thành "server sập".
 const REQUIRED_PRODUCTION_ENV = [
-  "DATABASE_URL", // Prisma -> Postgres/pgvector (đồng thời là nguồn dẫn xuất secret dự phòng cho Auth.js)
+  // Chỉ cần MỘT trong các tên này (platform nào inject tên nào thì dùng tên đó):
+  // Vercel Postgres/Neon đặt POSTGRES_PRISMA_URL/POSTGRES_URL, nơi khác đặt DATABASE_URL.
+  "DATABASE_URL|POSTGRES_PRISMA_URL|POSTGRES_URL|DATABASE_URL_UNPOOLED|POSTGRES_URL_NON_POOLING",
 ];
 const RECOMMENDED_PRODUCTION_ENV = [
-  "AUTH_SECRET", // ký session JWT — nên set riêng; thiếu thì src/auth.ts tự dẫn xuất từ DATABASE_URL
+  "AUTH_SECRET", // ký session JWT — nên set riêng; thiếu thì src/auth.ts tự dẫn xuất từ connection string DB
 ];
 const OPTIONAL_ENV = [
   "GEMINI_API_KEY", // provider AI chính
@@ -47,9 +49,15 @@ const OPTIONAL_ENV = [
 ];
 
 function reportMissingEnv() {
-  const missingRequired = REQUIRED_PRODUCTION_ENV.filter((name) => !process.env[name]);
-  const missingRecommended = RECOMMENDED_PRODUCTION_ENV.filter((name) => !process.env[name]);
-  const missingOptional = OPTIONAL_ENV.filter((name) => !process.env[name]);
+  // Mỗi phần tử có thể là danh sách tên thay thế (ngăn cách bằng "|") —
+  // chỉ báo thiếu khi KHÔNG tên nào trong nhóm tồn tại.
+  // (next.config.js là JavaScript thuần — không dùng type annotation ở đây.)
+  const groupsMissing = (names) =>
+    names.filter((group) => !group.split("|").some((name) => process.env[name]));
+
+  const missingRequired = groupsMissing(REQUIRED_PRODUCTION_ENV);
+  const missingRecommended = groupsMissing(RECOMMENDED_PRODUCTION_ENV);
+  const missingOptional = groupsMissing(OPTIONAL_ENV);
 
   if (missingRequired.length > 0) {
     // eslint-disable-next-line no-console
