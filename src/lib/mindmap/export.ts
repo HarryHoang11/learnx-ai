@@ -11,7 +11,7 @@
 
 import katex from "katex";
 import { type MindMapData, type MindMapNode, type MindMapEdge } from "./graph";
-import { computeLayout, deriveEdges, NODE_TYPE_COLORS, escapeXml, EXPORT_BG, EXPORT_PANEL, EXPORT_TEXT, type PositionedNode } from "./layout";
+import { computeLayout, deriveEdges, getEdgePath, NODE_TYPE_COLORS, NODE_DESC_CHAR_WIDTH, NODE_DESC_FONT_SIZE, NODE_DESC_LINE_HEIGHT, NODE_DESC_MAX_LINES, escapeXml, EXPORT_BG, EXPORT_PANEL, EXPORT_TEXT, EXPORT_TEXT_DIM, type PositionedNode } from "./layout";
 import { splitMathSegments } from "../math/segments";
 
 export const EXPORT_FORMATS = ["svg", "png", "pdf", "json", "md"] as const;
@@ -190,6 +190,52 @@ function renderLabelSVG(label: string, width: number, isRoot: boolean): string {
   return `<foreignObject x="12" y="18" width="${width - 24}" height="${Math.max(28, width / 2)}"><div xmlns="http://www.w3.org/1999/xhtml" style="color:${EXPORT_TEXT};font:13px system-ui,sans-serif;line-height:1.35;text-align:center;width:100%;overflow-wrap:anywhere">${html || escapeXml(label)}</div></foreignObject><text x="${width / 2}" y="${Math.min(34, width / 2 + 18)}" text-anchor="middle" font-size="11" fill="${EXPORT_TEXT}">${escapeXml(label)}</text>`;
 }
 
+/** Render mô tả của node thành các dòng nằm GỌN TRONG card (yêu cầu 3).
+ *
+ * Trước đây mô tả được vẽ 1 dòng, cắt ở 120 ký tự, không xuống dòng — chữ dài
+ * tràn ra ngoài rect của node và trông như text "bay" bên cạnh node. Giờ mô tả
+ * wrap theo cùng hệ số với layout (NODE_DESC_*), tối đa NODE_DESC_MAX_LINES
+ * dòng và neo vào ĐÁY card nên luôn nằm trong node dù card cao bao nhiêu.
+ */
+function renderDescriptionSVG(node: PositionedNode): string {
+  if (!node.description) return "";
+  const maxChars = Math.max(8, Math.floor((node.width - 44) / NODE_DESC_CHAR_WIDTH));
+  const lines = wrapDescription(node.description, maxChars);
+  const lastBaseline = node.height - 10;
+  const firstBaseline = lastBaseline - (lines.length - 1) * NODE_DESC_LINE_HEIGHT;
+  return lines
+    .map(
+      (line, index) =>
+        `<text x="${node.width / 2}" y="${firstBaseline + index * NODE_DESC_LINE_HEIGHT}" text-anchor="middle" font-size="${NODE_DESC_FONT_SIZE}" fill="${EXPORT_TEXT_DIM}">${escapeXml(line)}</text>`
+    )
+    .join("");
+}
+
+/** Wrap mô tả theo số ký tự mỗi dòng, tối đa NODE_DESC_MAX_LINES dòng. */
+function wrapDescription(description: string, maxChars: number): string[] {
+  const words = description.trim().split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+  let truncated = false;
+  for (const word of words) {
+    if (line && line.length + word.length + 1 > maxChars) {
+      lines.push(line);
+      line = word;
+      if (lines.length === NODE_DESC_MAX_LINES) {
+        truncated = true;
+        break;
+      }
+    } else {
+      line += line ? ` ${word}` : word;
+    }
+  }
+  if (!truncated && line && lines.length < NODE_DESC_MAX_LINES) lines.push(line);
+  // Canvas dùng line-clamp nên tự thêm "…"; SVG phải tự thêm để người đọc biết
+  // là còn nội dung (và để 2 nơi hiển thị giống nhau).
+  if (truncated && lines.length > 0) lines[lines.length - 1] = `${lines[lines.length - 1]}…`;
+  return lines;
+}
+
 /** Render one positioned node into the same coordinate system as the graph edges. */
 function renderNodeSVG(node: PositionedNode, isRoot: boolean): string {
   const stroke = NODE_TYPE_COLORS[node.type ?? ""] ?? "#94a0b8";
@@ -197,9 +243,7 @@ function renderNodeSVG(node: PositionedNode, isRoot: boolean): string {
   const x = node.x - node.width / 2;
   const y = node.y;
   const label = renderLabelSVG(node.label, node.width, isRoot);
-  const description = node.description
-    ? `<text x="${node.width / 2}" y="${Math.max(38, node.height - 8)}" text-anchor="middle" font-size="10" fill="#94a0b8">${escapeXml(node.description.slice(0, 120))}</text>`
-    : "";
+  const description = renderDescriptionSVG(node);
 
   // The node is positioned from the full layout, not from the current canvas
   // transform, so branches outside the viewport remain in the exported file.
@@ -239,12 +283,7 @@ export function generateMindMapSVG(
     const source = nodeMap.get(edge.source);
     const target = nodeMap.get(edge.target);
     if (!source || !target) continue;
-    const sx = source.x;
-    const sy = source.y + source.height / 2;
-    const tx = target.x;
-    const ty = target.y + target.height / 2;
-    const midX = (sx + tx) / 2;
-    svg += `<path d="M${sx},${sy} C${midX},${sy} ${midX},${ty} ${tx},${ty}" stroke="rgba(201,211,255,0.2)" stroke-width="1.5" fill="none"/>`;
+    svg += `<path d="${getEdgePath(source, target)}" stroke="rgba(201,211,255,0.2)" stroke-width="1.5" fill="none"/>`;
   }
 
   // Nodes

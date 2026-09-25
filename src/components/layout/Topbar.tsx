@@ -1,21 +1,25 @@
 // ================================================================
 // <Topbar /> — thanh trên cùng của mọi trang trong (app)
 // ================================================================
-// Mạch tư duy: dùng useSession() để lấy tên/avatar THẬT của user đã
-// đăng nhập (Google trả về `image`, đăng ký email/password
-// thì `image` sẽ là null — component tự fallback về chữ cái đầu tên
-// khi không có ảnh). Nút đăng xuất gọi signOut() của next-auth, tự
-// xoá session cookie và điều hướng về /login. Sticky + gọn chiều cao
-// để không chiếm không gian nội dung. Thêm LanguageSwitcher (VI/EN)
-// persist 2 lớp qua LanguageProvider.
+// Mạch tư duy: thanh này chỉ gom các điều khiển CHUNG — đổi ngôn ngữ,
+// đổi theme, và khu vực tài khoản. Phần tài khoản (avatar + tên +
+// menu: Cài đặt/Thêm tài khoản/Đăng xuất) do <AccountMenu> tự lo
+// trọn và TỰ gọi useSession().
+//
+// Vì sao Topbar KHÔNG tự vẽ avatar/tên: trước đây cả Topbar lẫn
+// AccountMenu đều render <Avatar> với cùng props => header hiện 2
+// avatar giống hệt nhau. Giữ AccountMenu là nguồn DUY NHẤT, đúng
+// tinh thần component <Avatar /> dùng chung ("một user chỉ có một
+// cách avatar được vẽ ra").
+//
+// Sticky + gọn chiều cao để không chiếm không gian nội dung.
 // ================================================================
 
 "use client";
 
 import { useState } from "react";
-import { useSession, signOut } from "next-auth/react";
-import { Menu, LogOut, Loader2, Sun, Moon } from "lucide-react";
-import Avatar from "@/components/ui/Avatar";
+import { Menu, Sun, Moon } from "lucide-react";
+import AccountMenu from "@/components/account/AccountMenu";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import type { Language } from "@/lib/i18n/dictionary";
@@ -74,25 +78,7 @@ function LanguageSwitcher() {
 }
 
 export default function Topbar({ onMenuClick }: TopbarProps) {
-  const { data: session } = useSession();
   const { t } = useLanguage();
-  const name = session?.user?.name ?? session?.user?.email ?? t("topbar.student");
-  const image = session?.user?.image;
-  // Chống double-submit: signOut() gọi API + điều hướng, có độ trễ
-  // mạng thật — không chặn nút trong lúc chờ thì user có thể bấm 2-3
-  // lần liên tiếp, gửi nhiều request signOut song song không cần thiết.
-  const [loggingOut, setLoggingOut] = useState(false);
-
-  function handleLogout() {
-    if (loggingOut) return;
-    setLoggingOut(true);
-    // Không cần .finally reset về false: signOut({callbackUrl}) điều
-    // hướng rời trang ngay khi thành công, nên component này unmount
-    // trước khi có cơ hội bấm lại; nếu mạng lỗi (Promise reject), giữ
-    // nguyên loading mãi thực chất an toàn hơn cho-phép double-submit.
-    void signOut({ callbackUrl: "/login" });
-  }
-
   return (
     <header className="topbar">
       {/* Nút hamburger CHỈ hiển thị trên mobile (ẩn bằng CSS ở
@@ -110,37 +96,15 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginLeft: "auto" }}>
         <LanguageSwitcher />
         <ThemeToggle />
-        <span
-          style={{
-            fontSize: 13,
-            color: "var(--text-dim)",
-            maxWidth: 220,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-          title={name}
-        >
-          {name}
-        </span>
+        {/* Menu tài khoản gom "Cài đặt tài khoản / Thêm tài khoản / Đăng xuất"
+            vào một điểm. Nút đăng xuất cũ (logout-btn) bị thay bằng menu này
+            để thanh trên không bị rối nhiều nút; hành vi đăng xuất giữ
+            nguyên signOut({ callbackUrl: "/login" }) như trước.
 
-        <Avatar src={image} name={name} size={34} />
-
-        <button
-          type="button"
-          onClick={handleLogout}
-          disabled={loggingOut}
-          className="logout-btn"
-          aria-label={t("topbar.logout")}
-          aria-busy={loggingOut}
-        >
-          {loggingOut ? (
-            <Loader2 size={15} className="spinner" aria-hidden="true" />
-          ) : (
-            <LogOut size={15} aria-hidden="true" />
-          )}
-          <span>{loggingOut ? t("topbar.loggingOut") : t("topbar.logout")}</span>
-        </button>
+            AccountMenu tự render <Avatar> + tên + mũi tên trong một trigger
+            duy nhất. Topbar KHÔNG render avatar/tên riêng nữa: trước đây
+            cả hai cùng vẽ nên header hiện 2 avatar giống hệt nhau. */}
+        <AccountMenu />
       </div>
     </header>
   );

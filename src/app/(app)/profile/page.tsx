@@ -15,6 +15,7 @@ import StateMessage from "@/components/ui/StateMessage";
 import LevelProgressBar from "@/components/ui/LevelProgressBar";
 import ProfileHeader from "@/components/profile/ProfileHeader";
 import EditProfileModal from "@/components/profile/EditProfileModal";
+import ChangePasswordPanel from "@/components/account/ChangePasswordPanel";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { ApiResponse, UserProfile } from "@/types";
 
@@ -26,6 +27,10 @@ interface StreakResponse {
     lxpBalance: number;
     level: number;
   } | null;
+}
+
+interface PasswordStatus {
+  hasPassword: boolean;
 }
 
 export default function ProfilePage() {
@@ -40,6 +45,10 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  // null = chưa biết tài khoản này có mật khẩu hay không. Giữ null (thay vì
+  // mặc định false) để không hiển thị nhầm "tài khoản Google" trong lúc
+  // request trạng thái mật khẩu còn đang bay.
+  const [hasPassword, setHasPassword] = useState<boolean | null>(null);
 
   useEffect(() => {
     fetch("/api/profile")
@@ -61,6 +70,15 @@ export default function ProfilePage() {
         }
       })
       .catch(() => {});
+
+    // Tài khoản này là credentials hay Google? Quyết định hiển thị form
+    // đổi mật khẩu. Độc lập với request /api/profile nên chạy song song.
+    fetch("/api/auth/password")
+      .then((res) => res.json())
+      .then((json: ApiResponse<PasswordStatus>) => {
+        if (json.success) setHasPassword(json.data.hasPassword);
+      })
+      .catch(() => setHasPassword(false));
   }, []);
 
   if (loading) return <StateMessage kind="loading" text={t("profile.loading")} />;
@@ -111,6 +129,11 @@ export default function ProfilePage() {
       </Panel>
 
       {lifetimeXP !== null && <LevelProgressBar lifetimeXP={lifetimeXP} />}
+
+      {/* Chỉ render panel bảo mật khi đã biết tài khoản có mật khẩu hay
+          không (hasPassword !== null) — tránh hiện nhầm thông báo "tài khoản
+          Google" trong lúc request trạng thái còn đang bay. */}
+      {hasPassword !== null && <ChangePasswordPanel hasPassword={hasPassword} />}
 
       {isEditing && (
         <EditProfileModal

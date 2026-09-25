@@ -11,10 +11,28 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { ApiResponse } from "@/types";
 
+export const runtime = "nodejs";
+
 const MIN_PASSWORD_LENGTH = 8;
+
+// Các mã lỗi Prisma báo "hạ tầng/sai trạng thái DB" chứ KHÔNG phải lỗi
+// người dùng: không có DB, không kết nối được, migration chưa chạy, cột
+// không tồn tại, timeout. Trả 503 để client biết đây là lỗi tạm thời của
+// server thay vì "sai dữ liệu" — trước đây tất cả bị gộp thành 500 chung.
+const DATABASE_INFRA_ERROR_CODES = new Set([
+  "P1000", // không xác thực được
+  "P1001", // không kết nối được tới DB
+  "P1008", // hết thời gian chờ DB
+  "P1010", // user DB không có quyền
+  "P1017", // server DB đóng kết nối
+  "P2021", // bảng không tồn tại (chưa chạy migration)
+  "P2022", // cột không tồn tại (DB lệch schema)
+  "P2034", // xung đột transaction, có thể thử lại
+]);
 
 export async function POST(req: NextRequest) {
   // Parse body RIÊNG khỏi try chính: body sai định dạng JSON là lỗi của
@@ -34,9 +52,16 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const email = (body.email as string | undefined)?.trim().toLowerCase();
-    const password = body.password as string | undefined;
-    const name = (body.name as string | undefined)?.trim();
+    if (typeof body.email !== "string" || typeof body.password !== "string" || typeof body.name !== "string") {
+      return NextResponse.json<ApiResponse<never>>(
+        { success: false, error: "Dữ liệu đăng ký không hợp lệ." },
+        { status: 400 }
+      );
+    }
+
+    const email = body.email.trim().toLowerCase();
+    const password = body.password;
+    const name = body.name.trim();
 
     if (!email || !email.includes("@")) {
       return NextResponse.json<ApiResponse<never>>(
@@ -78,7 +103,25 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json<ApiResponse<typeof user>>({ success: true, data: user });
   } catch (err) {
-    console.error("[api/auth/register] Lỗi:", err);
+    if (err instanceof Prisma.PrismaClientKnownRequestError) {
+      if (err.code === "P2002") {
+        return NextResponse.json<ApiResponse<never>>(
+          { success: false, error: "Email này đã được đăng ký." },
+          { status: 409 }
+        );
+      }
+      if (DATABASE_INFRA_ERROR_CODES.has(err.code)) {
+        // Chỉ log MÃ lỗi, không log cả error object: message của Prisma có
+        // thể chứa connection string/chi tiết DB. Không log stack trace vì
+        // response này đi ra client.
+        console.error(`[api/auth/register] Prisma error ${err.code}`);
+        return NextResponse.json<ApiResponse<never>>(
+          { success: false, error: "Dịch vụ đăng ký tạm thời không khả dụng. Vui lòng thử lại sau." },
+          { status: 503 }
+        );
+      }
+    }
+    console.error("[api/auth/register] Lỗi không xác định:", err instanceof Error ? err.name : "UnknownError");
     return NextResponse.json<ApiResponse<never>>(
       { success: false, error: "Không thể đăng ký, thử lại sau." },
       { status: 500 }

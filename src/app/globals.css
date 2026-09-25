@@ -64,6 +64,17 @@
      tối thì được, nhưng làm light mode gần như vô hình. */
   --panel-hover: rgba(255, 255, 255, 0.1);
   --border-hover: rgba(201, 211, 255, 0.2);
+  /* ---- Token riêng cho MIND MAP (yêu cầu 1 & 14) ----
+     Node là card nằm trên canvas tối nên cần 3 tầng chữ rõ ràng:
+     title > description > metadata. Nếu dùng --text-dim (#94a0b8) cho mô tả thì
+     trên nền card chỉ đạt ~6:1 và trông "chìm" vào background, nên tách riêng
+     token để chỉnh độ tương phản của mind map mà KHÔNG đổi màu chữ toàn app.
+     Thứ tự độ sáng có chủ ý: title > description > metadata. */
+  --mm-title: #f1f5f9;
+  --mm-desc: #b6c2d9;
+  --mm-meta: #93a1bc;
+  --mm-edge: rgba(201, 211, 255, 0.26);
+  --mm-edge-strong: rgba(53, 208, 216, 0.45);
   /* Typography tokens — code/math dùng stack riêng, không để mỗi
      component tự chọn font (tránh chữ vỡ, icon ô vuông). */
   --font-code: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -110,6 +121,13 @@
   --surface-elevated: #ffffff;
   --panel-hover: rgba(15, 23, 42, 0.09);
   --border-hover: rgba(15, 23, 42, 0.18);
+  /* Mind map ở light mode: card là lớp tối mờ trên nền sáng nên chữ phải ĐẬM
+     hơn bản dark để đạt tương phản tương đương (mô tả ~6.6:1, meta ~5:1). */
+  --mm-title: #171b26;
+  --mm-desc: #4c566c;
+  --mm-meta: #5d6779;
+  --mm-edge: rgba(15, 23, 42, 0.22);
+  --mm-edge-strong: rgba(15, 139, 147, 0.5);
 }
 
 /* Tôn trọng prefers-reduced-motion TOÀN APP — thay vì phải rà từng
@@ -1300,6 +1318,12 @@ h3 {
   max-width: 760px;
 }
 
+.profile-header {
+  /* Wrapper trung tối của 2 layer (cover + overlay). Không overflow:hidden ở
+     đây để avatar được nhô xuống dưới cover mà không bị cắt. */
+  position: relative;
+}
+
 .profile-cover {
   position: relative;
   height: 220px;
@@ -1308,12 +1332,33 @@ h3 {
   background-size: cover;
   background-position: center;
   border: 1px solid var(--border-soft);
+  /* Ảnh bìa bo góc: chỉ lớp này được clip. Overlay nằm ngoài nên an toàn. */
+  overflow: hidden;
+  z-index: 1;
+}
+
+/* LAYER OVERLAY — phủ đúng vùng cover, chứa avatar + nút đổi ảnh.
+   inset:0 để neo nút camera theo mép cover; avatar dùng bottom âm để nhô. */
+.profile-cover-overlay {
+  position: absolute;
+  inset: 0;
+  /* Không đặt overflow ở đây — đó là mục đích của việc tách layer. */
+  z-index: 2;
+  /* Lớp phủ không chặn thao tác chuột xuống vùng bên dưới nó; hai control
+     bên trong bật lại bằng pointer-events:auto. */
+  pointer-events: none;
+}
+
+.profile-cover-overlay .photo-edit-btn,
+.profile-cover-overlay .profile-avatar {
+  pointer-events: auto;
 }
 
 .profile-avatar-wrap {
   position: absolute;
   left: 24px;
   bottom: -44px;
+  z-index: 3;
 }
 
 .profile-avatar {
@@ -1326,7 +1371,10 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  /* KHÔNG dùng overflow:hidden ở đây. Lớp này chứa CẢ nút camera
+     (.photo-edit-btn--avatar, con trực tiếp) — overflow:hidden ở đây cắt
+     mất nửa dưới + nửa phải của nút, làm icon camera méo/không bấm được.
+     Chỉ .profile-avatar-inner (lớp con ô ảnh) mới cần bo tròn + cắt ảnh. */
 }
 
 .profile-avatar-inner {
@@ -1380,6 +1428,7 @@ h3 {
 .photo-edit-btn--cover {
   right: 16px;
   bottom: 16px;
+  z-index: 3;
 }
 
 .photo-edit-btn--avatar {
@@ -1387,7 +1436,7 @@ h3 {
   bottom: -2px;
   width: 30px;
   height: 30px;
-  font-size: 13px;
+  z-index: 3;
 }
 
 .photo-upload-overlay {
@@ -1437,6 +1486,62 @@ h3 {
   margin-top: 56px;
 }
 
+/* Menu tài khoản trên Topbar: panel nổi neo góc phải dưới avatar. */
+.account-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 260px;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  padding: 6px;
+  z-index: 40;
+}
+
+.account-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 12px;
+  margin-top: 2px;
+  background: transparent;
+  border: none;
+  border-radius: 9px;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-menu__item:hover {
+  background: var(--panel);
+}
+
+/* Panel bảo mật (đổi mật khẩu / trạng thái tài khoản Google) nằm dưới
+   khối hồ sơ, cùng nhịp card với .profile-info-panel. */
+.profile-security-panel {
+  margin-top: 20px;
+}
+
+.profile-security-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.profile-security-note {
+  margin-top: 10px;
+  font-size: 13.5;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
 .profile-info-header {
   display: flex;
   justify-content: space-between;
@@ -1456,6 +1561,15 @@ h3 {
   .profile-avatar-wrap {
     left: 16px;
     bottom: -34px;
+  }
+  /* Nút camera nhỏ lại + neo sát mép hơn trên màn hình hẹp để không đè lên
+     avatar và vẫn nằm trọn trong cover. Vùng chạm 36px vẫn đạt chuẩn tối
+     thiểu cho mobile. */
+  .photo-edit-btn--cover {
+    right: 12px;
+    bottom: 12px;
+    width: 36px;
+    height: 36px;
   }
   .profile-info-panel {
     margin-top: 46px;
@@ -2603,5 +2717,272 @@ pre {
   font-size: 18px;
   font-weight: 700;
   color: var(--text);
+}
+
+
+/* ============ MIND MAP CANVAS ============ */
+.mindmap-grid {
+  grid-template-columns: minmax(0, 1.65fr) minmax(260px, 0.85fr);
+  align-items: start;
+}
+
+.mindmap-panel {
+  min-width: 0;
+  padding: 12px;
+}
+
+.mindmap-viewport {
+  position: relative;
+  height: min(68vh, 680px);
+  min-height: 460px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(53, 208, 216, 0.08), transparent 42%),
+    linear-gradient(rgba(201, 211, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(201, 211, 255, 0.035) 1px, transparent 1px),
+    var(--surface-elevated);
+  background-size: auto, 28px 28px, 28px 28px, auto;
+  /* cursor grab trên vùng trống = kéo được cả canvas; node có cursor riêng
+     (xem .mindmap-node) nên người dùng phân biệt được ngay kéo-canvas với
+     kéo-node. */
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.mindmap-viewport:active {
+  cursor: grabbing;
+}
+
+/* Class do JS thêm khi đang pan: đổi cursor sang grabbing đúng lúc kéo, thay
+   vì dựa vào :active (Safari/iOS đôi khi không bắt được trong khi dùng
+   pointer capture). */
+.mindmap-viewport.is-panning {
+  cursor: grabbing;
+}
+
+.mindmap-stage {
+  position: absolute;
+  inset: 0 auto auto 0;
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.mindmap-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.mindmap-edges path {
+  fill: none;
+  stroke: var(--mm-edge);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Nhánh nối TRỰC TIẾP từ node trung tâm: đậm + dày hơn để mắt bám được trục
+   chính của mind map trước, các nhánh con lùi về sau (yêu cầu 4 & 13).
+   `vector-effect: non-scaling-stroke` giữ độ dày ổn định khi zoom -> ở zoom nhỏ
+   edge vẫn nhìn thấy thay vì teo thành sợi chỉ. */
+.mindmap-edges path.mindmap-edge--trunk {
+  stroke: var(--mm-edge-strong);
+  stroke-width: 2.4;
+}
+
+.mindmap-node {
+  position: absolute;
+  display: flex;
+  align-items: stretch;
+  padding: 0;
+  /* KHÔNG dùng `border` shorthand ở đây. Ranh giới shorthand ghi đè cả
+     `borderLeftColor` mà JSX set inline trong renderCanvasNode(), và React
+     cảnh báo "mix shorthand and non-shorthand" mỗi lần rerender node
+     (chọn node, search, đổi loại node). Khai báo tường minh từng cạnh:
+     3 cạnh 1px, cạnh trái 3px làm dải màu theo loại node. Giá trị màu
+     vẫn do inline style quyết định nên hình ảnh không đổi. */
+  border-top-width: 1px;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+  border-left-width: 3px;
+  border-top-style: solid;
+  border-right-style: solid;
+  border-bottom-style: solid;
+  border-left-style: solid;
+  border-top-color: var(--border);
+  border-right-color: var(--border);
+  border-bottom-color: var(--border);
+  border-left-color: var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  /* Node KHÔNG khoá height: chiều cao do nội dung quyết định rồi được
+     ResizeObserver đo lại (xem MindMapPage). min-height cố định ở đây chỉ
+     để node 1 dòng không trông quá mỏng — không dùng min-height theo số đo,
+     vì như vậy node sẽ không bao giờ co lại khi rút ngắn label. */
+  min-height: 48px;
+  /* `overflow: hidden` ở đây CHỈ để bo góc + cắt badge tìm kiếm đúng viền —
+     nó KHÔNG cắt chữ của graph: node tự cao theo nội dung (không khoá height)
+     và mô tả đã bị line-clamp sẵn, nên nội dung không bao giờ tràn ra ngoài.
+     Không đổi sang `visible` vì sẽ làm mất bo góc của card. */
+  overflow: hidden;
+  font-family: var(--font-inter), sans-serif;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+/* Node trung tâm cao hơn node con MỘT bậc (yêu cầu 13): to hơn, bo góc rộng
+   hơn, bóng sâu hơn. Không dùng glow mạnh để các node con vẫn nổi. */
+.mindmap-node--root {
+  border-radius: 14px;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.32);
+}
+
+.mindmap-node:hover,
+.mindmap-node:focus-visible {
+  outline: none;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(53, 208, 216, 0.24);
+}
+
+/* Node đang chọn: ring indigo để nhận ra ngay. Đặt SAU hover và lặp selector
+   (specificity 2 class) nên hover không nuốt mất trạng thái chọn. */
+.mindmap-node.mindmap-node--selected,
+.mindmap-node.mindmap-node--selected:hover,
+.mindmap-node.mindmap-node--selected:focus-visible {
+  box-shadow: 0 0 0 2px var(--indigo), 0 14px 30px rgba(0, 0, 0, 0.34);
+}
+
+/* Node khớp từ khoá tìm kiếm: viền cyan + ring mảnh. KHÔNG làm mờ các node
+   khác — mô tả của chúng sẽ chìm mất, trong khi yêu cầu là highlight mà vẫn
+   đọc được (yêu cầu 15). */
+.mindmap-node.mindmap-node--hit {
+  box-shadow: 0 0 0 1px var(--cyan), 0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+/* Typography của node (yêu cầu 2): title 14px (> node con cùng cỡ chữ tiêu đề
+   nhưng mô tả nhỏ hơn), mô tả 12.5px, gap dọc 6px giữa 2 khối. */
+.mindmap-node__content {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  align-content: center;
+  gap: 4px 8px;
+  padding: 11px 13px;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.mindmap-node__label {
+  min-width: 0;
+  color: var(--mm-title);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Node trung tâm: chữ tiêu đề lớn + đậm hơn, padding rộng hơn. */
+.mindmap-node--root .mindmap-node__content {
+  padding: 13px 16px;
+}
+
+.mindmap-node--root .mindmap-node__label {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+/* Mô tả: nhỏ hơn title, màu --mm-desc (sáng vừa, KHÔNG sáng hơn title), tối
+   đa 3 dòng. Không clamp thì mô tả dài biến node thành cột chữ cao gấp 3 lần
+   title và phá cân bằng layout; phần đầy đủ vẫn xem được ở panel chi tiết và
+   ở tooltip (title attribute) của chính span này. */
+.mindmap-node__description {
+  flex-basis: 100%;
+  color: var(--mm-desc);
+  font-size: 12.5px;
+  line-height: 1.45;
+  display: -webkit-box;
+  /* Line-clamp 3 dòng: khai báo CẢ bản chuẩn (`line-clamp`) lẫn bản cũ
+     (`-webkit-line-clamp`) — Chromium mới chỉ hỗ trợ bản chuẩn từ 133, còn
+     Safari/Firefox vẫn chỉ hiểu bản `-webkit-`; thiếu bên nào là mất clamp
+     (mô tả tràn hết node) ở trình duyệt bên đó. */
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.mindmap-node--root .mindmap-node__description {
+  font-size: 13px;
+}
+
+/* Nút thu gọn nằm cùng dòng đầu với tiêu đề: canh theo dòng chữ (margin-top
+   nhỏ) thay vì canh theo đỉnh card. */
+.mindmap-node__toggle {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: 1px;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border-hover);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--mm-desc);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.mindmap-node__toggle:hover {
+  color: var(--mm-title);
+  border-color: var(--cyan);
+}
+
+.mindmap-node__match {
+  align-self: flex-end;
+  padding: 0 8px 6px 0;
+  color: var(--cyan);
+  font-size: 11px;
+}
+
+.mindmap-detail {
+  min-width: 0;
+}
+
+@media (max-width: 880px) {
+  .mindmap-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mindmap-viewport {
+    height: min(72vh, 600px);
+    min-height: 420px;
+  }
+}
+
+@media (max-width: 520px) {
+  .mindmap-viewport {
+    min-height: 380px;
+  }
+
+  /* Màn hình hẹp: giảm đệm cho vừa khung nhưng KHÔNG hạ cỡ chữ tiêu đề/mô tả
+     xuống nữa — trên điện thoại người dùng pinch để đọc chứ không đọc chữ 12px. */
+  .mindmap-node__content {
+    padding: 10px 11px;
+    gap: 3px 7px;
+  }
+
+  .mindmap-node--root .mindmap-node__content {
+    padding: 11px 13px;
+  }
 }
 

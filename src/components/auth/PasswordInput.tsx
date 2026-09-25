@@ -20,6 +20,9 @@ interface PasswordInputProps {
   required?: boolean;
   minLength?: number;
   autoComplete?: string;
+  // Khoá input khi request đang bay (vd đổi mật khẩu) để người dùng không
+  // sửa giữa chừng và nút gửi không bị bấm lặp.
+  disabled?: boolean;
 }
 
 const inputStyle: CSSProperties = {
@@ -41,6 +44,7 @@ export default function PasswordInput({
   required,
   minLength,
   autoComplete,
+  disabled,
 }: PasswordInputProps) {
   const { t } = useLanguage();
   const [visible, setVisible] = useState(false);
@@ -55,6 +59,7 @@ export default function PasswordInput({
         required={required}
         minLength={minLength}
         autoComplete={autoComplete}
+        disabled={disabled}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         style={inputStyle}

@@ -14,7 +14,7 @@
 
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { isValidElement, useState, type ReactElement, type ReactNode } from "react";
 import katex from "katex";
 // Import tương đối (không dùng alias @/) vì vitest của project chưa
 // cấu hình resolve alias — Next.js build vẫn resolve bình thường.
@@ -52,6 +52,15 @@ export type InlineToken =
   | { kind: "italic"; text: string }
   | { kind: "code"; text: string };
 
+// Sentinel thay cho newline BÊN TRONG khối display math đã gom.
+// Vì sao cần: parser dòng-theo-dòng gọi .split("\n") NGAY SAU
+// mergeDisplayMathLines. Nếu khối gom vẫn chứa newline thật, nó bị cắt
+// lại thành nhiều dòng và công thức vỡ (trước đây mergeDisplayMathLines
+// vì vậy gần như không có tác dụng với công thức nhiều dòng). Ký tự này
+// không xuất hiện trong văn bản thật nên an toàn; được đổi lại thành "\n"
+// ngay sau khi tách dòng.
+const MATH_LINE_SENTINEL = "\u0000";
+
 // Gom display math nhiều dòng ($$...$$, \[...\]) thành 1 "siêu dòng" để
 // parser dòng-theo-dòng không cắt vỡ công thức. Hàm thuần túy — test
 // được bằng vitest. Code block ```...``` được tôn trọng: math delimiter
@@ -73,7 +82,7 @@ export function mergeDisplayMathLines(content: string): string {
     const trimmed = line.trim();
     if (trimmed.startsWith("```")) {
       inCodeBlock = !inCodeBlock;
-      if (buffer) out.push(buffer.join("\n"));
+      if (buffer) out.push(buffer.join(MATH_LINE_SENTINEL));
       buffer = null;
       closer = null;
       out.push(line);
@@ -95,12 +104,12 @@ export function mergeDisplayMathLines(content: string): string {
     }
     buffer.push(line);
     if (closer === "$$" ? trimmed.includes("$$") : trimmed.includes("\\]")) {
-      out.push(buffer.join("\n"));
+      out.push(buffer.join(MATH_LINE_SENTINEL));
       buffer = null;
       closer = null;
     }
   }
-  if (buffer) out.push(buffer.join("\n"));
+  if (buffer) out.push(buffer.join(MATH_LINE_SENTINEL));
   return out.join("\n");
 }
 
@@ -188,25 +197,91 @@ export function tryParseTable(lines: string[]): ParsedTable | null {
 // Render phần *inline* của 1 dòng: math LaTeX (\(..\), $$..$$) qua
 // KaTeX trước, sau đó bold/italic/code trên text thường qua tokenizer.
 // Thứ tự này bảo đảm công thức và code không bao giờ bị parse lẫn.
+// Dựng node cho CÔNG THỨC HIỂN THỊ ($$..$$, \[..\]). Luôn là <div> vì
+// công thức hiển thị phải đứng riêng dòng + căn giữa — đổi sang <span> sẽ
+// phá layout và sai semantics. Vì vậy node này KHÔNG được phép nằm trong
+// <p>; xem renderParagraph() bên dưới.
+function renderDisplayMath(latex: string, key: string) {
+  const html = katex.renderToString(latex, {
+    throwOnError: false,
+    displayMode: true,
+    output: "html",
+    strict: false,
+    trust: false,
+  });
+  return (
+    <div
+      key={key}
+      className="math-block"
+      role="img"
+      aria-label={latex}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
+// Render 1 dòng văn bản thành chuỗi block HỢP LỆ: mọi node inline gom
+// vào <p>, còn node display math (<div class="math-block">) thành block
+// RIÊNG ngang hàng — không bao giờ lồng trong <p>.
+//
+// Vì sao tách ở MỨC NODE chứ không tách chuỗi: splitMathSegments đã bóc
+// sẵn delimiter khỏi `content`, nên ghép lại `seg.content` sẽ MẤT dấu $
+// của inline math và khiến $x^2$ không còn được nhận diện. Dùng chính
+// node renderInline() tạo ra giữ nguyên mọi ký tự.
+function renderParagraph(line: string, keyPrefix: string): ReactNode[] {
+  const nodes = renderInline(line, keyPrefix);
+  const blocks: ReactNode[] = [];
+  let run: ReactNode[] = [];
+  let paraIndex = 0;
+
+  const flushRun = () => {
+    // Bỏ qua đoạn rỗng — tránh sinh <p></p> không cần thiết.
+    if (run.length === 0) return;
+    blocks.push(
+      <p key={`${keyPrefix}-p${paraIndex++}`} style={{ margin: "0 0 12px", lineHeight: 1.7 }}>
+        {run}
+      </p>
+    );
+    run = [];
+  };
+
+  for (const node of nodes) {
+    if (isDisplayMathNode(node)) {
+      flushRun();
+      blocks.push(node);
+    } else {
+      run.push(node);
+    }
+  }
+  flushRun();
+  return blocks;
+}
+
+// Nhận diện node display math do renderInline()/renderDisplayMath() tạo.
+function isDisplayMathNode(node: ReactNode): node is ReactElement<{ className?: string }> {
+  return (
+    isValidElement(node) &&
+    node.type === "div" &&
+    (node.props as { className?: string }).className === "math-block"
+  );
+}
+
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
   return splitMathSegments(text).map((seg, si) => {
     if (seg.type === "math") {
+      // Công thức HIỂN THỊ luôn là <div> (đứng riêng dòng, căn giữa) —
+      // đổi sang <span> sẽ phá layout. renderInline chỉ được gọi trong
+      // container cho phép <div> (<li>, <td>, <th>, <blockquote>); ở <p>
+      // thì display math đã được tách ra bởi renderParagraph() trước rồi.
+      if (seg.display) return renderDisplayMath(seg.content, `${keyPrefix}-m${si}`);
       const html = katex.renderToString(seg.content, {
         throwOnError: false,
-        displayMode: seg.display,
+        displayMode: false,
         output: "html",
         strict: false,
         trust: false,
       });
-      return seg.display ? (
-        <div
-          key={`${keyPrefix}-m${si}`}
-          className="math-block"
-          role="img"
-          aria-label={seg.content}
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
-      ) : (
+      return (
         <span
           key={`${keyPrefix}-m${si}`}
           className="math-inline"
@@ -248,7 +323,12 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
 export default function MarkdownLite({ content }: MarkdownLiteProps) {
   // Gom display math nhiều dòng THÀNH 1 siêu dòng trước khi parser
   // dòng-theo-dòng chạy (mergeDisplayMathLines tôn trọng code block).
-  const lines = mergeDisplayMathLines(content).split("\n");
+  // Sentinel \u0000 nối các dòng trong khối gom được đổi lại thành "\n"
+  // NGAY Ở ĐÂY, sau khi tách dòng — nếu không, .split("\n") sẽ cắt vỡ
+  // khối gom trở lại thành từng dòng và công thức nhiều dòng hỏng.
+  const lines = mergeDisplayMathLines(content)
+    .split("\n")
+    .map((line) => line.split(MATH_LINE_SENTINEL).join("\n"));
   const blocks: ReactNode[] = [];
 
   let i = 0;
@@ -437,13 +517,12 @@ export default function MarkdownLite({ content }: MarkdownLiteProps) {
       continue;
     }
 
-    // Đoạn văn thường
+    // Đoạn văn thường — renderParagraph tách công thức hiển thị ra
+    // thành <div> riêng nên <p> không bao giờ chứa <div> (hydration error).
     flushList();
-    blocks.push(
-      <p key={`p-${blocks.length}`} style={{ margin: "0 0 12px", lineHeight: 1.7 }}>
-        {renderInline(trimmed, `p-${blocks.length}`)}
-      </p>
-    );
+    for (const node of renderParagraph(trimmed, `p-${blocks.length}`)) {
+      blocks.push(node);
+    }
     i++;
   }
   flushList();

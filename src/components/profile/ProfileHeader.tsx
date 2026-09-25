@@ -21,6 +21,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
+import { Camera } from "lucide-react";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { UserProfile } from "@/types";
 
@@ -104,7 +105,11 @@ export default function ProfileHeader({ profile, onPhotoUpdated }: ProfileHeader
   const initials = (profile.name ?? profile.email).slice(0, 2).toUpperCase();
 
   return (
-    <div>
+    <div className="profile-header">
+      {/* LAYER 1 — COVER.
+          overflow:hidden CHỈ áp cho lớp này để ảnh bìa bo góc theo
+          .profile-cover. Avatar và nút camera nằm NGOÀI lớp này (layer 2)
+          nên không bị clipping, vẫn nhô xuống dưới cover an toàn. */}
       <div
         className="profile-cover"
         style={displayCover ? { backgroundImage: `url(${displayCover})` } : undefined}
@@ -114,32 +119,20 @@ export default function ProfileHeader({ profile, onPhotoUpdated }: ProfileHeader
             <span className="spinner-ring" />
           </div>
         )}
+      </div>
 
-        <button
-          type="button"
-          className="photo-edit-btn photo-edit-btn--cover"
-          onClick={() => coverInputRef.current?.click()}
-          disabled={uploadingCover}
-          aria-label={t("profile.changeCover")}
-          title={t("profile.changeCover")}
-        >
-          📷
-        </button>
-        <input
-          ref={coverInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          hidden
-          onChange={(e) => handleFileChange("cover", e.target.files?.[0])}
-        />
-
+      {/* LAYER 2 — OVERLAY (avatar + nút đổi ảnh).
+          pointer-events:none để lớp phủ không chặn thao tác của vùng bên
+          dưới; hai control bên trong bật lại bằng pointer-events:auto.
+          Nhờ tách khỏi cover, nút camera đặt trong cover vẫn nằm gọn bên
+          trong viền cover, còn avatar được phép tràn xuống dưới. */}
+      <div className="profile-cover-overlay">
         <div className="profile-avatar-wrap">
           <div className="profile-avatar">
             {/* profile-avatar-inner: lớp RIÊNG chịu trách nhiệm bo tròn
-                + cắt ảnh (overflow:hidden). Nút camera bên dưới nằm
-                NGOÀI lớp này (là con trực tiếp của .profile-avatar,
-                không có overflow:hidden) nên không bị cắt mất — đây là
-                lý do trước đây nút đổi avatar gần như không bấm được. */}
+                + cắt ảnh (overflow:hidden). Nút camera bên dưới nằm NGOÀI
+                lớp này (con trực tiếp của .profile-avatar, vốn KHÔNG có
+                overflow:hidden) nên không bị cắt mất. */}
             <div className="profile-avatar-inner">
               {displayAvatar ? (
                 // eslint-disable-next-line @next/next/no-img-element -- ảnh
@@ -165,7 +158,7 @@ export default function ProfileHeader({ profile, onPhotoUpdated }: ProfileHeader
               aria-label={t("profile.changeAvatar")}
               title={t("profile.changeAvatar")}
             >
-              📷
+              <Camera size={15} aria-hidden="true" />
             </button>
             <input
               ref={avatarInputRef}
@@ -176,6 +169,27 @@ export default function ProfileHeader({ profile, onPhotoUpdated }: ProfileHeader
             />
           </div>
         </div>
+
+        {/* Nút đổi ảnh bìa: neo trong cover bằng offset cố định (right/bottom
+            16px) nên luôn nằm hoàn toàn trong vùng an toàn, không tràn ra
+            mép và không bị clipping. */}
+        <button
+          type="button"
+          className="photo-edit-btn photo-edit-btn--cover"
+          onClick={() => coverInputRef.current?.click()}
+          disabled={uploadingCover}
+          aria-label={t("profile.changeCover")}
+          title={t("profile.changeCover")}
+        >
+          <Camera size={17} aria-hidden="true" />
+        </button>
+        <input
+          ref={coverInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          hidden
+          onChange={(e) => handleFileChange("cover", e.target.files?.[0])}
+        />
       </div>
 
       {error && <p style={{ color: "var(--rose)", fontSize: 13, marginTop: 8 }}>{error}</p>}
