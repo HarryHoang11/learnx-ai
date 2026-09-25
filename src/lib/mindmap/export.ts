@@ -9,8 +9,10 @@
 // Export lấy TOÀN BỘ graph (tính bounding box, không screenshot viewport).
 // ================================================================
 
+import katex from "katex";
 import { type MindMapData, type MindMapNode, type MindMapEdge } from "./graph";
-import { computeLayout, deriveEdges, NODE_TYPE_COLORS, escapeXml, EXPORT_BG, EXPORT_TEXT } from "./layout";
+import { computeLayout, deriveEdges, NODE_TYPE_COLORS, escapeXml, EXPORT_BG, EXPORT_PANEL, EXPORT_TEXT, type PositionedNode } from "./layout";
+import { splitMathSegments } from "../math/segments";
 
 export const EXPORT_FORMATS = ["svg", "png", "pdf", "json", "md"] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
@@ -57,65 +59,151 @@ export function resolveEdges(data: MindMapData): MindMapEdge[] {
   return Array.from(byKey.values());
 }
 
-/** Tạo dữ liệu JSON đầy đủ để backup & restore. */
-export function toMindMapJsonExport(data: MindMapData, title: string): string {
-  const payload = {
-    version: 1,
-    title,
-    nodes: data.nodes.map((n) => ({
-      id: n.id,
-      label: n.label,
-      parentId: n.parentId,
-      type: n.type,
-      description: n.description,
-    })),
-    edges: resolveEdges(data).map((e) => ({ id: e.id, source: e.source, target: e.target })),
+export interface MindMapExportPayload {
+  format: "learnx-ai-mindmap";
+  version: 1;
+  title: string;
+  exportedAt: string;
+  /** Dữ liệu ở cấp ngoài để tương thích trực tiếp với import/schema hiện tại. */
+  nodes: MindMapData["nodes"];
+  edges: MindMapData["edges"];
+  /** Snapshot chuẩn của dữ liệu, giữ cho các importer cũ đọc `data`. */
+  data: MindMapData;
+  layout: {
+    width: number;
+    height: number;
+    nodes: Array<{
+      id: string;
+      position: { x: number; y: number; width: number; height: number };
+      style: { fill: string; stroke: string; radius: number; fontSize: number; fontWeight: number };
+      metadata: { type?: string; description?: string };
+    }>;
+    edges: Array<{
+      id: string;
+      source: string;
+      target: string;
+      style: { stroke: string; strokeWidth: number };
+    }>;
   };
-  return JSON.stringify(payload, null, 2);
 }
 
-/** Render một node thành SVG element (gọi bởi generateMindMapSVG). */
-function renderNodeSVG(
-  node: MindMapNode & { x: number; y: number; width: number; height: number },
-  isRoot: boolean
-): string {
-  const color = NODE_TYPE_COLORS[node.type ?? ""] ?? "#94a0b8";
-  const rx = isRoot ? 14 : 10;
-  const w = node.width;
-  const h = node.height;
-  const bgColor = isRoot ? "#1b2233" : "#1a1f2d";
+/** Tạo payload backup có cả dữ liệu schema hiện tại và layout/style đã render. */
+export function createMindMapExportPayload(data: MindMapData, title: string): MindMapExportPayload {
+  const result = computeLayout(data.nodes);
+  const positioned = new Map(result.nodes.map((node) => [node.id, node]));
+  const edges = resolveEdges(data);
 
-  // Word-wrap label
-  const words = node.label.split(/\s+/).filter(Boolean);
+  return {
+    format: "learnx-ai-mindmap",
+    version: 1,
+    title,
+    exportedAt: new Date().toISOString(),
+    nodes: data.nodes,
+    edges,
+    data: {
+      version: data.version ?? 1,
+      nodes: data.nodes,
+      edges,
+    },
+    layout: {
+      width: result.width,
+      height: result.height,
+      nodes: result.nodes.map((node) => ({
+        id: node.id,
+        position: { x: node.x - node.width / 2, y: node.y, width: node.width, height: node.height },
+        style: {
+          fill: node.parentId === null ? "#1b2233" : "#1a1f2d",
+          stroke: NODE_TYPE_COLORS[node.type ?? ""] ?? "#94a0b8",
+          radius: node.parentId === null ? 14 : 10,
+          fontSize: node.parentId === null ? 15 : 13.5,
+          fontWeight: node.parentId === null ? 700 : 500,
+        },
+        metadata: {
+          ...(node.type ? { type: node.type } : {}),
+          ...(node.description ? { description: node.description } : {}),
+        },
+      })),
+      edges: edges
+        .filter((edge) => positioned.has(edge.source) && positioned.has(edge.target))
+        .map((edge) => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          style: { stroke: "rgba(201,211,255,0.2)", strokeWidth: 1.5 },
+        })),
+    },
+  };
+}
+
+/** Tạo dữ liệu JSON đầy đủ để backup & restore. */
+export function toMindMapJsonExport(data: MindMapData, title: string): string {
+  return JSON.stringify(createMindMapExportPayload(data, title), null, 2);
+}
+
+function wrapNodeLabel(label: string, width: number): string[] {
+  const maxChars = Math.max(8, Math.floor((width - 36) / 7.2));
+  const words = label.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let line = "";
-  const charsPerLine = Math.floor((w - 36) / 11);
   for (const word of words) {
-    if ((line + " " + word).length > charsPerLine && line.length > 0) {
+    if (line && (line + " " + word).length > maxChars) {
       lines.push(line);
       line = word;
     } else {
-      line += (line ? " " : "") + word;
+      line += `${line ? " " : ""}${word}`;
     }
   }
   if (line) lines.push(line);
-  if (lines.length === 0) lines.push("");
+  return lines.length > 0 ? lines : [""];
+}
 
-  let svg = `<g transform="translate(${node.x - w / 2},${node.y})">`;
-  svg += `<rect x="0" y="0" width="${w}" height="${h}" rx="${rx}" ry="${rx}" fill="${bgColor}" stroke="${color}" stroke-width="1"/>`;
-  svg += `<rect x="0" y="0" width="3" height="${h}" fill="${color}"/>`;
+function renderMathSVG(latex: string, display: boolean): string {
+  // MathML is self-contained in SVG and remains vector when the file is
+  // zoomed. SVG Canvas rasterization is supported by current Chromium/WebKit;
+  // if a runtime cannot render MathML, the text fallback keeps the formula
+  // readable instead of producing an empty node.
+  const mathml = katex.renderToString(latex, {
+    throwOnError: false,
+    displayMode: display,
+    output: "mathml",
+    strict: false,
+    trust: false,
+  });
+  return `<span class="math" data-latex="${escapeXml(latex)}">${mathml}</span>`;
+}
 
-  if (node.type && node.type !== "root") {
-    svg += `<rect x="${w - 46}" y="4" width="42" height="16" rx="3" ry="3" fill="${color}" opacity="0.2"/>`;
-    svg += `<text x="${w - 25}" y="15" text-anchor="middle" font-size="10" fill="${color}" font-weight="600">${escapeXml(node.type)}</text>`;
+function renderLabelSVG(label: string, width: number, isRoot: boolean): string {
+  const segments = splitMathSegments(label);
+  if (!segments.some((segment) => segment.type === "math")) {
+    return wrapNodeLabel(label, width)
+      .map(
+        (line, index) =>
+          `<text x="${width / 2}" y="${28 + index * 20}" text-anchor="middle" font-size="${isRoot ? 15 : 13.5}" fill="${EXPORT_TEXT}" font-weight="${isRoot ? 700 : 500}">${escapeXml(line)}</text>`
+      )
+      .join("");
   }
 
-  lines.forEach((ln, i) => {
-    svg += `<text x="${w / 2}" y="${28 + i * 18}" text-anchor="middle" font-size="13" fill="${EXPORT_TEXT}" font-weight="${isRoot ? "700" : "500"}">${escapeXml(ln)}</text>`;
-  });
+  // Mixed text/math labels are centered as MathML foreign objects, with a
+  // visible raw-label fallback for SVG viewers without MathML support.
+  const math = segments.find((segment) => segment.type === "math");
+  const html = math?.type === "math" ? renderMathSVG(math.content, math.display) : "";
+  return `<foreignObject x="12" y="18" width="${width - 24}" height="${Math.max(28, width / 2)}"><div xmlns="http://www.w3.org/1999/xhtml" style="color:${EXPORT_TEXT};font:13px system-ui,sans-serif;line-height:1.35;text-align:center;width:100%;overflow-wrap:anywhere">${html || escapeXml(label)}</div></foreignObject><text x="${width / 2}" y="${Math.min(34, width / 2 + 18)}" text-anchor="middle" font-size="11" fill="${EXPORT_TEXT}">${escapeXml(label)}</text>`;
+}
 
-    svg += `</g>`;
-  return svg;
+/** Render one positioned node into the same coordinate system as the graph edges. */
+function renderNodeSVG(node: PositionedNode, isRoot: boolean): string {
+  const stroke = NODE_TYPE_COLORS[node.type ?? ""] ?? "#94a0b8";
+  const fill = isRoot ? EXPORT_PANEL : "#151b29";
+  const x = node.x - node.width / 2;
+  const y = node.y;
+  const label = renderLabelSVG(node.label, node.width, isRoot);
+  const description = node.description
+    ? `<text x="${node.width / 2}" y="${Math.max(38, node.height - 8)}" text-anchor="middle" font-size="10" fill="#94a0b8">${escapeXml(node.description.slice(0, 120))}</text>`
+    : "";
+
+  // The node is positioned from the full layout, not from the current canvas
+  // transform, so branches outside the viewport remain in the exported file.
+  return `<g data-node-id="${escapeXml(node.id)}" transform="translate(${x},${y})"><rect x="0" y="0" width="${node.width}" height="${node.height}" rx="${isRoot ? 14 : 10}" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>${label}${description}</g>`;
 }
 
 /**
@@ -124,14 +212,13 @@ function renderNodeSVG(
  */
 export function generateMindMapSVG(
   data: MindMapData,
-  options?: { collapsed?: Set<string>; title?: string }
+  options?: { title?: string }
 ): string {
-  const { collapsed = new Set<string>() } = options || {};
   const title = options?.title ?? "Mind Map";
 
   const allNodes = data.nodes;
-  const layout = computeLayout(allNodes, collapsed);
-  const { nodes: positioned, edges, width, height } = layout;
+  const layout = computeLayout(allNodes);
+  const { nodes: positioned, width, height } = layout;
 
   const nodeMap = new Map(positioned.map((n) => [n.id, n] as const));
   const roots = positioned.filter((n) => n.parentId === null);

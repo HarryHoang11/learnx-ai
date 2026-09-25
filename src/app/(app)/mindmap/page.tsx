@@ -528,7 +528,6 @@ function MindMapPageInner() {
         onClose={() => setExportOpen(false)}
         title={record.title}
         data={exportData}
-        collapsed={collapsed}
       />
     </section>
   );

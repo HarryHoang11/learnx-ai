@@ -57,9 +57,11 @@ function nodeWidth(node: MindMapNode): number {
 
 function nodeHeight(node: MindMapNode): number {
   const w = nodeWidth(node);
-  const charsPerLine = Math.floor((w - 32) / 11);
+  const charsPerLine = Math.max(8, Math.floor((w - 44) / 7.2));
   const lines = Math.max(1, Math.ceil(node.label.length / charsPerLine));
-  return Math.min(lines, 3) * 24 + 28;
+  // Label dài được tăng chiều cao thay vì cắt ở ba dòng; bounding box sau
+  // cùng vì vậy luôn bao trọn cả node lẫn text trong PNG/SVG/PDF.
+  return lines * 20 + 28;
 }
 
 export function escapeXml(text: string): string {
@@ -86,14 +88,10 @@ export function deriveEdges(nodes: MindMapNode[]): MindMapEdge[] {
 }
 
 /**
- * Tính layout cho toàn bộ graph.
- * `collapsed` là tập id node đang thu gọn — node con của chúng sẽ
- * KHÔNG được bao gồm trong export để tránh file khổng lồ vô nghĩa.
+ * Tính layout và bounding box cho toàn bộ graph đã lưu. Trạng thái collapse
+ * chỉ thuộc UI nên export luôn chứa mọi node/edge, kể cả nhánh đang ẩn.
  */
-export function computeLayout(
-  nodes: MindMapNode[],
-  collapsed: Set<string> = new Set()
-): LayoutResult {
+export function computeLayout(nodes: MindMapNode[]): LayoutResult {
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
   const childrenByParent = new Map<string, MindMapNode[]>();
 
@@ -108,18 +106,23 @@ export function computeLayout(
   const roots = nodes.filter((n) => n.parentId === null);
 
   if (roots.length === 0) {
-    const positioned: PositionedNode[] = nodes.map((n, i) => ({
-      ...n,
-      x: NODE_WIDTH / 2 + MARGIN,
-      y: MARGIN + i * (NODE_HEIGHT + V_GAP),
-      width: nodeWidth(n),
-      height: nodeHeight(n),
-    }));
+    const positioned: PositionedNode[] = [];
+    let yCursor = MARGIN;
+    let maxX = 0;
+    for (const [index, n] of nodes.entries()) {
+      const width = nodeWidth(n);
+      const height = nodeHeight(n);
+      const x = MARGIN + width / 2;
+      const y = yCursor;
+      positioned.push({ ...n, x, y, width, height });
+      maxX = Math.max(maxX, x + width / 2 + MARGIN);
+      yCursor += height + V_GAP + (index < nodes.length - 1 ? 0 : MARGIN);
+    }
     return {
       nodes: positioned,
       edges: deriveEdges(nodes),
-      width: NODE_WIDTH + MARGIN * 2,
-      height: nodes.length * (NODE_HEIGHT + V_GAP) + MARGIN * 2,
+      width: maxX,
+      height: yCursor,
     };
   }
 
@@ -129,14 +132,14 @@ export function computeLayout(
   function computeHeight(nodeId: string, visited: Set<string>): number {
     if (visited.has(nodeId)) return 0;
     visited.add(nodeId);
-    const isCollapsed = collapsed.has(nodeId);
-    const kids = isCollapsed
-      ? []
-      : (childrenByParent.get(nodeId) || []).filter((k) => !visited.has(k.id));
+    const node = nodeMap.get(nodeId);
+    if (!node) return 0;
+    const kids = (childrenByParent.get(nodeId) || []).filter((k) => !visited.has(k.id));
+    const ownHeight = nodeHeight(node);
 
     if (kids.length === 0) {
-      subtreeHeight.set(nodeId, NODE_HEIGHT);
-      return NODE_HEIGHT;
+      subtreeHeight.set(nodeId, ownHeight);
+      return ownHeight;
     }
 
     let total = 0;
@@ -144,8 +147,8 @@ export function computeLayout(
       total += computeHeight(kid.id, new Set(visited));
     }
     total += V_GAP * (kids.length - 1);
-    subtreeHeight.set(nodeId, total);
-    return total;
+    subtreeHeight.set(nodeId, Math.max(ownHeight, total));
+    return Math.max(ownHeight, total);
   }
 
   for (const root of roots) {
@@ -169,10 +172,7 @@ export function computeLayout(
     visited.add(nodeId);
 
     const node = nodeMap.get(nodeId)!;
-    const isCollapsed = collapsed.has(nodeId);
-    const kids = isCollapsed
-      ? []
-      : (childrenByParent.get(nodeId) || []).filter((k) => !visited.has(k.id));
+    const kids = (childrenByParent.get(nodeId) || []).filter((k) => !visited.has(k.id));
 
     const w = nodeWidth(node);
     const h = nodeHeight(node);

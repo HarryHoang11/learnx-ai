@@ -37,8 +37,6 @@ interface MindMapExportModalProps {
   /** Tên mind map — dùng làm tên file (đã sanitize). */
   title: string;
   data: MindMapData;
-  /** Node đang thu gọn — nhánh con của chúng bị bỏ khỏi export. */
-  collapsed?: Set<string>;
 }
 
 interface FormatMeta {
@@ -61,7 +59,6 @@ export default function MindMapExportModal({
   onClose,
   title,
   data,
-  collapsed = new Set(),
 }: MindMapExportModalProps) {
   const { t } = useLanguage();
   const { push } = useToast();
@@ -85,16 +82,16 @@ export default function MindMapExportModal({
         downloadText(generateMindMapMarkdown(data, title), filename, "text/markdown;charset=utf-8");
       } else if (selected === "svg") {
         downloadText(
-          generateMindMapSVG(data, { collapsed, title }),
+          generateMindMapSVG(data, { title }),
           filename,
           "image/svg+xml;charset=utf-8"
         );
       } else if (selected === "png") {
         // scale 2 giữ nét chữ khi xem trên màn hình retina hoặc phóng to.
-        const svg = generateMindMapSVG(data, { collapsed, title });
+        const svg = generateMindMapSVG(data, { title });
         downloadBlob(await svgToPngBlob(svg, 2), filename);
       } else if (selected === "pdf") {
-        const svg = generateMindMapSVG(data, { collapsed, title });
+        const svg = generateMindMapSVG(data, { title });
         const pngBlob = await svgToPngBlob(svg, 2);
         const form = new FormData();
         form.append("title", title);
