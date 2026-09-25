@@ -1,9 +1,9 @@
 // ================================================================
 // GROQ MODEL REGISTRY — nguồn sự thật DUY NHẤT cho model ID của Groq
 // ================================================================
-// Mạch tư duy: display name trên Groq Console ("GPT OSS 120B", "Qwen
-// 3.6 27B"...) KHÔNG phải model ID thật mà API yêu cầu — dùng nhầm
-// display name sẽ ra lỗi 404 model_not_found (đúng lỗi đã gặp với
+// Mạch tư duy: display name trên Groq Console ("GPT OSS 120B"...)
+// KHÔNG phải model ID thật mà API yêu cầu — dùng nhầm display name
+// sẽ ra lỗi 404 model_not_found (đúng lỗi đã gặp với
 // "llama-3.3-70b-versatile" bị deprecate). Toàn bộ ID dưới đây tra
 // trực tiếp từ https://console.groq.com/docs/models, KHÔNG đoán.
 //
@@ -44,14 +44,6 @@ export const GROQ_MODELS = {
   GPT_OSS_20B: {
     id: "openai/gpt-oss-20b",
     capabilities: ["chat", "reasoning", "tool-use", "text", "multilingual"],
-  },
-  QWEN_3_6_27B: {
-    id: "qwen/qwen3.6-27b",
-    capabilities: ["vision", "tool-use"],
-  },
-  QWEN_3_8_27B: {
-    id: "qwen/qwen3.8-27b",
-    capabilities: ["vision", "tool-use"],
   },
   WHISPER_LARGE_V3: {
     id: "whisper-large-v3",

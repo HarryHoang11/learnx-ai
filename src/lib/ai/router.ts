@@ -9,7 +9,7 @@
 // (`@/lib/ai/gemini` -> `@/lib/ai/router`), KHÔNG cần sửa gì khác vì
 // generateText()/generateJSON()/AIOverloadedError giữ NGUYÊN chữ ký.
 //
-// THỨ TỰ PROVIDER: Gemini -> Groq -> DeepSeek -> Qwen -> OpenRouter. Provider
+// THỨ TỰ PROVIDER: Gemini -> Groq -> DeepSeek -> OpenRouter. Provider
 // thiếu API key bị SKIP (không throw), không phải lỗi.
 //
 // VÌ SAO EMBEDDING (lib/embeddings/vector.ts) KHÔNG đi qua router này:
@@ -27,7 +27,6 @@
 import { geminiProvider } from "./providers/gemini.provider";
 import { groqProvider } from "./providers/groq.provider";
 import { deepseekProvider } from "./providers/deepseek.provider";
-import { qwenProvider } from "./providers/qwen.provider";
 import { openrouterProvider } from "./providers/openrouter.provider";
 import { AIProvider, AIResponse, GenerateOptions, ProviderError, AIOverloadedError } from "./types";
 
@@ -118,7 +117,7 @@ export function createAIRouter(providers: AIProvider[]) {
 
     const lastMessage = lastError instanceof Error ? lastError.message : String(lastError);
     throw new AIOverloadedError(
-      `Tất cả AI provider (Gemini, Groq, DeepSeek, Qwen, OpenRouter) đều không khả dụng, vui lòng thử lại sau ít phút. Lỗi cuối: ${lastMessage}`
+      `Tất cả AI provider (Gemini, Groq, DeepSeek, OpenRouter) đều không khả dụng, vui lòng thử lại sau ít phút. Lỗi cuối: ${lastMessage}`
     );
   }
 
@@ -145,14 +144,12 @@ export function createAIRouter(providers: AIProvider[]) {
 // Thứ tự này KHÔNG phải thứ hạng chất lượng model, mà là thứ hạng
 // "độ sẵn sàng cho use case của LearnX": Gemini (chính, có embedding cùng
 // nhà) -> Groq (nhanh, độ trễ thấp cho tutor/quiz) -> DeepSeek (rẻ, JSON
-// output tốt) -> Qwen (đa dạng model, có region riêng) -> OpenRouter (chợ
-// model, nhiều model dự phòng nhất). Provider thiếu API key bị SKIP hoàn
-// toàn, không tính là fail.
+// output tốt) -> OpenRouter (chợ model, nhiều model dự phòng nhất).
+// Provider thiếu API key bị SKIP hoàn toàn, không tính là fail.
 export const DEFAULT_AI_PROVIDERS: readonly AIProvider[] = [
   geminiProvider,
   groqProvider,
   deepseekProvider,
-  qwenProvider,
   openrouterProvider,
 ];
 

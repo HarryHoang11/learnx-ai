@@ -1,11 +1,11 @@
 // ================================================================
-// TEST — DeepSeek & Qwen provider + thứ tự fallback của router MẶC ĐỊNH
+// TEST — DeepSeek provider + thứ tự fallback của router MẶC ĐỊNH
 // ================================================================
-// Mạch tư duy: 2 provider mới phải chứng minh được 4 điều mà KHÔNG cần
+// Mạch tư duy: provider DeepSeek phải chứng minh được 4 điều mà KHÔNG cần
 // API key thật (stub global fetch, không gọi mạng thật):
-//   1) isConfigured() đúng điều kiện (Qwen cần CẢ key LẪN base URL).
+//   1) isConfigured() đúng điều kiện.
 //   2) Gọi ĐÚNG endpoint OpenAI-compatible, model/endpoint lấy từ env.
-//   3) jsonMode -> gửi response_format json_object (DeepSeek/Qwen đều
+//   3) jsonMode -> gửi response_format json_object (DeepSeek
 //      yêu cầu prompt chứa từ "json" — đã audit toàn bộ prompts.ts).
 //   4) Lỗi HTTP phân loại đúng kind và message KHÔNG chứa API key.
 // ================================================================
@@ -13,16 +13,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createAIRouter, DEFAULT_AI_PROVIDERS } from "../../router";
 import { deepseekProvider } from "../deepseek.provider";
-import { qwenProvider } from "../qwen.provider";
+import { openrouterProvider } from "../openrouter.provider";
 import { ProviderError } from "../../types";
 
 const MANAGED_KEYS = [
   "DEEPSEEK_API_KEY",
   "DEEPSEEK_BASE_URL",
   "DEEPSEEK_MODEL",
-  "QWEN_API_KEY",
-  "QWEN_BASE_URL",
-  "QWEN_MODEL",
   "OPENROUTER_API_KEY",
   "OPENROUTER_MODEL",
 ] as const;
@@ -47,8 +44,6 @@ afterEach(() => {
 
 const baseOpts = { systemPrompt: "system", userPrompt: "user" };
 
-const INTL_BASE_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1";
-
 // Ghi lại URL + init của từng request để assert — KHÔNG log ra console.
 function stubFetchSequence(responder: (url: string) => { status: number; body: unknown }) {
   const calls: Array<{ url: string; init: RequestInit }> = [];
@@ -71,12 +66,11 @@ function jsonBodyOf(init: RequestInit): Record<string, unknown> {
 }
 
 describe("AI Router — thứ tự provider mặc định", () => {
-  it("Gemini -> Groq -> DeepSeek -> Qwen -> OpenRouter", () => {
+  it("Gemini -> Groq -> DeepSeek -> OpenRouter", () => {
     expect(DEFAULT_AI_PROVIDERS.map((p) => p.name)).toEqual([
       "gemini",
       "groq",
       "deepseek",
-      "qwen",
       "openrouter",
     ]);
   });
@@ -142,74 +136,23 @@ describe("DeepSeek provider", () => {
     expect((err as ProviderError).message).not.toContain("super-secret-ds-key");
   });
 });
-describe("Qwen provider", () => {
-  it("thiếu key HOẶC thiếu base URL -> isConfigured() false (không đoán region thay người dùng)", () => {
-    expect(qwenProvider.isConfigured()).toBe(false);
-
-    process.env.QWEN_API_KEY = "qw-test-key";
-    expect(qwenProvider.isConfigured()).toBe(false);
-
-    process.env.QWEN_BASE_URL = INTL_BASE_URL;
-    expect(qwenProvider.isConfigured()).toBe(true);
-  });
-
-  it("dùng đúng QWEN_BASE_URL theo region + model mặc định qwen-flash", async () => {
-    process.env.QWEN_API_KEY = "qw-test-key";
-    process.env.QWEN_BASE_URL = `${INTL_BASE_URL}/`;
-    const calls = stubFetchSequence(() => ({
-      status: 200,
-      body: { choices: [{ message: { content: "ok" } }] },
-    }));
-
-    const result = await qwenProvider.generate(baseOpts);
-
-    expect(calls[0].url).toBe(`${INTL_BASE_URL}/chat/completions`);
-    const headers = calls[0].init.headers as Record<string, string>;
-    expect(headers.Authorization).toBe("Bearer qw-test-key");
-    expect(jsonBodyOf(calls[0].init).model).toBe("qwen-flash");
-    expect(result.provider).toBe("qwen");
-  });
-
-  it("QWEN_MODEL ghi đè model, và lỗi 403 -> kind 'auth' không lộ key", async () => {
-    process.env.QWEN_API_KEY = "qw-secret-key";
-    process.env.QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
-    process.env.QWEN_MODEL = "qwen3.8-max";
-    const calls = stubFetchSequence(() => ({
-      status: 403,
-      body: { error: { message: "invalid api-key" } },
-    }));
-
-    const err = await qwenProvider.generate(baseOpts).catch((e: unknown) => e);
-
-    expect(jsonBodyOf(calls[0].init).model).toBe("qwen3.8-max");
-    expect(err).toBeInstanceOf(ProviderError);
-    expect((err as ProviderError).kind).toBe("auth");
-    expect((err as ProviderError).message).not.toContain("qw-secret-key");
-  });
-});
-
-describe("Fallback thực tế qua provider mới", () => {
-  it("DeepSeek 404 (model sai) -> KHÔNG retry -> Qwen 429 retry 1 lần -> OpenRouter thành công", async () => {
+describe("Fallback thực tế qua provider", () => {
+  it("DeepSeek 404 (model sai) -> KHÔNG retry -> OpenRouter thành công", async () => {
     process.env.DEEPSEEK_API_KEY = "ds-test-key";
-    process.env.QWEN_API_KEY = "qw-test-key";
-    process.env.QWEN_BASE_URL = INTL_BASE_URL;
     process.env.OPENROUTER_API_KEY = "or-test-key";
 
     const calls = stubFetchSequence((url) => {
       if (url.includes("deepseek")) return { status: 404, body: { error: "model_not_found" } };
-      if (url.includes("dashscope")) return { status: 429, body: { error: "rate_limit" } };
       return { status: 200, body: { model: "or-model", choices: [{ message: { content: "final" } }] } };
     });
 
-    const router = createAIRouter([deepseekProvider, qwenProvider, ...DEFAULT_AI_PROVIDERS.slice(4)]);
+    const router = createAIRouter([deepseekProvider, openrouterProvider]);
     const result = await router.generate(baseOpts);
 
     expect(result.provider).toBe("openrouter");
     expect(result.content).toBe("final");
     // 404 là lỗi cấu hình model -> KHÔNG retry vô hạn.
     expect(calls.filter((c) => c.url.includes("deepseek"))).toHaveLength(1);
-    // 429 là transient -> retry đúng 1 lần rồi mới bỏ sang provider kế.
-    expect(calls.filter((c) => c.url.includes("dashscope"))).toHaveLength(2);
     expect(calls.filter((c) => c.url.includes("openrouter"))).toHaveLength(1);
   });
 });

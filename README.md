@@ -56,7 +56,7 @@ Chỉ những gì thực sự có trong `package.json` và đang được dùng:
 - **React 19.3** + **TypeScript 5.5**
 - **Prisma 5.20** + **PostgreSQL** + **pgvector** (cột `DocumentChunk.embedding = Unsupported("vector")`, 768 chiều, thao tác bằng raw SQL)
 - **Auth.js v5** (`next-auth@5.0.0-beta.32`) + `@auth/prisma-adapter`, session strategy **JWT**, `bcryptjs` cho mật khẩu
-- **AI provider**: `@google/generative-ai` (Gemini) + 4 provider gọi qua `fetch` theo chuẩn OpenAI-compatible (Groq, DeepSeek, Qwen, OpenRouter)
+- **AI provider**: `@google/generative-ai` (Gemini) + 3 provider gọi qua `fetch` theo chuẩn OpenAI-compatible (Groq, DeepSeek, OpenRouter)
 - **Tài liệu**: `pdf-parse` (+ fallback `pdfjs-dist`), `mammoth` (DOCX), `jszip` (PPTX), `docx` (xuất DOCX), `pdfkit` (xuất PDF)
 - **Hiển thị**: `katex` (công thức), `MarkdownLite` (markdown nội bộ), `lucide-react` (icon), `@fontsource/noto-sans` + `src/fonts/*.ttf`
 - **Test**: `vitest` (12 file, 90 test)
@@ -163,9 +163,6 @@ GROQ_MODEL=openai/gpt-oss-120b
 DEEPSEEK_API_KEY=your_deepseek_key
 DEEPSEEK_BASE_URL=your_deepseek_base_url
 DEEPSEEK_MODEL=deepseek-flash
-QWEN_API_KEY=your_qwen_key
-QWEN_BASE_URL=your_qwen_base_url          # bắt buộc nếu dùng Qwen (khác nhau theo region)
-QWEN_MODEL=qwen-flash
 OPENROUTER_API_KEY=your_openrouter_key
 OPENROUTER_MODEL=meta-llama/llama-3.3-70b-instruct:free
 
@@ -249,7 +246,7 @@ curl -i localhost:3000/api/mindmap        # 401 JSON (đúng, vì chưa đăng n
 Chuỗi provider và điều kiện chuyển tiếp:
 
 ```
-Gemini  →  Groq  →  DeepSeek  →  Qwen  →  OpenRouter
+Gemini  →  Groq  →  DeepSeek  →  OpenRouter
 ```
 
 - Provider **thiếu API key bị bỏ qua hoàn toàn** (`isConfigured()`), không tính là lỗi và không crash app.
@@ -323,7 +320,7 @@ Logic export tách khỏi `page.tsx` thành service thuần trong `src/lib/mindm
 | `DATABASE_URL` | ✅ | Mọi API đọc/ghi DB trả HTTP 500 |
 | `AUTH_SECRET` | ⬜ (khuyến nghị) | Thiếu thì `src/auth.ts` dẫn xuất secret từ `DATABASE_URL` → auth vẫn chạy; set riêng để tách khoá ký session khỏi credential DB |
 | `GEMINI_API_KEY` | ⬜ (nên có) | RAG/embedding không chạy, AI phải dựa vào fallback |
-| `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY`, `QWEN_API_KEY` | ⬜ | Provider tương ứng bị bỏ qua |
+| `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY` | ⬜ | Provider tương ứng bị bỏ qua |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | ⬜ | Cần nếu dùng đăng nhập Google |
 | `AUTH_URL` / `AUTH_TRUST_HOST` | ❌ trên Vercel | Vercel tự set `VERCEL=1` nên Host được tin |
 
@@ -439,7 +436,7 @@ chạy lại `npm run db:generate`. Không ảnh hưởng Vercel (môi trường
 
 Đây là hành vi **đúng** khi mọi provider fail (không phải app crash). Kiểm tra theo thứ tự:
 
-- Gemini 429 (`rate limit`) hoặc 503 (`high demand`) → router tự retry rồi chuyển Groq → DeepSeek → Qwen → OpenRouter.
+- Gemini 429 (`rate limit`) hoặc 503 (`high demand`) → router tự retry rồi chuyển Groq → DeepSeek → OpenRouter.
   Muốn chắc chắn có fallback, hãy set tối thiểu `GROQ_API_KEY` **hoặc** `OPENROUTER_API_KEY`.
 - Gemini 404 (`model ... is not found for API version v1beta`) → model đã bị Google gỡ; đổi `GEMINI_MODEL` trong `.env`
   (không cần sửa code).
