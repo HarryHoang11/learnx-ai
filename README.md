@@ -1,6 +1,10 @@
 # LearnX AI
 
-> **Học cùng AI, không chỉ hỏi AI**
+> **"Học cùng AI, không chỉ hỏi AI."**
+
+LearnX AI là nền tảng **học tập cá nhân hoá bằng AI**: biến tài liệu sẵn có và mục tiêu học tập
+thành một *learning journey* có cấu trúc — tóm tắt → mind map → chẩn đoán → lộ trình → gia sư →
+luyện tập → ôn tập, mọi bước đều ghi kết quả thật vào database.
 
 ## Overview
 
@@ -11,14 +15,34 @@ cá nhân hoá các bước sau. Điểm khác biệt so với "chat với AI": 
 tài liệu gốc** (RAG + pgvector) và tiến độ/điểm số **lấy từ dữ liệu học tập thật trong DB**
 (không hardcode, không cộng điểm chỉ vì mở trang).
 
-## Features
+## Core learning flow
 
-### Document learning pipeline
+Pipeline thực tế của product — mỗi bước có endpoint + service riêng, bước sau đọc kết quả của bước
+trước từ database (không bước nào là mock hay hardcode điểm):
 
+```text
+Document
+   ↓
+AI Summary
+   ↓
+Mind Map
+   ↓
+Diagnostic
+   ↓
+Skill Profile
+   ↓
+Personalized Roadmap
+   ↓
+AI Tutor
+   ↓
+Practice
+   ↓
+Review / Spaced Repetition
+   ↓
+XP / Progress / Achievement
 ```
-Document → Summary → Mind Map → Diagnostic → Skill Profile
-        → Roadmap → Tutor → Practice → Review → XP/LXP → Achievement
-```
+
+Mỗi bước và code chịu trách nhiệm:
 
 | Bước | Người dùng làm gì | Code chịu trách nhiệm |
 |---|---|---|
@@ -34,6 +58,60 @@ Document → Summary → Mind Map → Diagnostic → Skill Profile
 | XP/LXP | XP + level (công thức luỹ thừa), Points, streak, daily challenge, rewards shop | `lib/constants/xp.ts`, `api/xp/history`, `api/lxp/history`, `api/rewards/*`, `api/streak` |
 | Achievement | Thành tích mở khoá theo điều kiện thật | `api/achievements*`, `services/achievement.service.ts` |
 
+## Features
+
+### 📚 Document Learning
+
+- **Upload** PDF/DOCX/PPTX/TXT/MD (≤20MB, ≤150 trang PDF, tối đa 400.000 ký tự trích xuất) — `POST /api/documents/upload`.
+- **Parse** ở server: `pdf-parse` → fallback `pdfjs-dist` cho PDF, `mammoth` cho DOCX, `jszip` cho PPTX (`lib/documents/extractText.ts`).
+- **AI summary** có cấu trúc, xem ngay trong `SummaryDrawer`, tải về **PDF / DOCX / TXT / MD** (`/api/documents/[id]/summary/download`).
+- **Chunking + embeddings**: cắt tối đa 300 chunk, mỗi chunk lưu `pageNumber`; embedding 768 chiều (pgvector) → hỏi đáp **RAG kèm trích dẫn theo trang** (`lib/embeddings/vector.ts`).
+- **Sinh thêm**: flashcard (`/api/documents/flashcards`) và study guide (`/api/documents/study-guide`) từ tài liệu đã có.
+- **Chất lượng & trùng lặp**: `document-quality.service.ts`, `duplicate-detection.service.ts`; Library hiển thị trạng thái xử lý theo phase thật, cho phép **thử lại** khi lỗi, phát hiện file trùng.
+
+### 🧠 Mind Map
+
+- **Tạo**: sinh từ tóm tắt tài liệu (`POST /api/mindmap/generate`) hoặc tạo trống (`POST /api/mindmap`); lưu/lấy/xoá bằng `GET·POST /api/mindmap` và `GET·PUT·DELETE /api/mindmap/[id]`.
+- **Cây phân cấp node/branch**: lưu theo `parentId` (edge suy ra từ đó, không khai báo tay), hiển thị dạng **cây thụt lề** — mỗi cấp lùi thêm, nét đứt dẫn nhánh, node có số node con hiện ngay trên card; viền trái màu theo `type` (`root` · `concept` · `detail` · `example` · `formula` · `prerequisite`).
+- **Thao tác node**: chọn node để mở panel chi tiết, **sửa label + mô tả**, **thêm node con**, **xoá node cùng cả nhánh con**, **thu gọn / mở rộng** từng nhánh bằng nút `+`/`−`.
+- **Tìm kiếm**: khớp label hoặc mô tả, node khớp được viền cyan + dấu `●`.
+- **Zoom**: nút `−` / `%` / `+` (50% → 160%, bấm `%` để về 100%).
+- **Lưu**: mọi thay đổi ghi ngược vào database bằng `PUT /api/mindmap/[id]`.
+- **Export 5 định dạng**: **PNG · SVG · PDF · JSON · Markdown** — `lib/mindmap/layout.ts` tính toạ độ **toàn bộ graph** nên file export không mất nhánh nào (chi tiết ở [Mind Map Export](#mind-map-export)).
+
+### 🤖 AI Tutor
+
+- **Buổi học Socratic** (`POST /api/tutor/session`, `/message`): AI dẫn dắt bằng câu hỏi thay vì đưa đáp án; prompt tập trung ở `lib/ai/prompts.ts`, lịch sử nằm trong session.
+- **3 mức gợi ý** (`POST /api/ai/hint`, `hintLevel` 1 → 3) — độ cụ thể tăng dần khi học sinh vẫn bí.
+- **Đánh giá bài làm** (`POST /api/tutor/evaluate`) và **ngữ cảnh** từ tài liệu/bài đang học (`GET /api/tutor/context`).
+- Chat tự do (`POST /api/ai/chat`) dùng chung fallback chain.
+
+### 🎯 Diagnostic & Skill Profile
+
+- **Bài chẩn đoán adaptive**: `pickNextDifficulty()` chọn độ khó `easy → medium → hard` của câu sau theo câu trả lời trước — `POST /api/diagnostic/session` · `/answer`, `GET /api/diagnostic/result` · `/status`.
+- Khung đánh giá riêng cho các bài test: `POST /api/assessment/start` · `/answer`, `GET /api/assessment/result`.
+- **Skill Profile** = `LearningProgress.mastery` (0 → 1) theo từng `subject`/`topic`, tính bằng `updateMastery()` từ **attempts thật** trong DB (không phải tự khai).
+
+### 🗺️ Roadmap
+
+- **Lộ trình cá nhân hoá** từ mục tiêu + mastery hiện tại: `POST /api/roadmap/generate`, `GET/POST /api/roadmap`.
+- Chi tiết lộ trình + **đề xuất bước tiếp** + tài nguyên gắn kèm: `GET /api/roadmaps/[id]`, `/recommendations`, `/resources`.
+- Bảng **Goal → Gap**: `GET /api/goals/[id]/gap` — so với mục tiêu 80%, tính từ `LearningProgress` thật.
+
+### 📈 Progress / XP / Streak
+
+- **XP & level** theo công thức luỹ thừa (`lib/constants/xp.ts`), lịch sử `GET /api/xp/history`; **LXP** (điểm học tập) `GET /api/lxp/history`.
+- **Streak** hằng ngày (`GET /api/streak`) + **daily challenge** (`GET/POST /api/daily-challenge`, `/claim`).
+- **Achievement** mở khoá theo điều kiện thật (`/api/achievements`, `/unlock`); **rewards shop** (`/api/rewards/shop` · `/redeem` · `/inventory` · `/history`).
+- **Tiến độ**: `GET /api/progress`, `GET /api/analytics`, gợi ý bước tiếp (`/api/next-action`), phiên học (`/api/learning-session/*`).
+
+### 👤 Account / Authentication
+
+- **Google OAuth** + **email/password** (`POST /api/auth/register`, bcrypt cost 12), **session JWT** cấu hình tập trung ở `src/auth.ts` — xem mục [Authentication](#authentication).
+- **Hồ sơ**: tên, nickname, bio, ngôn ngữ UI (VI/EN lưu vào `User.language`), **avatar + cover lưu trong DB** (cột `Bytes`) và serve qua `GET /api/profile/photo/[type]`.
+- **Account information**: xem thông tin, email, level/XP ngay trang `/profile`.
+- Xã hội: bạn bè (`/api/friends/*`), cộng đồng (`/api/community/*`), xếp hạng (`/api/leaderboard*`).
+
 ### Tính năng khác có trong code
 
 - **Workspace học tập** (`/(app)/workspace`): đọc tài liệu + hỏi đáp RAG + xem tóm tắt + sinh quiz/exercise + mind map ngay trong 1 màn hình.
@@ -48,7 +126,7 @@ Document → Summary → Mind Map → Diagnostic → Skill Profile
 - **Profile**: avatar/cover upload (lưu trong DB dạng Bytes, serve qua `/api/profile/photo/[type]`), tiểu sử, ngôn ngữ.
 - **i18n VI/EN** + dark theme + responsive (sidebar thành drawer trên mobile).
 
-## Tech Stack
+## Technology Stack
 
 Chỉ những gì thực sự có trong `package.json` và đang được dùng:
 
@@ -59,7 +137,7 @@ Chỉ những gì thực sự có trong `package.json` và đang được dùng:
 - **AI provider**: `@google/generative-ai` (Gemini) + 3 provider gọi qua `fetch` theo chuẩn OpenAI-compatible (Groq, DeepSeek, OpenRouter)
 - **Tài liệu**: `pdf-parse` (+ fallback `pdfjs-dist`), `mammoth` (DOCX), `jszip` (PPTX), `docx` (xuất DOCX), `pdfkit` (xuất PDF)
 - **Hiển thị**: `katex` (công thức), `MarkdownLite` (markdown nội bộ), `lucide-react` (icon), `@fontsource/noto-sans` + `src/fonts/*.ttf`
-- **Test**: `vitest` (12 file, 90 test)
+- **Test**: `vitest` — unit test cho layout/export mind map, AI router & providers, extract text, i18n, Markdown, roadmap (chạy bằng `npm test`)
 - **Lint**: `eslint` 8 + `eslint-config-next` 14 (xem [Troubleshooting](#troubleshooting) — chưa nâng lên ESLint 9/flat config)
 
 ## Project Structure
@@ -137,6 +215,18 @@ logic nghiệp vụ nằm ở `services/`, tiện ích dùng chung ở `lib/`.
 Danh sách **thực tế code đọc** (`process.env.*`). Không commit file `.env` — repo chỉ chứa
 `.env.example` với giá trị placeholder.
 
+| Variable | Purpose | Required |
+|---|---|---|
+| `DATABASE_URL` | PostgreSQL connection string (Prisma + pgvector) | ✅ Bắt buộc |
+| `AUTH_SECRET` | Ký JWT session của Auth.js | ⚠️ Khuyến nghị (thiếu thì `src/auth.ts` dẫn xuất từ `DATABASE_URL`) |
+| `AUTH_URL` | Public URL của app | 🔶 Production self-host (Vercel/Cloudflare tự set) |
+| `AUTH_TRUST_HOST` | Tự tin host khi đi sau proxy — thay thế `AUTH_URL` | 🔶 Thay thế `AUTH_URL` |
+| `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | Đăng nhập Google | ⬜ Tuỳ chọn (không có thì bỏ qua, chỉ còn email/password) |
+| `GEMINI_API_KEY` | AI chính **+ embedding cho RAG** | ⚠️ Cần cho hỏi đáp tài liệu |
+| `GROQ_API_KEY` · `DEEPSEEK_API_KEY` · `OPENROUTER_API_KEY` | AI fallback | ⬜ Tuỳ provider (thiếu thì router bỏ qua provider đó, không crash) |
+| `GEMINI_MODEL` · `GEMINI_EMBEDDING_MODEL` · `GROQ_MODEL` · `DEEPSEEK_MODEL` · `DEEPSEEK_BASE_URL` · `OPENROUTER_MODEL` | Override model / base URL | ⬜ Có default |
+| `APP_URL` · `APP_NAME` | Tên hiển thị trên dashboard OpenRouter | ⬜ Tuỳ chọn |
+
 ```dotenv
 # ---- Bắt buộc ----
 DATABASE_URL=your_postgres_connection_string
@@ -210,14 +300,25 @@ npm run db:studio
   connection trực tiếp (cổng 5432). Dùng `DATABASE_URL="<direct-url>" npm run db:migrate`.
 - Chưa có seed script trong repo — dữ liệu khởi tạo là do bạn dùng app (upload tài liệu, làm bài chẩn đoán).
 
-## Development
+## Local Development
 
 ```bash
-npm run dev        # next dev — http://localhost:3000
-npm run lint       # eslint src
-npm test           # vitest run (90 test / 12 file)
-npm run db:studio  # Prisma Studio
+npm install           # cài dependencies
+npx prisma generate   # sinh Prisma Client (build script cũng tự chạy bước này)
+npm run dev           # next dev — http://localhost:3000
+npm run lint          # eslint src
+npm test              # vitest run
+npm run db:studio     # Prisma Studio
 ```
+
+Các lệnh database có sẵn trong `package.json`:
+
+| Lệnh | Tác dụng |
+|---|---|
+| `npm run db:generate` | `prisma generate` — sinh Prisma Client |
+| `npm run db:push` | `prisma db push` — đẩy schema không cần file migration |
+| `npm run db:migrate` | `prisma migrate deploy` — áp migration (CI/production) |
+| `npm run db:studio` | mở Prisma Studio |
 
 Dev Indicator của Next.js đã bị tắt trong `next.config.js` để log/UI dev sạch.
 
@@ -296,6 +397,13 @@ Logic export tách khỏi `page.tsx` thành service thuần trong `src/lib/mindm
   `User.passwordHash`. Đăng ký qua `POST /api/auth/register`.
 - **Session strategy = JWT** vì Auth.js không hỗ trợ Credentials provider với session kiểu "database";
   `PrismaAdapter` vẫn lưu User/Account vào Postgres (không tạo bản ghi Session khi dùng JWT — đúng thiết kế).
+- **Session chứa user ID**: `callbacks.jwt` nhét `userId` thật từ DB vào JWT lúc đăng nhập, `callbacks.session`
+  trả `session.user.id` — mọi API lấy userId từ đó, không bao giờ tin userId do client gửi lên.
+- **Cấu hình production**: `AUTH_SECRET` (ký session JWT), `AUTH_URL` hoặc `AUTH_TRUST_HOST` (nhận diện host
+  khi self-host), `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (Google OAuth, redirect URI
+  `https://<domain>/api/auth/callback/google`). Danh sách đầy đủ ở mục
+  [Environment Variables](#environment-variables) — **không tạo biến với giá trị rỗng**
+  (xem Troubleshooting mục 1) và không đặt secret thật vào repo.
 - `lib/auth/session.ts` → `getCurrentUserId()` đọc session, **xác minh user còn tồn tại trong DB** trước khi
   trả userId (tránh lỗi P2003 khi DB đổi/reset mà cookie cũ vẫn hợp lệ) và trả `401` JSON chuẩn hoá.
 - `src/proxy.ts` chặn **page** chưa đăng nhập (redirect `/login`); **API không bị redirect** để client luôn
@@ -307,7 +415,7 @@ Logic export tách khỏi `page.tsx` thành service thuần trong `src/lib/mindm
   Vercel/Cloudflare cần thêm `AUTH_URL` (hoặc `AUTH_TRUST_HOST=true`).
 
 
-## Deployment
+## Production / Vercel
 
 ### Vercel
 
