@@ -16,6 +16,7 @@ import { generateJSON } from "@/lib/ai/router";
 import { buildRoadmapPrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/db/prisma";
 import { getSkillProfile } from "@/services/assessment.service";
+import { getLearningContext } from "@/services/personalization.service";
 import { applyMasteryToPlan } from "@/lib/roadmap/applyMasteryToPlan";
 import type { RoadmapPlan, RoadmapStatus, GoalWithRoadmap } from "@/types";
 
@@ -72,10 +73,25 @@ export async function generateRoadmap(params: {
   const profile = await getSkillProfile(params.userId);
   const weakTopics = profile.filter((p) => p.isWeak).map((p) => p.topic);
 
+  // Bước 1b: NGỮ CẢNH HỒ SƠ (lớp/định hướng/môn/mục đích/thời gian học).
+  // Nhờ vậy AI biết "sinh viên năm 1, 1-2 giờ/ngày, thi giữa kỳ" nên chia tháng
+  // khác hẳn "học sinh lớp 12, 4+ tiếng/ngày" thay vì cùng một khuôn.
+  // Best-effort: thiếu hồ sơ thì vẫn sinh roadmap như cũ.
+  let profileHint = "";
+  try {
+    const context = await getLearningContext(params.userId);
+    if (context.prompt) {
+      profileHint = `\nHồ sơ học sinh (tự khai — dùng để bám đúng mức độ và thời gian học):\n${context.prompt}\n`;
+    }
+  } catch (err) {
+    console.warn("[roadmap] Không dựng được ngữ cảnh hồ sơ:", err);
+  }
+
   // Bước 2: gọi AI sinh lộ trình thô (chỉ có tên tháng + danh sách topic)
   const prompt = buildRoadmapPrompt(params.goalTitle, params.targetMonths, weakTopics, {
     subject: params.subject,
     targetOutcome: params.targetOutcome,
+    profileHint,
   });
   const plan = await generateJSON<RoadmapPlan[]>(
     {

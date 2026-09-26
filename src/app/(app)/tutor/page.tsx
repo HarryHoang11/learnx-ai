@@ -250,11 +250,19 @@ function TutorPageInner() {
             {sending && <div style={{ color: "var(--text-dim)", fontSize: 13 }}>{t("tutor.sending")}</div>}
           </div>
 
-          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+          {/* class "tutor-composer": trên mobile ô nhập dính sát đáy màn hình
+              (sticky) và tự nhấc lên trên thanh nav dưới + safe-area, nên lúc
+              đang đọc lịch sử chat người dùng vẫn gõ được ngay (xem
+              globals.css). Không có class này thì ô nhập trôi lên khỏi màn
+              hình và phải cuộn ngược xuống mới gõ tiếp — rất bực mobile. */}
+          <div className="tutor-composer" style={{ display: "flex", gap: 10, marginTop: 16 }}>
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendMessage(input)}
+              // enterKeyHint: bàn phím mở ra hiện nút "Gửi" thay vì "xuống
+              // dòng" trên điện thoại — đúng thao tác gõ tin nhắn.
+              enterKeyHint="send"
               placeholder={t("tutor.inputPh")}
               style={{
                 flex: 1,

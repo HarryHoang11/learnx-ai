@@ -10,6 +10,8 @@
 import { generateText } from "@/lib/ai/router";
 import { buildSocraticPrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/db/prisma";
+import { getLearningContext } from "@/services/personalization.service";
+import { prefersNoDirectAnswer } from "@/lib/personalization/context";
 import type { ChatMessage } from "@/types";
 
 // Lấy hội thoại hiện tại của user (tạo mới nếu chưa có) — MVP đơn
@@ -65,11 +67,38 @@ export async function sendTutorMessage(params: {
 - Hồ sơ chủ đề: ${topicProgress.length > 0 ? topicProgress.map((item) => `${item.subject}/${item.topic}: ${Math.round(item.mastery * 100)}% sau ${item.attempts} lượt`).join("; ") : "chưa có dữ liệu"}
 Hãy điều chỉnh ví dụ và mức độ giải thích theo ngữ cảnh này, nhưng không bịa số liệu ngoài dữ liệu được cung cấp.`;
 
-  const systemPrompt = buildSocraticPrompt(
-    params.topic,
-    params.hintLevel,
-    params.language === "en" ? "en" : "vi"
-  ) + learningContext;
+  // ---- NGỮ CẢNH CÁ NHÂN HOÁ (Learning Profile) ----
+  // Đây là chỗ hồ sơ onboarding trở thành HÀNH VI THẬT của AI. Khối ngữ cảnh
+  // đến từ getLearningContext() (dùng chung với Diagnostic/Roadmap) nên đổi
+  // 1 tuỳ chọn trong Account là Tutor đổi hành vi ngay ở lượt chat kế tiếp.
+  //
+  // best-effort: hồ sơ lỗi KHÔNG được làm hỏng Tutor — học sinh vẫn cần gia sư
+  // dù không đọc được hồ sơ.
+  let profileContext = "";
+  let aiPreferences: string[] = [];
+  try {
+    const context = await getLearningContext(params.userId, { language: params.language });
+    aiPreferences = context.summary.aiPreferences;
+    if (context.prompt) profileContext = `\n\nHỒ SƠ NGƯỜI DÙNG (tự khai, dùng để điều chỉnh cách dạy):\n${context.prompt}`;
+  } catch (err) {
+    console.warn("[tutor] Không dựng được ngữ cảnh hồ sơ:", err);
+  }
+
+  // Quy tắc CỨNG dè lên mặc định: nếu user chọn "không đưa đáp án ngay" thì
+  // kể cả hintLevel = 6 (cấp "lời giải đầy đủ" mặc định) cũng KHÔNG được đưa
+  // đáp án — vì đó chính là điều họ đã yêu cầu ở onboarding.
+  const blockFinalAnswer =
+    prefersNoDirectAnswer(aiPreferences) && params.hintLevel === 6
+      ? `\n\nLƯU Ý QUAN TRỌNG: người dùng đã chọn "không đưa đáp án ngay" trong hồ sơ học tập.
+Dù cấp độ gợi ý là 6, KHÔNG được đưa lời giải hoàn chỉnh. Hãy đưa gợi ý mạnh nhất
+vẫn dừng trước bước kết luận, rồi hỏi học sinh tự hoàn thiện.`
+      : "";
+
+  const systemPrompt =
+    buildSocraticPrompt(params.topic, params.hintLevel, params.language === "en" ? "en" : "vi") +
+    learningContext +
+    profileContext +
+    blockFinalAnswer;
 
   // Truyền vài lượt hội thoại gần nhất làm ngữ cảnh (không truyền cả
   // lịch sử để tránh vượt giới hạn token) — 6 tin nhắn gần nhất là đủ

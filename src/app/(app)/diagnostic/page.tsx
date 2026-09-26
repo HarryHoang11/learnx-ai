@@ -8,12 +8,15 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Panel from "@/components/ui/Panel";
 import SkillBar from "@/components/ui/SkillBar";
 import StateMessage from "@/components/ui/StateMessage";
+import { useToast } from "@/components/ui/Toast";
 import SafeMath from "@/components/math/SafeMath";
+import { Sparkles } from "lucide-react";
+import "@/app/onboarding/onboarding.css";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 import { SUBJECTS, CUSTOM_SUBJECT_VALUE } from "@/lib/constants/subjects";
 import type { ApiResponse, PublicQuestion, SkillMasteryPoint } from "@/types";
@@ -36,13 +39,83 @@ interface SubjectStatus {
 
 const AVAILABLE_SUBJECTS = SUBJECTS;
 
+/**
+ * Timeout cho POST /api/assessment/start.
+ *
+ * Con số này phải LỚN HƠN tổng thời gian server có thể mất: AI router thử
+ * lần lượt Gemini (12s) -> Groq (8s) -> DeepSeek (12s) -> OpenRouter (12s),
+ * mỗi provider retry tối đa 2 lần -> worst case ~1 phút. Timeout ở client
+ * chỉ để chặn trường hợp request treo vô hạn (mạng treo, server không trả
+ * response), KHÔNG cắt ngắn một lần gọi AI hợp lệ.
+ */
+const START_TIMEOUT_MS = 75_000;
+
+/** Timeout cho POST /api/assessment/answer (cũng gọi AI sinh câu kế tiếp). */
+const ANSWER_TIMEOUT_MS = 45_000;
+
+/**
+ * Lỗi KHÔNG phải do server trả về (response không phải JSON — vd proxy
+ * trả HTML 500, mất mạng, request bị abort). Tách riêng để caller KHÔNG
+ * show message kỹ thuật cho người dùng, nhưng vẫn log đầy đủ cho dev.
+ */
+class TransportError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TransportError";
+  }
+}
+
+/**
+ * Đọc ApiResponse mà không để lỗi JSON che mất nguyên nhân thật.
+ *
+ * `res.json()` ném SyntaxError nếu body là HTML/empty — khi đó catch block
+ * cũ chỉ hiện "Unexpected token '<'" cho người dùng, dev cũng mất thông
+ * tin. Ở đây log status + body cắt ngắn rồi ném TransportError để tầng
+ * trên quyết định thông báo nào hiển thị.
+ */
+async function readApi<T>(res: Response, label: string): Promise<ApiResponse<T>> {
+  const raw = await res.text();
+  try {
+    return JSON.parse(raw) as ApiResponse<T>;
+  } catch {
+    console.error(
+      `[diagnostic] ${label} trả về ${res.status} nhưng body không phải JSON:`,
+      raw.slice(0, 300)
+    );
+    throw new TransportError(`${label} -> HTTP ${res.status} (body không phải JSON)`);
+  }
+}
+
+/**
+ * Bọc trong <Suspense>: `useSearchParams` bắt buộc phải nằm trong Suspense khi
+ * render tĩnh (Next.js chặn build nếu thiếu). Cùng pattern với trang /setup.
+ */
 export default function DiagnosticPage() {
   const { t } = useLanguage();
+  return (
+    <Suspense fallback={<StateMessage kind="loading" text={t("common.loading")} />}>
+      <DiagnosticPageInner />
+    </Suspense>
+  );
+}
+
+function DiagnosticPageInner() {
+  const { t } = useLanguage();
+  const { push } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Đến từ bước "Kiểm tra năng lực" của onboarding. Cờ này quyết định:
+  //   1) sau khi làm xong, CTA quay về màn HỒ SƠ thay vì Dashboard — đi đúng
+  //      luồng Profile -> Roadmap -> Dashboard, không tự nhảy về giữa chừng;
+  //   2) có nút "quay lại khảo sát" trên màn chọn môn.
+  const fromOnboarding = searchParams?.get("from") === "onboarding";
   const [phase, setPhase] = useState<Phase>("subject_select");
   const [selectedSubject, setSelectedSubject] = useState<string>("");
   const [customSubject, setCustomSubject] = useState<string>("");
   const [subjectStatus, setSubjectStatus] = useState<Map<string, SubjectStatus>>(new Map());
+  // Môn được gợi ý theo hồ sơ học tập (§19). Rổng = user chưa có
+  // hồ sơ đủ d῅ng, UI hiển thị đầy đệ môn như cũ.
+  const [suggested, setSuggested] = useState<string[]>([]);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
   const [question, setQuestion] = useState<PublicQuestion | null>(null);
@@ -52,34 +125,103 @@ export default function DiagnosticPage() {
   const [profile, setProfile] = useState<SkillMasteryPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [completion, setCompletion] = useState<CompletionActivity | null>(null);
+  // Đang gọi POST /api/assessment/start. Dùng để phản hồi NGAY trên nút
+  // ("Đang chuẩn bị...") thay vì thay cả trang — layout không nhảy.
+  const [starting, setStarting] = useState(false);
+  // Chặn double-click NGAY trong cùng tick: `starting` chỉ đổi sau render nên
+  // một mình nó không đủ (cùng lý do đã ghi ở LearningOnboarding.savingRef).
+  const startingRef = useRef(false);
+  // Bước vừa lỗi — quyết định nút "Thử lại" gọi lại ĐÚNG việc gì.
+  const [failedStep, setFailedStep] = useState<"start" | "answer" | "result" | null>(null);
 
-  const effectiveSubject = selectedSubject === "Khác" ? customSubject : selectedSubject;
+  // Dùng CUSTOM_SUBJECT_VALUE thay vì chuỗi "Khác" viết tay: trước đây hai
+  // chỗ này trùng giá trị, nếu hằng số đổi thì select hiện "Khác" còn logic
+  // lại không nhận ra -> effectiveSubject rỗng -> nút "Bắt đầu kiểm tra"
+  // disabled mà không giải thích được.
+  const effectiveSubject = selectedSubject === CUSTOM_SUBJECT_VALUE ? customSubject : selectedSubject;
 
   useEffect(() => {
+    // Endpoint này CHỈ để gợi ý môn + hiện badge "đã kiểm tra" — lỗi ở đây
+    // không được chặn việc làm bài. Nhưng nuốt im lặng thì khi hỏng ta mất
+    // dấu vết, nên vẫn log ra console (chỉ 1 dòng, không spam).
     fetch("/api/diagnostic/status")
-      .then((res) => res.json())
-      .then((json: ApiResponse<SubjectStatus[]>) => {
-        if (json.success) {
+      .then((res) => readApi<{ history: SubjectStatus[]; suggestedSubjects: string[] }>(res, "GET /api/diagnostic/status"))
+      .then(
+        (json) => {
+          if (!json.success) {
+            console.error("[diagnostic] /api/diagnostic/status thất bại:", json.error);
+            return;
+          }
           const map = new Map<string, SubjectStatus>();
-          json.data.forEach((s) => map.set(s.subject, s));
+          json.data.history.forEach((s) => map.set(s.subject, s));
           setSubjectStatus(map);
+          const fromProfile = json.data.suggestedSubjects ?? [];
+          setSuggested(fromProfile);
+          // Từ onboarding: TỰ CHỌN MÔN ĐẦU TIÊN theo hồ sơ. Đây là điểm nối
+          // khảo sát -> kiểm tra: người dùng vừa nói "tôi học Toán và Vật lý"
+          // thì không bắt họ chọn lại từ đầu.
+          // CHỈ chọn hộ nếu môn nằm trong danh sách hợp lệ — môn gõ tay nằm
+          // ngoài danh sách sẽ không hiện trong <select>.
+          const firstKnown = fromProfile.find((s) =>
+            AVAILABLE_SUBJECTS.some((a) => a.value === s)
+          );
+          if (firstKnown) setSelectedSubject(firstKnown);
         }
-      })
-      .catch(() => {})
+      )
+      .catch((err) => console.error("[diagnostic] không tải được trạng thái kiểm tra:", err))
       .finally(() => setLoadingStatus(false));
   }, []);
 
   async function start() {
-    setPhase("loading");
+    // ---- VALIDATION (chặn trước khi gọi API) ----
+    // effectiveSubject rỗng khi user chưa chọn môn, hoặc chọn "Khác" mà
+    // chưa gõ tên. Nút đã disabled trong trường hợp này, nhưng guard ở đây
+    // vẫn cần: đây là ranh giới dữ liệu, không phải chi tiết UI.
+    const subject = effectiveSubject.trim();
+    if (!subject) {
+      push("error", t("diagnostic.subjectRequired"));
+      return;
+    }
+
+    // ---- CHỐNG DOUBLE-CLICK ----
+    // `startingRef` chặn ở CÙNG TICK trước khi React render lại, nên 5
+    // click liên tiếp chỉ tạo 1 Assessment. Chỉ dựa vào `starting` state
+    // là KHÔNG đủ: các click trong cùng một tick đều thấy `starting ===
+    // false` (state chưa kịp commit) -> sinh nhiều bản ghi trùng.
+    if (startingRef.current) return;
+    startingRef.current = true;
+
+    setStarting(true);
     setError(null);
     setCompletion(null);
+    setFailedStep("start");
+    // CỐ Ý KHÔNG setPhase("loading"): nếu thay cả trang bằng
+    // StateMessage thì user mất nút, thấy màn trắng không rõ còn sống
+    // hay không, và không có gì để bấm "Thử lại". Giữ nguyên layout +
+    // chỉ đổi trạng thái NÚT -> phản hồi tức thời, có spinner, có retry.
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), START_TIMEOUT_MS);
     try {
       const res = await fetch("/api/assessment/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject: effectiveSubject }),
+        body: JSON.stringify({ subject }),
+        signal: controller.signal,
       });
-      const json: ApiResponse<{ assessmentId: string; question: PublicQuestion }> = await res.json();
+
+      // 401 = session hết hạn / user bị đăng xuất. Phải nói rõ chứ không
+      // im lặng — nếu chỉ show lỗi chung, user bấm "Thử lại" hoài vô ích.
+      if (res.status === 401) {
+        push("error", t("diagnostic.sessionExpired"));
+        router.push("/login");
+        return;
+      }
+
+      const json = await readApi<{ assessmentId: string; question: PublicQuestion }>(
+        res,
+        "POST /api/assessment/start"
+      );
       if (!json.success) throw new Error(json.error);
 
       setAssessmentId(json.data.assessmentId);
@@ -89,24 +231,50 @@ export default function DiagnosticPage() {
       setAnswerWasCorrect(null);
       setPhase("in_progress");
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("diagnostic.startFail"));
+      // Abort do timeout của chính ta -> thông báo riêng, nói rõ nguyên nhân
+      // thay vì "Failed to fetch" (AbortError không cho biết là do hết giờ).
+      if (controller.signal.aborted) {
+        console.error("[diagnostic] start() hết thời gian chờ sau", START_TIMEOUT_MS, "ms");
+        setError(t("diagnostic.startTimeout"));
+      } else if (err instanceof TransportError) {
+        setError(t("diagnostic.startFail"));
+      } else {
+        console.error("[diagnostic] start() lỗi:", err);
+        setError(err instanceof Error ? err.message : t("diagnostic.startFail"));
+      }
       setPhase("error");
+    } finally {
+      clearTimeout(timer);
+      startingRef.current = false;
+      setStarting(false);
     }
   }
 
   async function answer(index: number) {
     if (!question || !assessmentId || selected !== null) return;
     setSelected(index);
+    setError(null);
+    setFailedStep("answer");
 
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ANSWER_TIMEOUT_MS);
     try {
       const res = await fetch("/api/assessment/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ assessmentId, questionId: question.id, selectedIndex: index }),
+        signal: controller.signal,
       });
-      const json: ApiResponse<
+
+      if (res.status === 401) {
+        push("error", t("diagnostic.sessionExpired"));
+        router.push("/login");
+        return;
+      }
+
+      const json = await readApi<
         { done: true; activity?: CompletionActivity } | { done: false; isCorrect: boolean; nextQuestion: PublicQuestion }
-      > = await res.json();
+      >(res, "POST /api/assessment/answer");
       if (!json.success) throw new Error(json.error);
 
       setAnsweredCount((c) => c + 1);
@@ -115,6 +283,8 @@ export default function DiagnosticPage() {
         setCompletion(json.data.activity);
       }
 
+      // Chừa 700ms cho user thấy đáp án đúng/sai trước khi chuyển câu.
+      // `timer` đã clear ở finally nên callback này không bị rò rỉ.
       setTimeout(async () => {
         if (json.data.done) {
           await loadResult();
@@ -125,23 +295,64 @@ export default function DiagnosticPage() {
         }
       }, 700);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("diagnostic.answerFail"));
+      if (controller.signal.aborted) {
+        console.error("[diagnostic] answer() hết thời gian chờ sau", ANSWER_TIMEOUT_MS, "ms");
+        setError(t("diagnostic.answerTimeout"));
+      } else if (err instanceof TransportError) {
+        setError(t("diagnostic.answerFail"));
+      } else {
+        console.error("[diagnostic] answer() lỗi:", err);
+        setError(err instanceof Error ? err.message : t("diagnostic.answerFail"));
+      }
+      // Mở lại lựa chọn: user phải bấm lại được, không bị kẹt ở câu đã
+      // chọn nhưng không chấm được.
+      setSelected(null);
       setPhase("error");
+    } finally {
+      clearTimeout(timer);
     }
   }
 
   async function loadResult() {
     setPhase("loading");
+    setFailedStep("result");
     try {
       const res = await fetch(`/api/assessment/result?subject=${encodeURIComponent(effectiveSubject)}`);
-      const json: ApiResponse<{ profile: SkillMasteryPoint[]; weakTopics: string[] }> = await res.json();
+      if (res.status === 401) {
+        push("error", t("diagnostic.sessionExpired"));
+        router.push("/login");
+        return;
+      }
+      const json = await readApi<{ profile: SkillMasteryPoint[]; weakTopics: string[] }>(
+        res,
+        "GET /api/assessment/result"
+      );
       if (!json.success) throw new Error(json.error);
       setProfile(json.data.profile);
       setPhase("finished");
     } catch (err) {
+      console.error("[diagnostic] loadResult() lỗi:", err);
       setError(err instanceof Error ? err.message : t("diagnostic.resultFail"));
       setPhase("error");
     }
+  }
+
+  /**
+   * Nút "Thử lại" — gọi lại ĐÚNG bước đã lỗi, không phải luôn gọi lại
+   * `start()` (làm mất tiến độ 15 câu đã làm nếu lỗi xảy ra ở bước sau).
+   */
+  function retry() {
+    setError(null);
+    if (failedStep === "answer" && question) {
+      // Không tự động gửi lại đáp án: user chọn lại là quyết định của họ.
+      setPhase("in_progress");
+      return;
+    }
+    if (failedStep === "result") {
+      void loadResult();
+      return;
+    }
+    void start();
   }
 
   return (
@@ -155,6 +366,32 @@ export default function DiagnosticPage() {
         <>
           <Panel style={{ marginBottom: 20, padding: "16px 18px" }}>
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{t("diagnostic.chooseSubject")}</div>
+
+            {/* Gợi ý môn theo hồ sơ: bấm tách 1 chềp để môn được
+                đánh giá nhất, nhưng vẫn là CHỈ định — user chọn
+                được bao nhiêu cũng được (yêu cầu §1, §19). */}
+            {suggested.length > 0 && (
+              <div className="onb-group" style={{ marginBottom: 12 }}>
+                <div className="onb-group-label">{t("onboarding.diagnostic.suggested")}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {suggested.map((subject) => (
+                    <button
+                      key={subject}
+                      type="button"
+                      className="onb-option"
+                      style={{ minHeight: 36, padding: "6px 12px", fontSize: 13 }}
+                      onClick={() => {
+                        setSelectedSubject(subject);
+                        if (subject !== CUSTOM_SUBJECT_VALUE) setCustomSubject("");
+                      }}
+                    >
+                      <Sparkles size={13} aria-hidden="true" />
+                      <span>{subject}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <select
               value={selectedSubject}
               onChange={(e) => {
@@ -212,15 +449,70 @@ export default function DiagnosticPage() {
           </Panel>
           <Panel style={{ textAlign: "center", padding: 40 }}>
             <p style={{ color: "var(--text-dim)", marginBottom: 20 }}>{t("diagnostic.intro")}</p>
-            <button className="btn-primary" onClick={start} disabled={!effectiveSubject.trim()}>
-              {t("diagnostic.start")}
-            </button>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+              {/* Lối quay lại khảo sát — luôn có, vì bước kiểm tra năng lực là
+                  MỘT PHẦN của onboarding, không phải ngõ cụt. */}
+              {fromOnboarding && (
+                <button className="btn-secondary" onClick={() => router.push("/onboarding")}>
+                  {t("onboarding.back")}
+                </button>
+              )}
+              <button
+                className={starting ? "btn-primary btn-with-spinner" : "btn-primary"}
+                onClick={start}
+                disabled={starting || !effectiveSubject.trim()}
+                aria-busy={starting}
+              >
+                {starting ? (
+                  <>
+                    {/* spinner-dot dùng chung với DocumentCard — không
+                        thêm animation mới, và kích thước nhỏ nên nút không
+                        nhảy dòng khi đổi sang trạng thái loading. */}
+                    <span className="spinner-dot" aria-hidden="true" />
+                    <span>{t("diagnostic.preparing")}</span>
+                  </>
+                ) : (
+                  t("diagnostic.start")
+                )}
+              </button>
+            </div>
+            {/* Chỉ hiện khi đang chờ: giải thích vì sao phải đợi (AI đang
+                soạn câu hỏi) để user không tưởng nút bị treo. */}
+            {starting && (
+              <p style={{ color: "var(--text-dim)", fontSize: 12.5, marginTop: 12 }}>
+                {t("diagnostic.preparingHint")}
+              </p>
+            )}
           </Panel>
         </>
       )}
 
       {phase === "loading" && <StateMessage kind="loading" text={t("diagnostic.loading")} />}
-      {phase === "error" && error && <StateMessage kind="error" text={error} />}
+      {phase === "error" && error && (
+        <div style={{ textAlign: "center" }}>
+          <StateMessage kind="error" text={error} />
+          {/* Luôn có lối ra khỏi trạng thái lỗi: bấm lại đúng bước đã
+              hỏng, hoặc quay về màn chọn môn. Không để user kẹt ở đây
+              với một dòng chữ đỏ. */}
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+            <button className="btn-primary" onClick={retry} disabled={starting}>
+              {starting ? t("diagnostic.preparing") : t("common.retry")}
+            </button>
+            {failedStep === "start" && (
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setError(null);
+                  setFailedStep(null);
+                  setPhase("subject_select");
+                }}
+              >
+                {t("diagnostic.chooseOther")}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {phase === "in_progress" && question && (
         <>
@@ -330,10 +622,33 @@ export default function DiagnosticPage() {
                 ))}
               </div>
             )}
-            <div style={{ textAlign: "center", marginTop: 20 }}>
-              <button className="btn-primary" onClick={() => router.push("/roadmap")}>
-                {t("diagnostic.viewRoadmap")}
+            {/*
+              CTA cuối tùy nơi đến:
+              - Từ onboarding: quay về màn HỒ SƠ để xem "Năng lực hiện tại"
+                vừa được cập nhật + lộ trình gợi ý. Đi đúng luồng
+                Profile -> Roadmap -> Dashboard.
+              - Vào trực tiếp từ menu: xem lộ trình như cũ.
+            */}
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                justifyContent: "center",
+                flexWrap: "wrap",
+                marginTop: 20,
+              }}
+            >
+              <button
+                className={fromOnboarding ? "btn-secondary" : "btn-primary"}
+                onClick={() => router.push(fromOnboarding ? "/onboarding" : "/roadmap")}
+              >
+                {fromOnboarding ? t("onboarding.ready.title") : t("diagnostic.viewRoadmap")}
               </button>
+              {fromOnboarding && (
+                <button className="btn-primary" onClick={() => router.push("/roadmap")}>
+                  {t("diagnostic.viewRoadmap")}
+                </button>
+              )}
             </div>
           </Panel>
         </div>

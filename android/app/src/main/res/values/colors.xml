@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Màu chung cho theme ứng dụng (xem values/styles.xml). Gradient logo
+         và nền splash được khai báo ở values/ic_launcher_background.xml. -->
+    <color name="colorPrimary">#7775FF</color>
+    <color name="colorPrimaryDark">#070B16</color>
+    <color name="colorAccent">#45D9E9</color>
+</resources>

@@ -30,6 +30,29 @@ model User {
   // Ngôn ngữ UI của user ("vi" | "en") — Topbar switcher lưu vào đây
   // (kèm localStorage để có ngay trước khi session tải xong).
   language       String             @default("vi")
+  // ---- ONBOARDING (Welcome Experience) ----
+  // Nguồn sự thật cho "user này đã xem Welcome chưa / đang ở giai đoạn nào".
+  // CỐ Ý lưu ở DB chứ không phải localStorage: localStorage mất khi user đổi
+  // máy/xoá dữ liệu trình duyệt, và proxy (chạy trước mọi page) không đọc
+  // được localStorage. Cookie chỉ là bản cache để proxy điều hướng nhanh.
+  onboardingStatus OnboardingStatus @default(NEW)
+  // Mốc thời gian đã xem xong Welcome Experience (null = chưa xem).
+  welcomeSeenAt  DateTime?
+  // Đánh dấu user đã hoàn thành phiên học đầu tiên — mốc đo
+  // "Time to First Meaningful Learning Experience" (chỉ số quan trọng nhất
+  // của onboarding, theo nguyên tắc Explore-before-you-configure).
+  firstLearningSessionAt DateTime?
+  // Câu trả lời Quick Setup (mục tiêu / môn học / trình độ). Lưu JSON vì
+  // đây là dữ liệu "gợi ý cho AI", không cần truy vấn/index theo từng field.
+  // Được MỞ RỘNG thành Learning Profile đầy đủ (giai đoạn học tập, mục tiêu,
+  // môn học, nghề nghiệp, thời gian học, tuỳ chọn AI...) — xem
+  // src/lib/onboarding/profile.ts làm nguồn sự thật của shape này.
+  learningProfile Json?
+  // Mốc thời gian user HOÀN TẤT onboarding học tập (không phải Quick Setup).
+  // NULL = chưa hoàn tất (kể cả đã bỏ qua) — Dashboard dùng cột này để gợi ý
+  // hoàn thiện mà KHÔNG chặn. Welcome đã có cột riêng (welcomeSeenAt) vì
+  // "xem giới thiệu" và "điền hồ sơ" là 2 mốc khác nhau.
+  learningProfileCompletedAt DateTime?
   accounts       Account[]
   assessments    Assessment[]
   attempts       Attempt[]
@@ -128,12 +151,31 @@ model LearningGoal {
   // thuộc tính của CẢ HÀNH TRÌNH học goal đó, không phải của 1 lần
   // sinh plan cụ thể.
   status       RoadmapStatus @default(ACTIVE)
+  // ---- Bổ sung cho Learning Profile (onboarding học tập) ----
+  // Mọi cột dưới đây NULLABLE/default nên migration an toàn với dữ liệu cũ.
+  //
+  // `category` là nhóm mục tiêu người dùng CHỌN khi onboarding (thi đại học,
+  // đi làm, học kỹ năng mới...). Tách khỏi `title` vì title là do AI/người
+  // dùng gõ tự do, còn category là enum để LỌC/THỐNG KÊ được.
+  category     String?
+  // `target` là kết quả đo được (vd "điểm Toán 7 -> 9"). Tách khỏi
+  // `targetOutcome` (mô tả định tính) vì target dùng để so sánh gap máy được.
+  target       String?
+  // 1 = cao, 2 = thường, 3 = thấp. Dùng để sắp xếp "mục tiêu hiện tại" trên
+  // Dashboard; lưu Int thay vì enum để thêm mức mà không cần migration.
+  priority     Int           @default(2)
+  // Nguồn tạo: "onboarding" | "manual" | "ai". Cho phép onboarding chạy lại mà
+  // không nhân bản mục tiêu người dùng đã sửa tay.
+  source       String        @default("manual")
   createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   user         User          @relation(fields: [userId], references: [id])
   roadmaps     Roadmap[]
   roadmapLinks RoadmapResource[]
   studySessions StudySession[]
   learningSessions LearningSession[]
+
+  @@index([userId, status, priority])
 }
 
 model Assessment {
@@ -162,6 +204,9 @@ model Attempt {
   createdAt    DateTime    @default(now())
   assessment   Assessment? @relation(fields: [assessmentId], references: [id])
   user         User        @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([userId, subject, topic])
 }
 
 model QuizQuestionCache {
@@ -336,6 +381,7 @@ model LearningSession {
   sourceDocument Document?     @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
 
   @@index([userId, status])
+  @@index([userId, startedAt])
 }
 
 model DocumentChunk {
@@ -720,6 +766,21 @@ enum Role {
   STUDENT
   TEACHER
   ADMIN
+}
+
+// Trạng thái onboarding của user — state machine của Welcome Experience
+// (xem docs/WELCOME.md). Mục tiêu thiết kế: ĐƯỜNG CHÍNH là EXPLORE trước,
+// SETUP chỉ là lựa chọn phụ, nên "NEW" không hề cản trở việc dùng app.
+enum OnboardingStatus {
+  // Vừa đăng ký, chưa xem Welcome. Đây là lý do duy nhất được đưa tới /welcome.
+  NEW
+  // Đã bỏ qua/thiện cảm Welcome và đang dùng app — TRẠNG THÁI ĐƯỢC XEM LÀ
+  // "đã onboarding xong" về mặt điều hướng. Profile có thể vẫn chưa có.
+  EXPLORING
+  // Đang làm Quick Setup (mục tiêu / môn / trình độ).
+  SETTING_UP
+  // Đã có profile từ Quick Setup hoặc từ hành vi học thực tế.
+  PERSONALIZED
 }
 
 enum RewardType {
@@ -1244,5 +1305,6 @@ model ExerciseAttempt {
   exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
 
   @@index([userId, exerciseId])
+  @@index([userId, createdAt])
   @@index([exerciseId, createdAt])
 }

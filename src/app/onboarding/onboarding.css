@@ -1,0 +1,768 @@
+/* ================================================================
+   ONBOARDING HỌC TẬP — LearnX AI
+   ------------------------------------------------------------
+   Glass card trên nền #070b16, indigo/cyan, bo góc lớn.
+   Mobile-first: mọi khoảng cách dùng clamp() để 360px không chật
+   mà 1280px không trông nhỏ. KHÔNG dùng width cố định > 100vw và
+   không để phần tử nào rộng hơn container -> không horizontal scroll.
+   ================================================================ */
+
+.onb-screen {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  overflow-x: hidden;
+  background: #070b16;
+  color: #f5f7ff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding:
+    calc(var(--safe-top) + clamp(16px, 4vw, 32px))
+    clamp(12px, 4vw, 24px)
+    calc(var(--safe-bottom) + clamp(16px, 4vw, 32px));
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Glow trang trí — pointer-events:none để KHÔNG BAO GIỜ chặn CTA.
+   Đây là lỗi hay gặp: 1 lớn trang trí phủ lên nút "Tiếp tục" khiến nút
+   không bấm được trên mobile mà nhìn vẫn bình thường. */
+.onb-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.onb-glow::before,
+.onb-glow::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+}
+
+.onb-glow::before {
+  top: -12%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, 90vw);
+  height: min(520px, 90vw);
+  background: radial-gradient(circle, rgba(69, 217, 233, 0.14) 0%, transparent 70%);
+}
+
+.onb-glow::after {
+  bottom: -10%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(600px, 95vw);
+  height: min(600px, 95vw);
+  background: radial-gradient(circle, rgba(119, 117, 255, 0.16) 0%, transparent 70%);
+}
+
+.onb-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 620px;
+  background: linear-gradient(160deg, rgba(22, 29, 49, 0.88) 0%, rgba(15, 20, 35, 0.92) 100%);
+  border: 1px solid rgba(201, 211, 255, 0.12);
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  padding: clamp(20px, 5vw, 34px);
+}
+
+.onb-eyebrow {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--cyan);
+  margin-bottom: 8px;
+}
+
+.onb-title {
+  font-size: clamp(20px, 5.2vw, 26px);
+  font-weight: 650;
+  margin: 0 0 6px;
+  line-height: 1.25;
+}
+
+.onb-subtitle {
+  font-size: 13.5px;
+  color: var(--text-dim);
+  margin: 0 0 20px;
+  line-height: 1.6;
+}
+
+.onb-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.onb-dots {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.onb-dot {
+  flex: 1;
+  height: 4px;
+  min-width: 0;
+  border-radius: 999px;
+  background: rgba(201, 211, 255, 0.16);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: background 220ms ease;
+}
+
+.onb-dot.is-done { background: var(--indigo); }
+.onb-dot.is-current { background: var(--cyan); }
+
+.onb-step-label {
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.onb-question {
+  font-size: clamp(17px, 4.4vw, 20px);
+  font-weight: 620;
+  margin: 0 0 4px;
+  line-height: 1.35;
+}
+
+.onb-question-hint {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 0 0 18px;
+  line-height: 1.55;
+}
+
+/* min-height cố định để card KHÔNG nhảy chiều cao giữa các bước có số
+   lựa chọn khác nhau — chuyển bước mượt hơn nhiều. */
+.onb-body { min-height: 268px; }
+
+.onb-body--animating { animation: onbSlideIn 280ms ease both; }
+
+@keyframes onbSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.onb-group + .onb-group { margin-top: 18px; }
+
+.onb-group-label {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.onb-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.onb-options--single { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+
+/* 44px là ngưỡng tối thiểu cho tay chạm (Apple HIG) — giữ ở mọi kích thước
+   màn hình, kể cả khi nội dung dài hơn 1 dòng. */
+.onb-option {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(201, 211, 255, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 120ms ease;
+}
+
+.onb-option:hover:not(:disabled) {
+  border-color: rgba(201, 211, 255, 0.28);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.onb-option:active:not(:disabled) { transform: scale(0.985); }
+
+.onb-option.is-selected {
+  border-color: var(--indigo);
+  background: rgba(124, 108, 240, 0.16);
+  color: #fff;
+}
+
+.onb-option:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.onb-option:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.onb-check {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  border: 1.5px solid rgba(201, 211, 255, 0.3);
+  color: transparent;
+}
+
+.onb-check.is-on {
+  background: var(--indigo);
+  border-color: var(--indigo);
+  color: #fff;
+}
+
+.onb-radio {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(201, 211, 255, 0.3);
+  display: grid;
+  place-items: center;
+}
+
+.onb-option.is-selected .onb-radio { border-color: var(--indigo); }
+
+.onb-radio::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--indigo);
+  transform: scale(0);
+  transition: transform 160ms ease;
+}
+
+.onb-option.is-selected .onb-radio::after { transform: scale(1); }
+
+.onb-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  background: rgba(10, 14, 22, 0.6);
+  border: 1px solid rgba(201, 211, 255, 0.14);
+  color: var(--text);
+  font-size: 14.5px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 160ms ease;
+}
+
+.onb-input::placeholder { color: var(--text-faint); }
+.onb-input:focus { border-color: var(--indigo); }
+.onb-input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+
+.onb-field + .onb-field { margin-top: 12px; }
+
+.onb-field-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.onb-field-hint { font-size: 12px; color: var(--text-faint); margin-top: 5px; }
+
+.onb-goal-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.onb-goal-row .onb-input { flex: 1; min-width: 0; }
+
+.onb-goal-remove {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  border: 1px solid rgba(201, 211, 255, 0.14);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.onb-goal-remove:hover { color: var(--rose); border-color: rgba(240, 124, 145, 0.4); }
+
+.onb-goal-add {
+  margin-top: 10px;
+  min-height: 44px;
+  width: 100%;
+  border-radius: 11px;
+  border: 1px dashed rgba(201, 211, 255, 0.25);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.onb-goal-add:hover { color: var(--text); border-color: rgba(201, 211, 255, 0.4); }
+
+.onb-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.onb-notice--error {
+  background: rgba(240, 124, 145, 0.12);
+  border: 1px solid rgba(240, 124, 145, 0.3);
+  color: #f7c2cc;
+}
+
+.onb-notice--offline {
+  background: rgba(245, 199, 106, 0.1);
+  border: 1px solid rgba(245, 199, 106, 0.28);
+  color: #f5d9a4;
+}
+
+.onb-retry {
+  margin-top: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(240, 124, 145, 0.4);
+  background: transparent;
+  color: #f7c2cc;
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.onb-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(201, 211, 255, 0.08);
+}
+
+.onb-actions .onb-primary { margin-left: auto; }
+
+.onb-btn {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 11px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  transition: filter 150ms ease, transform 120ms ease;
+}
+
+.onb-btn:active:not(:disabled) { transform: scale(0.985); }
+.onb-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.onb-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+.onb-primary {
+  border: none;
+  background: linear-gradient(135deg, #7c6cf0 0%, #5b8cf0 100%);
+  color: #fff;
+}
+
+.onb-primary:hover:not(:disabled) { filter: brightness(1.08); }
+
+.onb-ghost {
+  border: 1px solid rgba(201, 211, 255, 0.16);
+  background: transparent;
+  color: var(--text-dim);
+}
+
+.onb-ghost:hover:not(:disabled) { color: var(--text); border-color: rgba(201, 211, 255, 0.3); }
+
+.onb-done { text-align: center; padding: 8px 0 4px; }
+
+.onb-done-icon {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: rgba(101, 214, 163, 0.14);
+  border: 1px solid rgba(101, 214, 163, 0.32);
+  color: var(--green);
+}
+
+.onb-done-title { font-size: clamp(19px, 5vw, 23px); font-weight: 650; margin: 0 0 8px; }
+
+.onb-done-desc {
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin: 0 0 22px;
+}
+
+.onb-done-actions { display: flex; flex-direction: column; gap: 9px; }
+.onb-done-actions .onb-btn { width: 100%; }
+
+/* Mobile nhỏ: nút bọc tràn dòng thay vì tràn ngang.
+   CỐ Ý để KHÔNG ép cột ở đây: ở 360px phần nội dung chỉ ~296px, nên
+   `auto-fill minmax(150px, 1fr)` đã tự cho ra ĐÚNG 1 cột — đây là lựa chọn
+   dễ đọc nhất. Ép 2 cột sẽ làm nhãn tiếng Việt dài bị bẻ xuống nhiều dòng. */
+@media (max-width: 420px) {
+  .onb-actions { flex-wrap: wrap; }
+  .onb-actions .onb-primary { margin-left: 0; flex: 1 1 100%; order: -1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-body--animating { animation: none; }
+}
+
+/* ----------------------------------------------------------------
+   5 PHASE — thanh tiến trình theo phase
+   ---------------------------------------------------------------- */
+/* Thay `onb-dots` (một dot / câu) bằng 4 nút phase có nhãn. Ưu điểm so với
+   dãy dot: người dùng luôn thấy mình đang ở HỒ SƠ hay MỤC TIÊU, thay vì
+   "câu 5/8" không có ngữ cảnh. Số câu cụ thể vẫn hiện ở .onb-step-label. */
+.onb-phases {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.onb-phase {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-height: 44px; /* vùng chạm tối thiểu */
+  padding: 7px 4px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  font-family: var(--font-inter), sans-serif;
+  font-size: 10.5px;
+  line-height: 1.25;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.onb-phase:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.onb-phase:not(:disabled):hover {
+  background: rgba(201, 211, 255, 0.06);
+}
+
+.onb-phase__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(201, 211, 255, 0.1);
+}
+
+.onb-phase__label {
+  /* Nhãn dài xuống dòng thay vì tràn ra ngoài ô — tránh chồng chữ ở 360px. */
+  overflow-wrap: anywhere;
+}
+
+.onb-phase.is-done .onb-phase__index {
+  background: rgba(69, 217, 233, 0.16);
+  color: var(--cyan);
+}
+
+.onb-phase.is-current {
+  background: rgba(119, 117, 255, 0.12);
+  border-color: rgba(119, 117, 255, 0.3);
+  color: var(--text);
+}
+
+.onb-phase.is-current .onb-phase__index {
+  background: var(--indigo);
+  color: #070b16;
+}
+
+.onb-phase:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* ----------------------------------------------------------------
+   Màn hồ sơ sẵn sàng (ProfileReady)
+   ---------------------------------------------------------------- */
+.onb-section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(201, 211, 255, 0.09);
+}
+
+.onb-section__title {
+  margin: 0 0 12px;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+/* 2 cột: nhãn | giá trị. `min-width: 0` ở cả 2 ô để giá trị dài co lại
+   thay vì đẩy nhãn ra khỏi hàng. */
+.onb-profile-grid {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.onb-profile-row {
+  display: grid;
+  grid-template-columns: minmax(0, 42%) minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 0;
+
+.onb-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: var(--font-inter), sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--cyan);
+  cursor: pointer;
+}
+
+.onb-link-btn:hover {
+  text-decoration: underline;
+}
+
+.onb-link-btn:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.onb-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(201, 211, 255, 0.04);
+  border: 1px solid rgba(201, 211, 255, 0.08);
+}
+
+.onb-empty p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.onb-skill-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.onb-roadmap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--cyan-soft);
+  border: 1px solid rgba(69, 217, 233, 0.22);
+}
+
+.onb-roadmap__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--cyan);
+}
+
+.onb-roadmap__title {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.onb-roadmap__topics {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text-dim);
+}
+
+.onb-roadmap__topics li {
+  overflow-wrap: anywhere;
+}
+
+/* Nút hành động chính xếp dọc, chiếm hết bề ngang.
+ *
+ * BUG ĐÃ SỬA — nút "Vào trang chủ →" lệch góc dưới bên phải & sát đường kẻ
+ * của khối bên dưới.
+ *
+ * Nguyên nhân: `.onb-actions .onb-primary { margin-left: auto }` (dòng ~361)
+ * được viết cho footer NGANG của màn câu hỏi (Quay lại ......... Tiếp tục),
+ * nơi nút chính phải đẩy sang mép phải. Biến thể `--stack` chỉ ghi đè
+ * `flex-direction: column` mà KHÔNG gỡ `margin-left: auto` — nên trong flex
+ * column, auto-margin trên trục chéo vẫn có hiệu lực và đẩy nút về mép phải.
+ * Kết hợp với `border-top` của chính `.onb-actions` và của `.onb-appdl` ngay
+ * dưới, ta có 2 đường kẻ ôm nút trong ~44px -> nhìn như bị đè.
+ *
+ * Cách sửa đúng tận gốc: gỡ `margin-left` trong CHÍNH biến thể này (không
+ * đụng rule gốc, vì footer ngang của màn câu hỏi vẫn cần nó), kéo `align-items`
+ * về `stretch` để nút thật sự chiếm hết bề ngang, và tăng khoảng hở trước
+ * đường kẻ bên dưới. KHÔNG dùng z-index — hai phần tử này chưa bao giờ
+ * overlap thật, chỉ là bố cục bị bóp.
+ */
+.onb-actions--stack {
+  flex-direction: column;
+  align-items: stretch;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(201, 211, 255, 0.08);
+}
+
+/* Gỡ `margin-left: auto` mà rule gốc để lại — xem giải thích trên. */
+.onb-actions--stack .onb-primary {
+  margin-left: 0;
+}
+
+.onb-actions--stack .onb-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+/* Khối tải app ở màn hồ sơ — bản thân nó đã tự canh giữa.
+ * `margin-top`/`padding-top` đủ lớn để đường kẻ ở trên không "dính" vào nút
+ * hành động ngay phía trên. */
+.onb-appdl {
+  display: flex;
+  justify-content: center;
+  margin-top: 28px;
+  padding-top: 26px;
+  border-top: 1px solid rgba(201, 211, 255, 0.09);
+}
+
+/* Icon xoay khi nút đang gửi request — phản hồi rõ ràng khi mạng chậm.
+ * DÙNG LẠI `@keyframes spin` đã có sẵn trong globals.css, không định nghĩa
+ * animation thứ hai cho cùng một việc. */
+.onb-btn svg[data-leaving="true"] {
+  animation: spin 900ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Người giảm chuyển động vẫn thấy nút bị disable + đổi icon, nên vẫn nhận
+     biết được đang xử lý — chỉ bỏ phần quay thôi. */
+  .onb-btn svg[data-leaving="true"] {
+    animation: none;
+  }
+}
+
+/* ----------------------------------------------------------------
+   Bước kiểm tra năng lực (phase 04)
+   ---------------------------------------------------------------- */
+.onb-diag {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 8px 0 4px;
+}
+
+.onb-diag__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 14px;
+  border-radius: 16px;
+  color: var(--cyan);
+  background: rgba(69, 217, 233, 0.1);
+  border: 1px solid rgba(69, 217, 233, 0.22);
+}
+
+.onb-diag .onb-question-hint {
+  max-width: 44ch;
+}
+
+/* "Vì sao nên làm" — ô nhấn mạnh lý do, đúng lúc người dùng đang cân nhắc
+   bỏ qua. */
+.onb-diag__note {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(119, 117, 255, 0.1);
+  border: 1px solid rgba(119, 117, 255, 0.22);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text);
+  text-align: left;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-phase {
+    transition: none;
+  }
+}
+
+  border-bottom: 1px solid rgba(201, 211, 255, 0.05);
+}
+
+.onb-profile-row dt {
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.onb-profile-row dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.onb-profile-row dd.is-empty {
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+

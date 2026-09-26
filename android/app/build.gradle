@@ -1,0 +1,90 @@
+apply plugin: 'com.android.application'
+
+// ==================================================================
+// KHOÁ KÝ RELEASE — đọc từ biến môi trường, KHÔNG commit khoá vào repo
+// ==================================================================
+// Tạo khoá (chạy 1 lần, KHÔNG làm trong repo):
+//   keytool -genkey -v -keystore ~/learnx-release.keystore \
+//           -alias learnx -keyalg RSA -keysize 2048 -validity 10000
+// Rồi export biến môi trường (KHÔNG ghi vào file nào trong repo):
+//   LEARNX_KEYSTORE_PATH, LEARNX_KEYSTORE_PASSWORD,
+//   LEARNX_KEY_ALIAS, LEARNX_KEY_PASSWORD
+//
+// Vì sao đọc biến môi trường: khoá ký KHÔNG BAO GIỜ được commit. Nếu ai đó
+// lấy được khoá thì có thể phát hành bản giả mạo LearnX AI. Nếu thiếu biến,
+// Gradle chỉ cảnh báo và build unsigned (để còn build được bản debug).
+// ==================================================================
+def keystorePath = System.getenv("LEARNX_KEYSTORE_PATH")
+
+android {
+    namespace "ai.learnx.app"
+    compileSdk rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId "ai.learnx.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        // Tăng versionCode MỘT LẦN mỗi lần phát hành lên Google Play
+        // (Play từ chối bản có versionCode bằng hoặc thấp hơn bản trước).
+        // Hiện 1 = bản đầu tiên.
+        versionCode 1
+        versionName "1.0.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePath) {
+                storeFile file(keystorePath)
+                storePassword System.getenv("LEARNX_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("LEARNX_KEY_ALIAS")
+                keyPassword System.getenv("LEARNX_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Chỉ bật khi có khoá: nếu không, Gradle lỗi ở bước đóng gói thay vì
+            // âm thầm tạo ra file unsigned dễ bị nhầm là đã ký xong.
+            if (keystorePath) {
+                signingConfig signingConfigs.release
+            }
+            // Bật R8 để APK nhỏ hơn. Keep rules trong proguard-rules.pro giữ lại
+            // những gì Capacitor dùng qua reflection.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'

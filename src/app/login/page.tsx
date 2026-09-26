@@ -39,6 +39,15 @@ export default function LoginPage() {
     router.push("/dashboard");
   }
 
+  /**
+   * Sau đăng nhập, cứ đi thẳng /dashboard — KHÔNG cần biết user mới hay cũ.
+   *
+   * Lý do: proxy.ts (chạy trên server, đọc onboardingStatus từ JWT) sẽ tự
+   * chuyển hướng user CHƯA xem Welcome sang /welcome. Nếu login page tự quyết
+   * định ở client thì phải đọc onboarding ở 2 nơi (login + register + Google
+   * OAuth) và dễ lệch với proxy. Để MỘT chỗ quyết định như vậy an toàn hơn,
+   * và user cũ vẫn tới thẳng Dashboard không bị delay.
+   */
   return (
     <AuthCard title={t("auth.loginTitle")} subtitle={t("auth.loginSubtitle")}>
       <OAuthButtons />

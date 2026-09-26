@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Nền icon: deep navy đúng tone app. Mặc định của Capacitor là #FFFFFF
+         (trắng), khiến icon nổi bật sai và lạc trên launcher tối. -->
+    <color name="ic_launcher_background">#070B16</color>
+
+    <!-- Gradient logo: khớp 2 token màu indigo/cyan trong globals.css. -->
+    <color name="ic_launcher_gradient_start">#7775FF</color>
+    <color name="ic_launcher_gradient_end">#45D9E9</color>
+
+    <!-- Màu splash + thanh trên cùng: trùng nền app để lúc chuyển từ splash
+         sang nội dung không bị "giật" màu. -->
+    <color name="splash_background">#070B16</color>
+</resources>

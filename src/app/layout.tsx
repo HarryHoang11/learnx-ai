@@ -9,10 +9,12 @@
 // ================================================================
 
 import type { ReactNode } from "react";
+import type { Metadata } from "next";
 import { Space_Grotesk, Inter } from "next/font/google";
 import SessionProviderWrapper from "@/components/providers/SessionProviderWrapper";
 import { LanguageProvider } from "@/components/providers/LanguageProvider";
 import { ThemeProvider, THEME_STORAGE_KEY } from "@/components/providers/ThemeProvider";
+import NativeShell from "@/components/native/NativeShell";
 import "katex/dist/katex.min.css";
 import "./globals.css";
 
@@ -42,9 +44,61 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
-export const metadata = {
+/**
+ * Metadata toàn site — nơi DUY NHẤT khai báo tên + icon + link chia sẻ.
+ *
+ * Icon trỏ thẳng về `/brand/learnx-mark.svg` (cùng asset với logo trong UI)
+ * thay vì tạo thêm `app/icon.svg` hay `favicon.ico`: một file logo duy nhất
+ * nghĩa là đổi logo một lần là cả tab browser, PWA và màn hình trong app
+ * cùng đổi — không bao giờ có tình trạng tab trình duyệt khác logo trong app.
+ */
+export const metadata: Metadata = {
   title: "LearnX AI",
   description: "Trợ lý học tập cá nhân hoá bằng AI",
+  applicationName: "LearnX AI",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/brand/learnx-mark.svg", type: "image/svg+xml" }],
+    // Safari chỉ hiển thị favicon SVG từ Safari 16+; các bản cũ sẽ dùng mặc
+    // định. Chấp nhận hơn là tạo thêm file .ico riêng cho 1 trình duyệt.
+    apple: [{ url: "/brand/learnx-mark.svg" }],
+  },
+  openGraph: {
+    type: "website",
+    siteName: "LearnX AI",
+    title: "LearnX AI — Trợ lý học tập cá nhân hoá bằng AI",
+    description: "Lộ trình học cá nhân hoá, AI gia sư và bài tập theo đúng năng lực của bạn.",
+    locale: "vi_VN",
+    images: [{ url: "/brand/learnx-mark.svg", width: 512, height: 512, alt: "LearnX AI" }],
+  },
+  twitter: {
+    card: "summary",
+    title: "LearnX AI",
+    description: "Trợ lý học tập cá nhân hoá bằng AI",
+    images: ["/brand/learnx-mark.svg"],
+  },
+};
+
+
+/**
+ * Viewport — BẮT BUỘC cho app Android.
+ *
+ * `viewportFit: "cover"` là điều kiện để `env(safe-area-inset-*)` trả về giá
+ * trị khác 0. Không có nó, mọi padding safe-area trong globals.css bằng 0 và
+ * nội dung bị chồng lên notch / thanh home indicator trên iPhone — trên
+ * Android thường là vùng camera punch-hole và thanh điều hướng gesture.
+ *
+ * `maximumScale` cố ý KHÔNG đặt: chặn zoom làm người dùng khó đọc khi
+ * phóng chữ (WCAG). Zoom trong WebView vẫn chạy bình thường.
+ */
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  // `interactive-widget` giúp bàn phím không che ô nhập ở Chrome Android;
+  // WebView Capacitor bỏ qua giá trị này và dùng resize: native của
+  // @capacitor/keyboard, nên đặt sẵn là vô hại và đúng cho web.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -83,7 +137,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             lồng 2 tầng (xem (app)/layout.tsx). */}
         <LanguageProvider>
           <ThemeProvider>
-            <SessionProviderWrapper>{children}</SessionProviderWrapper>
+            <SessionProviderWrapper>
+              {/* NativeShell bọc ngoài cùng: gắn nút back Android, status bar,
+                  bàn phím, splash và băng cảnh báo offline. Trên website nó là
+                  no-op nên không đổi hành vi gì cả. */}
+              <NativeShell>{children}</NativeShell>
+            </SessionProviderWrapper>
           </ThemeProvider>
         </LanguageProvider>
       </body>

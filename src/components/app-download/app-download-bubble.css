@@ -1,0 +1,309 @@
+/* ================================================================
+   BUBBLE TẢI APP — hành động nổi THỨ CẤP
+   ================================================================
+
+   NGUYÊN TẮC BẤT BIẾN: file này KHÔNG đặt `position: fixed`.
+   Toạ độ do `.floating-actions` (globals.css) lo — cùng cột flex với nút AI,
+   nên bubble này TỰ ĐỘNG đứng phía trên AI Assistant và không thể đè lên nó.
+
+   Màu: chỉ dùng token `var(--*)` của hệ thiết kế. Nhờ vậy light mode nhận
+   bản sáng hơn tự động, không phải viết lại bảng mà riêng.
+
+   NGUYÊN TẮC 2 — POPOVER KHÔNG ĐƯỢC NẰM TRONG @media NÀO.
+   Thiết kế popover phải áp ở MỌI viewport. Đã mắc lỗi này 1 lần: dấu đóng của
+   @media (ẩn tooltip) bị thiếu nên TOÀN BỘ khối popover bị nuốt vào trong
+   `@media (max-width: 880px), (hover: none)`. Trên desktop (>880px, có hover)
+   popover mất sạch style, và mọi thứ trông như "lỗi vặt" nhưng cùng 1 gốc:
+     - nút đóng trở thành <button> mặc định của trình duyệt -> Ô VUÔNG TRẮNG
+       chứa dấu × (không phải ảnh vỡ, không phải thiếu icon);
+     - link "Tải ứng dụng" dùng màu link mặc định #0000EE -> xanh sẫm, khó đọc
+       trên nền tối (bản thân chữ vẫn đúng, chỉ thiếu style);
+     - icon điện thoại thành <svg> trần 16px, sát mép trên thay vì nằm trong ô
+       28px căn giữa;
+     - dòng "Android · v1.0.0" không còn padding của thẻ nên dính vào mép dưới.
+   Sửa file này thì đếm lại số dấu mở/đóng ngoặc và kiểm `.app-bubble-popover`
+   có `position: absolute` trên desktop — đừng thêm style bù cho triệu chứng.
+
+   NGUYÊN TẮC 3 — POPOVER PHẢI LÀ `position: absolute`.
+   `.app-bubble-root` là flex row. Nếu popover mất `position: absolute`, nó
+   thành flex item bị co lại (flex-shrink) trong khi CHỮ không co được -> chữ
+   tràn khỏi hộp và chạy vào đúng vị trí nút điện thoại: đó chính là bug "cuối
+   đoạn mô tả bị nút nổi đè". Nằm ngoài luồng (absolute) thì việc này KHÔNG THỂ
+   xảy ra, không cần `overflow: hidden` hay z-index. Đừng bỏ dòng đó. */
+
+.app-bubble-root {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Đã bấm "x": bỏ hiệu ứng xuất hiện để không nháy mỗi lần vào lại trang.
+   Bubble vẫn hiện — người dùng phải còn đường mở lại. */
+.app-bubble-root--calm .app-bubble {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------------- Bubble ---------------- */
+.app-bubble {
+  position: relative;
+  width: var(--fab-app-size);
+  height: var(--fab-app-size);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--cyan);
+  /* Nền dùng token: light mode tự đổi sang bản sáng, không hard-code. */
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  touch-action: manipulation;
+  animation: app-bubble-in 320ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.app-bubble:hover {
+  transform: scale(1.05);
+  background: var(--panel-hover);
+  /* Glow rất nhẹ — đủ để gợi "sống", không nhấp nháy gây khó chịu. */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34), 0 0 0 4px var(--cyan-soft);
+}
+
+.app-bubble:active {
+  transform: scale(0.94);
+  transition-duration: 80ms;
+}
+
+.app-bubble:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+.app-bubble__phone,
+.app-bubble__arrow {
+  flex: none;
+}
+
+.app-bubble__arrow {
+  margin-top: 1px;
+}
+
+@keyframes app-bubble-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ---------------- Tooltip (desktop, hover) ---------------- */
+/* Pseudo-element -> không thêm DOM, không gây layout shift. */
+.app-bubble__tip {
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  pointer-events: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+
+.app-bubble-root:hover .app-bubble__tip {
+  opacity: 1;
+}
+
+/* Mobile không có hover -> ẩn tooltip, tránh che nội dung bằng nhãn vô nghĩa. */
+@media (max-width: 880px), (hover: none) {
+  .app-bubble__tip {
+    display: none;
+  }
+}
+
+/* ---------------- Popover ---------------- */
+/*
+ * Mở lên TRÊN bubble (bubble nằm ở đáy cột nổi). `right: 0` để mép phải popover
+ * thẳng với mép phải bubble -> luôn gọn trong viewport, không tràn ra ngoài.
+ */
+.app-bubble-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  width: min(320px, calc(100vw - 32px));
+  padding: 14px;
+  border-radius: 14px;
+  /* Glassmorphism: nền token + blur. */
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: app-bubble-pop-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  text-align: left;
+}
+
+.app-bubble-popover__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.app-bubble-popover__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 9px;
+  color: var(--cyan);
+  background: var(--cyan-soft);
+  border: 1px solid var(--border);
+}
+
+.app-bubble-popover__title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.app-bubble-popover__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  color: var(--text-dim);
+  background: transparent;
+  transition: color 0.14s ease, background-color 0.14s ease;
+}
+
+.app-bubble-popover__close:hover {
+  color: var(--text);
+  background: var(--panel-hover);
+}
+
+.app-bubble-popover__close:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+.app-bubble-popover__desc {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.app-bubble-popover__cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  /* >= 44px: vùng chạm tối thiểu trên mobile. */
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: 11px;
+  font-family: var(--font-inter), sans-serif;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-decoration: none;
+  /* Nhãn trên nền gradient: dùng token `--on-accent` của hệ thiết kế (đúng
+     token mà `.btn-primary` trong globals.css dùng) thay vì hard-code màu —
+     đổi design system là đổi theo, không phải đi tìm từng file.
+     KHÔNG dùng màu link mặc định của trình duyệt cho nút này: #0000EE trên nền
+     gradient sẽ tối và lệch hẳn khỏi ngôn ngữ thị giác. */
+  color: var(--on-accent);
+  /* Gradient cyan->indigo đúng ngôn ngữ thị giác LearnX. Dùng màu GỐC (không
+     phải bản light-mode) vì đây là nền tối, cần tương phản cao. */
+  background: linear-gradient(135deg, var(--cyan), var(--indigo));
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+  touch-action: manipulation;
+}
+
+.app-bubble-popover__cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px var(--indigo-soft);
+}
+
+.app-bubble-popover__cta:active {
+  transform: translateY(0) scale(0.985);
+}
+
+.app-bubble-popover__cta:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.app-bubble-popover__meta {
+  margin: 10px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: center;
+  /* `--text-faint` (#68748c) chỉ đạt ~3.5:1 trên nền panel -> dưới ngưỡng AA
+     4.5:1 cho chữ 11px. Dùng `--text-dim` (~6:1) — vẫn là màu mờ nhất trong
+     bảng màu nên không tranh sự chú ý với CTA phía trên. Khoảng cách tới mép
+     dưới thẻ do `padding` của `.app-bubble-popover` lo (14px), KHÔNG dùng
+     margin âm / translate để "né" border. */
+  color: var(--text-dim);
+}
+
+@keyframes app-bubble-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Người dùng giảm chuyển động: bỏ hẳn animation, không chỉ rút thời gian. */
+@media (prefers-reduced-motion: reduce) {
+  .app-bubble,
+  .app-bubble-popover {
+    animation: none;
+  }
+
+  .app-bubble:hover,
+  .app-bubble-popover__cta:hover {
+    transform: none;
+  }
+
+  .app-bubble__tip {
+    transition: none;
+  }
+}

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    ADAPTIVE ICON (Android 8.0 / API 26+).
+
+    Lớp `monochrome` là THÊM MỚI cho Android 13+: hệ thống sẽ tô lại icon
+    theo màu của launcher (themed icons). Không khai báo nó thì icon LearnX
+    không đổi màu theo theme hệ thống và trông lạc trên máy đã bật themed icon.
+
+    Trước đây foreground trỏ tới @mipmap/ic_launcher_foreground (PNG logo
+    Capacitor) — nay trỏ tới vector drawable LearnX nên sắc nét ở mọi mật độ
+    và không cần thêm ảnh.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+    <monochrome android:drawable="@drawable/ic_launcher_foreground"/>
+</adaptive-icon>

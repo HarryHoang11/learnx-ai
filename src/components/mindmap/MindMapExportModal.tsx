@@ -18,6 +18,7 @@ import { useState } from "react";
 import { Download, X } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { useLanguage } from "@/components/providers/LanguageProvider";
+import { useBackButtonToClose } from "@/lib/native/useBackButton";
 import type { I18nKey } from "@/lib/i18n/dictionary";
 import {
   type ExportFormat,
@@ -64,6 +65,10 @@ export default function MindMapExportModal({
   const { push } = useToast();
   const [selected, setSelected] = useState<ExportFormat>("png");
   const [exporting, setExporting] = useState(false);
+
+  // Nút back Android: đóng modal export trước (Mind Map là màn hình hay
+  // dùng gesture, bấm back mà bị quay ra danh sách rất dễ chửi).
+  useBackButtonToClose(open, onClose);
 
   /**
    * Sinh và tải file theo format đang chọn.

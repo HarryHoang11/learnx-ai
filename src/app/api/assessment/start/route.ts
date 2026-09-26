@@ -6,6 +6,11 @@
 // sơ đồ "AI Diagnostic Test" trong bản kế hoạch gốc (luôn bắt đầu dễ
 // rồi mới thích ứng dần). Việc sinh câu hỏi tiếp theo (dựa đúng/sai)
 // thuộc về /api/assessment/answer, KHÔNG lặp lại ở đây.
+//
+// THỨ TỰ CỐ Ý: sinh câu hỏi TRƯỚC, tạo Assessment SAU. Nếu AI fail
+// (503/quota) thì không tạo ra dòng rác status=in_progress không bao
+// giờ được dùng. Đổi thứ tự này sẽ làm mỗi lần AI chết lại đẻ thêm
+// 1 phiên mồ côi.
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -14,6 +19,27 @@ import { prisma } from "@/lib/db/prisma";
 import { generateQuizQuestion, QuizQuestionError, toPublicQuestion } from "@/services/quiz.service";
 import { AIOverloadedError } from "@/lib/ai/router";
 import type { ApiResponse, PublicQuestion } from "@/types";
+
+/**
+ * Cửa sổ "coi như chưa từng bấm" — chống tạo trùng Assessment ở TẦNG SERVER.
+ *
+ * Client đã chặn double-click bằng ref (xem start() ở (app)/diagnostic/page.tsx),
+ * nhưng ref chỉ bảo vệ 1 tab. Vẫn còn 2 đường tạo phiên trùng KHÔNG qua guard UI:
+ *   1) user bấm lại trong vài giây (mất mạng rồi bấm "Thử lại");
+ *   2) request đầu vẫn đang chờ AI, client đã hết patience và abort
+ *      -> server vẫn tạo Assessment, user không biết và thử lại -> 2 phiên.
+ *
+ * Vì vậy: nếu đã có Assessment status=in_progress, cùng user + cùng môn,
+ * vừa tạo trong cửa sổ này VÀ chưa trả lời câu nào -> tái dùng chính phiên
+ * đó thay vì tạo phiên mới. Câu hỏi KHÔNG gắn với dòng Assessment (nó nằm
+ * ở QuizQuestionCache), nên sinh câu đầu tiên mới rồi trả về vẫn đúng — chỉ
+ * là bỏ 1 lần tạo dòng thừa.
+ *
+ * GIỚI HẠN CỐ Ý: cửa sổ ngắn + điều kiện "chưa có Attempt". Sau khi đã
+ * trả lời câu nào, bấm lại là người dùng CHỦ ĐỘNG làm lại bài -> vẫn tạo
+ * phiên mới đúng như mong muốn, không bị nuốt.
+ */
+const DEDUPE_WINDOW_MS = 2 * 60 * 1000;
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,13 +59,38 @@ export async function POST(req: NextRequest) {
     // đúng/sai (xem services/assessment.service.ts -> pickNextDifficulty).
     const firstQuestion = await generateQuizQuestion(userId, subject, "Kiến thức nền tảng", "easy");
 
-    const assessment = await prisma.assessment.create({
-      data: { userId, subject, status: "in_progress" },
+    const since = new Date(Date.now() - DEDUPE_WINDOW_MS);
+    const recentOpen = await prisma.assessment.findFirst({
+      where: {
+        userId,
+        status: "in_progress",
+        startedAt: { gte: since },
+        subject: { equals: subject, mode: "insensitive" },
+        // attempts: { none: {} } -> chỉ khử trùng phiên CHƯA dùng.
+        // Đã làm vài câu rồi thì bấm lại = làm bài mới, không phải trùng.
+        attempts: { none: {} },
+      },
+      orderBy: { startedAt: "desc" },
+      select: { id: true },
     });
+
+    const assessmentId = recentOpen?.id ?? (
+      await prisma.assessment.create({
+        data: { userId, subject, status: "in_progress" },
+        select: { id: true },
+      })
+    ).id;
+
+    if (recentOpen) {
+      console.log(
+        `[api/assessment/start] Tái dùng phiên in_progress ${assessmentId} (môn "${subject}") ` +
+        "thay vì tạo phiên trùng."
+      );
+    }
 
     return NextResponse.json<ApiResponse<{ assessmentId: string; question: PublicQuestion }>>({
       success: true,
-      data: { assessmentId: assessment.id, question: toPublicQuestion(firstQuestion) },
+      data: { assessmentId, question: toPublicQuestion(firstQuestion) },
     });
   } catch (err) {
     console.error("[api/assessment/start] Lỗi:", err);

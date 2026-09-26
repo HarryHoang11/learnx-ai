@@ -7,6 +7,7 @@
 // ================================================================
 
 import type { ReactNode } from "react";
+import LearnXLogo from "@/components/brand/LearnXLogo";
 
 export default function AuthCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
@@ -20,27 +21,17 @@ export default function AuthCard({ title, subtitle, children }: { title: string;
       }}
     >
       <div style={{ width: "100%", maxWidth: 380 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center", marginBottom: 28 }}>
-          <div
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 10,
-              background: "linear-gradient(135deg, var(--indigo), var(--cyan))",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontFamily: "var(--font-space-grotesk), sans-serif",
-              fontWeight: 700,
-              fontSize: 17,
-              color: "var(--on-accent)",
-            }}
-          >
-            X
-          </div>
-          <div style={{ fontFamily: "var(--font-space-grotesk), sans-serif", fontWeight: 600, fontSize: 19 }}>
-            LearnX
-          </div>
+        {/* Logo chính thức: dùng LearnXLogo (cùng asset với sidebar, welcome,
+            favicon) thay vì ô gradient + chữ "X" tự dựng ở đây. */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 28,
+          }}
+        >
+          <LearnXLogo size="lg" />
         </div>
 
         <div className="panel" style={{ padding: "30px 28px" }}>

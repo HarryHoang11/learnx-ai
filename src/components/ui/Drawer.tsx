@@ -4,6 +4,7 @@
 
 import { useEffect, type ReactNode, type CSSProperties } from "react";
 import { X } from "lucide-react";
+import { useBackButtonToClose } from "@/lib/native/useBackButton";
 
 export interface DrawerProps {
   open: boolean;
@@ -40,6 +41,9 @@ export default function Drawer({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [open, onClose]);
+
+  // Nút back Android đóng drawer trước khi trình duyệt quay trang.
+  useBackButtonToClose(open, onClose);
 
   if (!open) return null;
 

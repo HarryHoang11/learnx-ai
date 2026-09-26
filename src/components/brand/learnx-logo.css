@@ -1,0 +1,57 @@
+/* ================================================================
+   LEARNX LOGO — dùng chung mọi nơi (xem LearnXLogo.tsx)
+   ================================================================
+
+   Ràng buộc bắt buộc: logo KHÔNG được làm thay đổi chiều cao khối chứa nó
+   (navbar, sidebar, auth card). Vì vậy:
+     - mark là <img> có width/height CỐ ĐỊNH (set inline bởi component) -> không
+       có khả năng giãn làm vỡ layout;
+     - mọi khoảng cách bên trong dùng gap, không dùng margin làm lệch nhịp
+       dòng chữ bên cạnh. */
+.learnx-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  /* Không co lại khi khung hẹp: logo là điểm nhận diện, mất logo thì mất
+     thương hiệu. Nhường chỗ cho phần khác bị co. */
+  flex: none;
+  line-height: 1;
+  /* Nhãn sản phẩm có thể dài ở một số ngôn ngữ -> không cho tràn ngang. */
+  overflow: hidden;
+}
+
+.learnx-logo__mark {
+  flex: none;
+  display: block;
+  /* Logo có nền trong suốt, bo tròn nhẹ để không bị "dán" lên nền sáng. */
+  border-radius: 8px;
+}
+
+.learnx-logo__word {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-weight: 600;
+  /* Màu token: tự đúng ở dark + light mode, không hard-code. */
+  color: var(--text);
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+
+/* Hover nhẹ — dùng chung mọi nơi (sidebar, topbar, auth). Không đặt ở từng
+   component để không lệch. */
+a:hover .learnx-logo__mark,
+.learnx-logo:hover .learnx-logo__mark {
+  transform: scale(1.05);
+}
+
+.learnx-logo__mark {
+  transition: transform 150ms ease;
+}
+
+/* Màn hình rất hẹp: bỏ chữ, giới hạn hẹp hơn. Chỉ áp khi thực sự thiếu
+   chỗ (dướng 380px), không phải mọi mobile — chữ "LearnX" là nhận diện
+   thương hiệu, bỏ sớm là mất. */
+@media (max-width: 380px) {
+  .learnx-logo--full .learnx-logo__word {
+    display: none;
+  }
+}

@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
+import { useBackButtonToClose } from "@/lib/native/useBackButton";
 
 export interface ModalProps {
   open: boolean;
@@ -45,6 +46,9 @@ export default function Modal({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [open, onClose]);
+
+  // Nút back Android đóng modal (thay vì quay trang / đóng app).
+  useBackButtonToClose(open, onClose);
 
   if (!open) return null;
 

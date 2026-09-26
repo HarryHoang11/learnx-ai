@@ -1,14 +1,27 @@
 // ================================================================
-// GET /api/diagnostic/status — Get diagnostic status per subject
+// GET /api/diagnostic/status — tình trạng diagnostic theo môn
 // ================================================================
-// Trả về danh sách các môn học mà user đã/không đã làm kiểm tra
-// năng lực, kèm thời gian hoàn thành và mastery trung bình gần nhất.
-// Dùng cho Phase 5: hiển thị trạng thái trước khi bắt đầu.
+//
+// Trả về 2 thứ:
+//   1) `history` — môn nào đã làm / chưa làm, mastery gần nhất (như cũ).
+//   2) `suggestedSubjects` — môn NÊN đánh giá trước, xếp hạng từ
+//      hồ sơ học tập (môn user chọn + môn đang yếu theo dữ liệu
+//      thật).
+//
+// VÌ SAO THÊM: yêu cầu §19 — Diagnostic phải bám grade/track/subjects/goal
+// chứ không phải lúc nào cũng mặc định Toán. Hàm xếp hạng chỉ
+// SẮP XẾP danh sách môn hợp lệ mà hồ sơ đã nêu, KHÔNG tự
+// chế môn mới; danh sách rỗng thì UI hiển thị đầy đủ như cũ —
+// tức là thay đổi này KHÔNG BAO GIỜ chặn user.
+//
+// DATA ISOLATION: userId lấy từ getCurrentUserId() (session Auth.js), không
+// bao giờ đọc từ query string của client.
 // ================================================================
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { getAssessmentHistoryBySubject } from "@/services/assessment.service";
+import { getSuggestedDiagnosticSubjects } from "@/services/personalization.service";
 import type { ApiResponse } from "@/types";
 
 export async function GET(req: NextRequest) {
@@ -18,9 +31,17 @@ export async function GET(req: NextRequest) {
 
     const history = await getAssessmentHistoryBySubject(userId);
 
-    return NextResponse.json<ApiResponse<typeof history>>({
+    // Best-effort: hồ sơ lỗi thì vẫn trả history như cũ.
+    let suggestedSubjects: string[] = [];
+    try {
+      suggestedSubjects = await getSuggestedDiagnosticSubjects(userId);
+    } catch (err) {
+      console.warn("[api/diagnostic/status] Không dựng được gợi ý môn:", err);
+    }
+
+    return NextResponse.json<ApiResponse<{ history: typeof history; suggestedSubjects: string[] }>>({
       success: true,
-      data: history,
+      data: { history, suggestedSubjects },
     });
   } catch (err) {
     console.error("[api/diagnostic/status] Error:", err);

@@ -10,12 +10,14 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
 import LevelProgressBar from "@/components/ui/LevelProgressBar";
 import ProfileHeader from "@/components/profile/ProfileHeader";
 import EditProfileModal from "@/components/profile/EditProfileModal";
 import ChangePasswordPanel from "@/components/account/ChangePasswordPanel";
+import LearningProfilePanel from "@/components/account/LearningProfilePanel";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { ApiResponse, UserProfile } from "@/types";
 
@@ -40,6 +42,7 @@ export default function ProfilePage() {
   // Topbar/FloatingAIButton không đổi theo khi đổi avatar ở trang này.
   const { update: updateSession } = useSession();
   const { t } = useLanguage();
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [lifetimeXP, setLifetimeXP] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -134,6 +137,27 @@ export default function ProfilePage() {
           không (hasPassword !== null) — tránh hiện nhầm thông báo "tài khoản
           Google" trong lúc request trạng thái còn đang bay. */}
       {hasPassword !== null && <ChangePasswordPanel hasPassword={hasPassword} />}
+
+      {/* Hồ sơ học tập — nừa tạp vào Account (§22). Đọc ngay
+          dưối Security vì và nội dung của tài khoản, nên ngưỗi
+          để người đánh địfu. */}
+      <LearningProfilePanel />
+
+      {/* Đường quay lại Welcome + mở lại Quick Setup (yêu cầu §9 và §17.11:
+          setup phải LUÔN mở được, không phải chỉ lúc mới đăng ký). */}
+      <Panel>
+        <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 12 }}>
+          {t("profile.aboutLearnX")}
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button type="button" className="btn-secondary" onClick={() => router.push("/setup")}>
+            {t("account.personalize")}
+          </button>
+          <button type="button" className="btn-secondary" onClick={() => router.push("/welcome?replay=true")}>
+            {t("account.replayWelcome")}
+          </button>
+        </div>
+      </Panel>
 
       {isEditing && (
         <EditProfileModal

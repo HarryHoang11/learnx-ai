@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  LearnX AI — brand mark (chữ X + mũi tên + sparkle)
+
+  ĐÂY LÀ NGUỒN SỰ THẬT DUY NHẤT của logo LearnX AI.
+
+  Ai cần logo (web: sidebar / auth / welcome / favicon / PWA; Android: launcher
+  icon + splash) đều dùng CHUNG file này — không component nào tự vẽ lại. Xem
+  src/components/brand/LearnXLogo.tsx (web) và scripts/generate-android-icons.mjs
+  (sinh PNG launcher từ cùng hình học này).
+
+  THAY FILE NÀY khi có bản vector gốc từ designer: giữ nguyên viewBox
+  0 0 512 512 và đổi nội dung, mọi nơi tự cập nhật theo.
+
+  Palette lấy đúng design system (globals.css):
+    indigo #7775ff · cyan #45d9e9 · navy #243561 (mảng tối của X)
+-->
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 512 512"
+  width="512"
+  height="512"
+  fill="none"
+  role="img"
+  aria-label="LearnX AI"
+>
+  <defs>
+    <!-- Gradient chính của X: indigo-navy (góc trên-trái) -> indigo -> cyan.
+         Các điểm "navy" CHỈ tối vừa đủ: logo nằm trên nền #070b16, nếu
+         navy quá đậm thì góc trên-trái chìm mất và mất nhận diện. -->
+    <linearGradient id="lxX" x1="96" y1="96" x2="416" y2="416" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3B4E96" />
+      <stop offset="0.45" stop-color="#6E7FE4" />
+      <stop offset="1" stop-color="#45D9E9" />
+    </linearGradient>
+
+    <!-- Gradient ngược cho nhánh còn lại (đối xứng với trên) -->
+    <linearGradient id="lxX2" x1="416" y1="96" x2="96" y2="416" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#33417A" />
+      <stop offset="0.5" stop-color="#4E5FB4" />
+      <stop offset="1" stop-color="#5FE3F0" />
+    </linearGradient>
+
+    <!-- Ánh sáng viền trên của khối 3D -->
+    <linearGradient id="lxShine" x1="256" y1="88" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55" />
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+
+    <linearGradient id="lxArrow" x1="196" y1="316" x2="330" y2="182" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9" />
+      <stop offset="1" stop-color="#FFFFFF" />
+    </linearGradient>
+  </defs>
+
+  <!--
+    Lớp 1: bóng đổ dưới X. Tách riêng để khối X có chiều sâu 3D như logo gốc
+    mà không phải vẽ thủ công mặt trước/sau ở mọi nhánh.
+  -->
+  <g opacity="0.35" transform="translate(0 14)">
+    <path d="M132 132 L380 380" stroke="#101A33" stroke-width="72" stroke-linecap="round" />
+    <path d="M380 132 L132 380" stroke="#101A33" stroke-width="72" stroke-linecap="round" />
+  </g>
+
+  <!-- Lớp 2: thân X, gradient theo từng nhánh -->
+  <path d="M132 132 L380 380" stroke="url(#lxX)" stroke-width="72" stroke-linecap="round" />
+  <path d="M380 132 L132 380" stroke="url(#lxX2)" stroke-width="72" stroke-linecap="round" />
+
+  <!--
+    Lớp 3: highlight mảnh dọc theo mép trên-của X, tạo cảm giác mặt trên bắt
+    sáng. Dùng cắt chéo mảnh, không phủ lên giữa nên mũi tên vẫn nổi rõ.
+  -->
+  <path
+    d="M132 116 L380 364"
+    stroke="url(#lxShine)"
+    stroke-width="14"
+    stroke-linecap="round"
+    opacity="0.7"
+  />
+  <path
+    d="M380 116 L132 364"
+    stroke="url(#lxShine)"
+    stroke-width="10"
+    stroke-linecap="round"
+    opacity="0.45"
+  />
+
+  <!--
+    Lớp 4: mũi tên trắng ở giữa — yếu tố nhận diện chính của LearnX AI
+    ("học cùng AI, không chỉ hỏi AI": mũi tên = tiến về phía trước).
+    Vẽ SAU cùng X để luôn nằm trên, không bị X cắt mất ở mọi kích thước.
+  -->
+  <g>
+    <!-- thân mũi tên -->
+    <path
+      d="M188 300 L262 226 L214 214 L300 128 L292 214 L320 202 Z"
+      fill="url(#lxArrow)"
+    />
+  </g>
+
+  <!-- Lớp 5: sparkle nhỏ góc dưới-phải (chi tiết nhận diện phụ) -->
+  <path
+    d="M392 372
+       C398 392, 404 398, 424 404
+       C404 410, 398 416, 392 436
+       C386 416, 380 410, 360 404
+       C380 398, 386 392, 392 372 Z"
+    fill="#FFFFFF"
+    opacity="0.9"
+  />
+</svg>

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density|fontScale"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- DEEP LINK — mở app bằng learnx://<đường-dẫn>
+                 `android:host="*"` là BẮT BUỘC: Android khớp intent-filter theo CẢ
+                 scheme lẫn host. Ghim host cụ thể (vd "app") sẽ chỉ mở được learnx://app/...
+                 còn learnx://roadmap/123 — dạng link người dùng thật sự chia sẻ — sẽ không
+                 khớp và Android báo "không tìm thấy ứng dụng nào".
+                 URL được xử lý ở web: src/lib/native/deepLinks.ts. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="learnx" android:host="*" />
+            </intent-filter>
+
+            <!--
+                GOOGLE LOGIN.
+                Bắt buộc khai báo <queries> bên dưới từ Android 11 (API 30):
+                theo mặc định app không "nhìn thấy" package khác, nên
+                AccountManager.findAccountsByType() của Auth.js sẽ trả về
+                rỗng và Google OAuth im lặng thất bại. Cần cả intent-filter
+                cho gservice để truy cập chọn tài khoản.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.google.android.gms.auth" />
+            </intent-filter>
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+    </application>
+
+    <!-- Permissions -->
+
+    <!-- Gọi API LearnX (server của chính app), bắt buộc. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Xem trạng thái mạng để hiện "Bạn đang offline". -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+        CAMERA — CỐ Ý KHÔNG KHAI BÁO Ở ĐÂY.
+        Upload tài liệu hiện dùng <input type="file"> nên WebView tự mở file
+        picker của hệ thống, không cần quyền nào. LearnX chưa có OCR ảnh
+        (xem src/lib/documents/extractText.ts), nên xin quyền camera lúc này
+        là xin quyền thừa. Khi thật sự làm tính năng chụp ảnh bài toán thì
+        thêm CAMERA + FileProvider ở đây (đã có sẵn provider ở trên).
+    -->
+</manifest>

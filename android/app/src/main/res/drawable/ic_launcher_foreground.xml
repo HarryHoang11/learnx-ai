@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Icon LearnX AI — vector drawable của BRAND MARK CHÍNH THỨC.
+
+  ĐỒNG BỘ VỚI WEB: cùng một hình học với public/brand/learnx-mark.svg
+  (chữ X gradient + mũi tên trắng). Không tự vẽ riêng: đổi logo ở
+  public/brand/ thì script scripts/generate-android-icons.mjs sinh lại PNG,
+  còn vector drawable này cập nhật cùng lúc.
+
+  Canvas 108x108 là chuẩn adaptive icon. Launcher cắt bo/mask theo hình
+  dạng thiết bị nên mark PHẢI nằm trọn trong vùng an toàn 66x66 giữa canvas
+  (tức 21..87) — tràn ra ngoài là mất nét trên launcher tròn, vuông và
+  "squircle".
+
+  VÌ SAO DÙNG FILL CHỨ KHÔNG DÙNG STROKE: Android vector drawable không hỗ trợ
+  `stroke-*` trên <path> (đó là cú pháp SVG). Chữ X vì thế được vẽ bằng
+  polygon 12 điểm đóng kín, và mũi tên là một polygon riêng vẽ SAU để luôn
+  nằm trên X ở mọi kích thước.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!--
+      Chữ X: polygon 12 điểm, dày vừa để rõ ở 48px mà không bị đặc.
+      Gradient khớp token màu của web (globals.css): indigo -> cyan.
+    -->
+    <path android:pathData="M41,39 L48.5,39 L54,48 L59.5,39 L67,39 L57.5,53 L67,67 L59.5,67 L54,58.5 L48.5,67 L41,67 L50.5,53 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="41" android:startY="39"
+                android:endX="67" android:endY="67"
+                android:type="linear">
+                <item android:offset="0" android:color="#FF6E7FE4" />
+                <item android:offset="1" android:color="#FF45D9E9" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!--
+      Mũi tên trắng ở giữa — yếu tố nhận diện chính của LearnX AI
+      ("học cùng AI": mũi tên = tiến về phía trước).
+      Toạ độ quy đổi từ public/brand/learnx-mark.svg theo cùng tỉ lệ.
+    -->
+    <path
+        android:pathData="M43,61 L55,49 L47,47 L61,33 L60,47 L64,45 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <!--
+      Sparkle nhỏ góc dưới-phải. Phóng to so với bản web (512) vì ở 48px
+      launcher, chi tiết nhỏ hơn ~8px sẽ biến thành nhiễm pixel — bỏ chi tiết
+      không đọc được còn hơn làm icon nhoè.
+    -->
+    <path
+        android:pathData="M74,68 L77,73 L82,76 L77,79 L74,84 L71,79 L66,76 L71,73 Z"
+        android:fillColor="#FFFFFFFF"
+        android:fillAlpha="0.9" />
+</vector>

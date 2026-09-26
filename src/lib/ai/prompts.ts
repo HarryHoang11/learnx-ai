@@ -11,6 +11,7 @@
 // ================================================================
 
 import type { Difficulty } from "@/types";
+import { withSubject, type QuestionType } from "@/lib/subjects/engine";
 
 // Quy ước xuất công thức toán — UI render bằng KaTeX nên AI PHẢI ra
 // LaTeX với đúng delimiters này (không dùng $ đơn lẻ, không chèn
@@ -114,12 +115,57 @@ Hãy tạo 3 câu hỏi gợi ý phù hợp nhất cho học sinh này.`,
 // vì bản chất đều là "sinh 1 câu hỏi trắc nghiệm theo (subject, topic,
 // difficulty)" — tách thành prompt riêng để 2 service không tự viết
 // prompt trùng lặp nhau.
+export interface QuestionGenContext {
+  /** Loại câu hỏi mong muốn. Bỏ trống = lấy loại mặc định của môn. */
+  questionType?: QuestionType;
+  /** Trình độ để AI không đoán mò (vd "lớp 11", "năm 2 đại học"). */
+  gradeLevel?: string;
+  /** Mastery hiện tại của học sinh ở chủ đề này (0..1) để AI nhắm đúng độ khó. */
+  mastery?: number;
+}
+
+/**
+ * Sinh prompt trắc nghiệm theo (subject, topic, difficulty).
+ *
+ * SUBJECT-AWARE: mọi prompt đều đi qua đây và nhận thêm ngữ cảnh môn từ
+ * `lib/subjects/engine.ts` — nên prompt Toán khác prompt Tin học, nhưng CHUNG
+ * một AI Router (không tạo provider riêng cho từng môn).
+ *
+ * `context` là tham số TUỲ CHỌN có default: mọi call site cũ gọi dạng
+ * `buildQuestionGenPrompt(subject, topic, difficulty)` vẫn chạy đúng, không phải
+ * sửa hàng loạt. Đó là lý do không bắt buộc tham số này.
+ */
 export function buildQuestionGenPrompt(
   subject: string,
   topic: string,
   difficulty: Difficulty,
-  sourceContext?: string
+  sourceContext?: string,
+  context?: QuestionGenContext,
 ): { system: string; user: string } {
+  const engine = withSubject(subject);
+  const questionType = context?.questionType ?? engine.questionTypes[0] ?? "CONCEPT";
+
+  // Chỉ bật quy ước toán cho môn thật sự cần — bật cho mọi môn sẽ ép AI viết
+  // \(x\) trong câu hỏi tiếng Anh, vừa vô nghĩa vừa tốn token.
+  const formatRule = engine.usesMathNotation ? MATH_FORMAT_RULE : "";
+
+  // Ngữ cảnh hồ sơ: chỉ đưa vào prompt khi CÓ dữ liệu thật. Không bịa
+  // "mastery 0.5" cho học sinh chưa từng làm bài — thiếu thì nói rõ là chưa có.
+  const profileLines: string[] = [];
+  if (context?.gradeLevel) {
+    profileLines.push(`Trình độ người học: ${context.gradeLevel}.`);
+  }
+  if (typeof context?.mastery === "number") {
+    const percent = Math.round(context.mastery * 100);
+    const note =
+      percent < 50
+        ? "người học còn yếu, nên câu hỏi nên dạy dỗi chứ không chỉ kiểm tra"
+        : percent < 80
+          ? "người học nắm khá, cần bài vận dụng chứ không chỉ hỏi định nghĩa"
+          : "người học đã vững, cần bài mở rộng hoặc liên hợp nâng cao";
+    profileLines.push(`Mức độ nắm chủ đề này: ${percent}% — ${note}.`);
+  }
+
   return {
     system: `Bạn là hệ thống sinh câu hỏi trắc nghiệm cho nền tảng học tập LearnX.
 LUÔN trả về JSON THUẦN theo đúng schema sau, KHÔNG kèm markdown, KHÔNG giải thích thêm:
@@ -129,9 +175,11 @@ LUÔN trả về JSON THUẦN theo đúng schema sau, KHÔNG kèm markdown, KHÔ
   "correctIndex": 0,
   "explanation": "giải thích ngắn gọn (1-3 câu) vì sao đáp án đúng là đúng, chỉ ra lỗi sai thường gặp nếu có"
 }
-` + MATH_FORMAT_RULE,
+` + formatRule,
     user: `Sinh 1 câu hỏi trắc nghiệm 4 đáp án, môn "${subject}", chủ đề "${topic}",
-độ khó "${difficulty}". Câu hỏi phải phù hợp trình độ học sinh phổ thông Việt Nam.
+độ khó "${difficulty}", LOẠI CÂU HỎI "${questionType}". Câu hỏi phải phù hợp trình độ học sinh phổ thông Việt Nam.
+${engine.promptGuidance ? `\nYÊU CẦU RIÊNG CHO MÔN NÀY:\n${engine.promptGuidance}` : ""}
+${profileLines.length ? `\nHỒ SƠ NGƯỜI HỌC:\n${profileLines.join("\n")}` : ""}
 "explanation" phải giúp học sinh hiểu được BẢN CHẤT lỗi sai điển hình cho chủ đề này (vd nhầm dấu, sai công thức, hiểu sai khái niệm) để dùng cho tính năng phân tích lỗi sai.
 ${sourceContext ? `Chỉ sử dụng kiến thức trong nguồn sau và bám sát nội dung nguồn:\n${sourceContext.slice(0, 18_000)}` : ""}`,
   };
@@ -144,7 +192,7 @@ export function buildRoadmapPrompt(
   goalTitle: string,
   targetMonths: number,
   weakTopics: string[],
-  context?: { subject?: string | null; targetOutcome?: string | null }
+  context?: { subject?: string | null; targetOutcome?: string | null; profileHint?: string }
 ): { system: string; user: string } {
   return {
     system: `Bạn là AI thiết kế lộ trình học cho nền tảng LearnX.
@@ -158,9 +206,12 @@ Không kèm giải thích, không markdown.`,
 ${context?.subject ? `Môn/lĩnh vực: "${context.subject}".` : ""}
 ${context?.targetOutcome ? `Kết quả mong muốn: "${context.targetOutcome}".` : ""}
 Các kiến thức học sinh đang YẾU cần ưu tiên ôn trước: ${weakTopics.join(", ") || "chưa có dữ liệu"}.
+${context?.profileHint ?? ""}
 Hãy chia lộ trình theo từng tháng, tháng đầu ưu tiên củng cố nền tảng/điểm yếu
-trước khi sang kiến thức nâng cao. Nội dung phải bám sát môn/lĩnh vực và kết quả mong muốn,
-không tạo một lộ trình chung chung cho mọi mục tiêu.`,
+trước khi sang kiến thức nâng cao. Nội dung phải bám sát môn/lĩnh vực và kết quả
+mong muốn, cũng phải bám sát hồ sơ học sinh ở trên (đặc biệt là thời gian học
+mỗi ngày và mức độ hiện tại), không tạo một lộ trình chung chung cho mọi
+mục tiêu.`,
   };
 }
 

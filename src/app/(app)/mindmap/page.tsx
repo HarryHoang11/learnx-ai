@@ -18,8 +18,10 @@ import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
 import EmptyState from "@/components/ui/EmptyState";
 import Skeleton from "@/components/ui/Skeleton";
+import BottomSheet from "@/components/ui/BottomSheet";
 import { useToast } from "@/components/ui/Toast";
 import { useLanguage } from "@/components/providers/LanguageProvider";
+import { useIsMobile } from "@/lib/hooks/useMediaQuery";
 import MindMapExportModal from "@/components/mindmap/MindMapExportModal";
 import { computeLayout, getEdgePath, GRAPH_PADDING, type PositionedNode } from "@/lib/mindmap/layout";
 import {
@@ -93,6 +95,12 @@ function MindMapPageInner() {
   const searchParams = useSearchParams();
   const { push } = useToast();
   const id = searchParams?.get("id") ?? null;
+  // Màn hình hẹp: bảng "Chi tiết node" không còn là cột bên cạnh canvas (canvas
+  // cần nguyên chiều ngang để kéo/pinch) mà nhảy lên thành BOTTOM SHEET bấm
+  // từ dưới lên — đúng cách app native hiện chi tiết 1 item. Desktop giữ
+  // nguyên bố cục cột như cũ.
+  const isMobile = useIsMobile();
+  const [nodeSheetOpen, setNodeSheetOpen] = useState(false);
 
   const [list, setList] = useState<MindMapRecord[] | null>(null);
   const [record, setRecord] = useState<MindMapRecord | null>(null);
@@ -328,6 +336,23 @@ function MindMapPageInner() {
     });
   }
 
+  /**
+   * Chọn 1 node.
+   *
+   * `openSheet` chỉ bật khi chạm node KIỂU BẤM (onClick / bàn phím), KHÔNG bật
+   * ở pointerdown: pointerdown là đầu mỗi thao tác KÉO node, mở sheet ngay
+   * tại đó sẽ che mất node đang kéo và hủy luôn cú kéo. Sau một cú kéo, trình
+   * duyệt không bắn click nên sheet không mở — đúng như mong muốn.
+   *
+   * Vì sao cần mở sheet: bảng chi tiết không nằm cạnh canvas ở mobile nữa,
+   * nếu bấm node chỉ tô sáng viền mà không hiện gì để xem thì thao tác bấm
+   * trên canvas trở nên vô nghĩa.
+   */
+  function selectNode(nodeId: string, openSheet = true) {
+    setSelectedId(nodeId);
+    if (isMobile && openSheet) setNodeSheetOpen(true);
+  }
+
   function markDirty(next: MindNode[]) {
     setNodes(next);
     setDirty(true);
@@ -347,7 +372,10 @@ function MindMapPageInner() {
     if (!selected) return;
     const childId = `n-${Date.now()}`;
     markDirty([...nodes, { id: childId, label: t("mm.newNode"), parentId: selected.id, type: "detail" }]);
-    setSelectedId(childId);
+    // selectNode (không phải setSelectedId) để trên mobile sheet chi tiết mở
+    // lại đúng node vừa tạo — đặc biệt quan trọng sau khi người dùng đóng
+    // sheet, bấm "+ Node con" từ đâu đó không còn chỗ nào để sửa node mới.
+    selectNode(childId);
   }
 
   function deleteSelected() {
@@ -707,7 +735,10 @@ function MindMapPageInner() {
       start: { x: node.x - renderOffset.x, y: node.y - renderOffset.y },
     };
     event.currentTarget.setPointerCapture(event.pointerId);
-    setSelectedId(node.id);
+    // openSheet=false: đây là đầu thao tác KÉO node, mở sheet ở đây sẽ che
+    // node đang kéo. Sheet sẽ mở ở onClick nếu người dùng chỉ chạm mà không
+    // kéo. Xem selectNode().
+    selectNode(node.id, false);
   }
 
   function handleNodePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
@@ -754,11 +785,11 @@ function MindMapPageInner() {
         key={node.id}
         role="button"
         tabIndex={0}
-        onClick={() => setSelectedId(node.id)}
+        onClick={() => selectNode(node.id)}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            setSelectedId(node.id);
+            selectNode(node.id);
           }
         }}
         onPointerDown={(event) => handleNodePointerDown(event, node)}
@@ -824,6 +855,53 @@ function MindMapPageInner() {
           )}
         </div>
         {isHit && <span className="mindmap-node__match" aria-hidden="true">●</span>}
+      </div>
+    );
+  }
+
+  /**
+   * Form chi tiết node — dùng CHUNG cho 2 nơi: cột bên cạnh canvas (desktop)
+   * và bottom sheet (mobile). Tách ra 1 hàm để hai bố cục không lệch nhau sau
+   * này (trước đây form chỉ nằm trong Panel nên không tái dùng được).
+   * Chưa chọn node thì hiện dòng hướng dẫn thay vì form rỗng.
+   */
+  function renderNodeDetail() {
+    if (!selected) {
+      return <p style={{ color: "var(--mm-meta)", fontSize: 13.5 }}>{t("mm.pickNode")}</p>;
+    }
+    return (
+      <div>
+        <label className="form-label" htmlFor="mm-label">{t("mm.nodeName")}</label>
+        <input
+          id="mm-label"
+          className="form-input"
+          value={editLabel}
+          onChange={(e) => setEditLabel(e.target.value)}
+        />
+        <label className="form-label" htmlFor="mm-desc">{t("mm.nodeDesc")}</label>
+        <textarea
+          id="mm-desc"
+          className="form-textarea"
+          value={editDesc}
+          onChange={(e) => setEditDesc(e.target.value)}
+          rows={3}
+        />
+        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+          <button className="btn-primary" onClick={updateSelected} style={{ fontSize: 12.5 }}>
+            {t("mm.update")}
+          </button>
+          <button className="btn-secondary" onClick={addChild} style={{ fontSize: 12.5 }}>
+            {t("mm.addChild")}
+          </button>
+          <button className="btn-secondary" onClick={deleteSelected} style={{ fontSize: 12.5 }}>
+            {t("mm.delete")}
+          </button>
+        </div>
+        {selected.description && (
+          <p style={{ fontSize: 13, color: "var(--mm-desc)", marginTop: 12, lineHeight: 1.6 }}>
+            {selected.description}
+          </p>
+        )}
       </div>
     );
   }
@@ -1009,49 +1087,37 @@ function MindMapPageInner() {
               </div>
             )}
           </div>
-        </Panel>
-
-        <Panel className="mindmap-detail">
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{t("mm.nodeDetail")}</div>
-          {!selected ? (
-            <p style={{ color: "var(--mm-meta)", fontSize: 13.5 }}>{t("mm.pickNode")}</p>
-          ) : (
-            <div>
-              <label className="form-label" htmlFor="mm-label">{t("mm.nodeName")}</label>
-              <input
-                id="mm-label"
-                className="form-input"
-                value={editLabel}
-                onChange={(e) => setEditLabel(e.target.value)}
-              />
-              <label className="form-label" htmlFor="mm-desc">{t("mm.nodeDesc")}</label>
-              <textarea
-                id="mm-desc"
-                className="form-textarea"
-                value={editDesc}
-                onChange={(e) => setEditDesc(e.target.value)}
-                rows={3}
-              />
-              <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                <button className="btn-primary" onClick={updateSelected} style={{ fontSize: 12.5 }}>
-                  {t("mm.update")}
-                </button>
-                <button className="btn-secondary" onClick={addChild} style={{ fontSize: 12.5 }}>
-                  {t("mm.addChild")}
-                </button>
-                <button className="btn-secondary" onClick={deleteSelected} style={{ fontSize: 12.5 }}>
-                  {t("mm.delete")}
-                </button>
-              </div>
-              {selected.description && (
-                <p style={{ fontSize: 13, color: "var(--mm-desc)", marginTop: 12, lineHeight: 1.6 }}>
-                  {selected.description}
-                </p>
-              )}
-            </div>
+          {/* MOBILE: bảng "Chi tiết node" đã chuyển vào bottom sheet, nên nhắc
+              thao tác ngay dưới canvas — nếu không, người dùng bấm node thấy
+              sheet mở nhưng không có manh mối ban đầu để biết bấm được. */}
+          {isMobile && !selected && (
+            <p className="mindmap-mobile-hint">{t("mm.pickNode")}</p>
           )}
         </Panel>
+
+        {/* DESKTOP: bảng chi tiết là cột bên cạnh canvas. MOBILE: cột này bị
+            bỏ (xem bên dưới) và thay bằng BottomSheet — canvas cần nguyên
+            chiều ngang để kéo/pinch, cột 300px sẽ bóp mép node. */}
+        {!isMobile && (
+          <Panel className="mindmap-detail">
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{t("mm.nodeDetail")}</div>
+            {renderNodeDetail()}
+          </Panel>
+        )}
       </div>
+
+      {/* MOBILE: chi tiết node trong bottom sheet. Chỉ render khi có node được
+          chọn — mở sheet rỗng (chỉ dòng "bấm vào 1 node") thì vô nghĩa, người
+          dùng bấm nhầm vào nền sẽ thấy 1 sheet trống. */}
+      {isMobile && (
+        <BottomSheet
+          open={nodeSheetOpen && selected !== null}
+          onClose={() => setNodeSheetOpen(false)}
+          title={t("mm.nodeDetail")}
+        >
+          {renderNodeDetail()}
+        </BottomSheet>
+      )}
 
       <MindMapExportModal
         open={exportOpen}

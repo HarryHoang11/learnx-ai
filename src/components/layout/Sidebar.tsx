@@ -5,92 +5,23 @@
 // đang ở trang nào và tô sáng đúng mục nav. Nav khai báo theo nhóm
 // (Học tập / AI / Tiến độ / Cộng đồng / Tài nguyên / Tài khoản) để
 // sidebar dài 13 mục vẫn scan nhanh — thêm/bớt mục chỉ cần sửa mảng
-// NAV_GROUPS, không sửa JSX. Icon dùng lucide-react (ISC license,
-// vector đồng nhất, không vỡ font như emoji/glyph ký tự).
+// NAV_GROUPS trong ./navGroups (dùng chung với thanh nav mobile),
+// không sửa JSX. Icon dùng lucide-react (ISC license, vector đồng
+// nhất, không vỡ font như emoji/glyph ký tự).
 // ================================================================
 
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  BarChart3,
-  BookOpen,
-  Bot,
-  CalendarDays,
-  FlaskConical,
-  Flame,
-  Heart,
-  Home,
-  Library,
-  Network,
-  Route,
-  RotateCcw,
-  Sparkles,
-  Trophy,
-  User,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { Flame } from "lucide-react";
 import { useLanguage } from "@/components/providers/LanguageProvider";
-import type { I18nKey } from "@/lib/i18n/dictionary";
+import LearnXLogo from "@/components/brand/LearnXLogo";
+import { isActiveRoute } from "@/lib/nav/activeRoute";
+import { NAV_GROUPS } from "./navGroups";
 
-interface NavItem {
-  href: string;
-  labelKey: I18nKey;
-  icon: LucideIcon;
-}
-
-interface NavGroup {
-  titleKey: I18nKey;
-  items: NavItem[];
-}
-
-// Chỉ gồm các route đã tồn tại — không đổi route vì lý do UI.
-const NAV_GROUPS: NavGroup[] = [
-  {
-    titleKey: "nav.groups.learn",
-    items: [
-      { href: "/dashboard", labelKey: "nav.dashboard", icon: Home },
-      { href: "/workspace", labelKey: "nav.workspace", icon: Network },
-      { href: "/review", labelKey: "nav.review", icon: RotateCcw },
-      { href: "/calendar", labelKey: "nav.calendar", icon: CalendarDays },
-      { href: "/roadmap", labelKey: "nav.roadmap", icon: Route },
-      { href: "/practice", labelKey: "nav.practice", icon: FlaskConical },
-    ],
-  },
-  {
-    titleKey: "nav.groups.ai",
-    items: [
-      { href: "/diagnostic", labelKey: "nav.diagnostic", icon: Sparkles },
-      { href: "/tutor", labelKey: "nav.tutor", icon: Bot },
-    ],
-  },
-  {
-    titleKey: "nav.groups.progress",
-    items: [{ href: "/progress", labelKey: "nav.progress", icon: BarChart3 }],
-  },
-  {
-    titleKey: "nav.groups.community",
-    items: [
-      { href: "/friends", labelKey: "nav.friends", icon: Heart },
-      { href: "/leaderboard", labelKey: "nav.leaderboard", icon: Trophy },
-      { href: "/community", labelKey: "nav.community", icon: Users },
-    ],
-  },
-  {
-    titleKey: "nav.groups.resources",
-    items: [
-      { href: "/library", labelKey: "nav.library", icon: Library },
-      { href: "/resources", labelKey: "nav.resources", icon: BookOpen },
-      { href: "/mindmap", labelKey: "nav.mindmap", icon: Network },
-    ],
-  },
-  {
-    titleKey: "nav.groups.account",
-    items: [{ href: "/profile", labelKey: "nav.profile", icon: User }],
-  },
-];
+// Dữ liệu các route (NAV_GROUPS) đã tách sang ./navGroups để MobileBottomNav
+// dùng CHUNG — thêm route mới chỉ sửa 1 file. Ở đây Sidebar chỉ vẽ cột + tô sáng.
 
 interface SidebarProps {
   // Mobile: sidebar là drawer overlay, cần biết đang mở/đóng và cách
@@ -118,10 +49,9 @@ export default function Sidebar({ open = false, onNavigate }: SidebarProps) {
           cursor: "pointer",
         }}
       >
-        <div className="sidebar-logo">X</div>
-        <div style={{ fontFamily: "var(--font-space-grotesk), sans-serif", fontWeight: 600, fontSize: 17 }}>
-          LearnX
-        </div>
+        {/* Logo + chữ "LearnX" — giữ nguyên nhận diện thương hiệu như trước,
+            chỉ thay phần "ô X" bằng brand mark thật. */}
+        <LearnXLogo size="sm" decorative />
       </Link>
 
       <nav style={{ display: "flex", flexDirection: "column", gap: 14 }} aria-label="Menu học tập">
@@ -130,7 +60,7 @@ export default function Sidebar({ open = false, onNavigate }: SidebarProps) {
             <div className="sidebar-group-title">{t(group.titleKey)}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               {group.items.map((item) => {
-                const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);
+                const active = isActiveRoute(pathname, item.href);
                 const Icon = item.icon;
                 return (
                   <Link

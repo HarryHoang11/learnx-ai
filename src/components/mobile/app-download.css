@@ -1,0 +1,189 @@
+/* ================================================================
+   KHỐI TẢI APP ANDROID — dùng chung (Welcome / Hồ sơ / Dashboard)
+   ================================================================
+
+   NGUYÊN TẮC BẤT BIẾN CỦA FILE NÀY:
+   Mỗi phần tử nằm trên DÒNG RIÊNG, trong normal flow. TUYỆT ĐỐI không dùng
+   position:absolute, margin-left:50% + translateX(-50%), white-space:nowrap,
+   hay chiều cao cố định cho khối này.
+
+   Lý do (đây chính là bug đã gặp): bản cũ xếp "QR | chữ | 2 nút" thành MỘT
+   hàng nowrap và dùng kỹ thuật breakout 780px để "chen ra ngoài" khung cha.
+     - Chữ bị ép nowrap trong hộp co lại -> tràn ra ngoài hộp -> ĐÈ LÊN 2 nút.
+     - Breakout chỉ đúng khi cha rộng = viewport; tái dùng trong khung 620px
+       (màn hồ sơ) thì thẻ rộng hơn cha và bị đẩy lệch, tràn 2 mép rồi bị
+       overflow-x:hidden của màn hình cắt mất.
+   Cột dọc loại bỏ cả 2 lỗi vì không còn khái niệm "chen ngang" nữa.
+
+   Mọi kích thước dùng min-height (>= 44px theo chuẩn vùng chạm) chứ không dùng
+   height — nhãn dài ở tiếng Đức/Nhật sẽ không bị cắt.
+   ================================================================ */
+
+.app-dl {
+  /* Cột dọc: mọi khối là 1 hàng, không bao giờ tranh chỗ ngang với nhau. */
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+
+  /* Tự co trong khung cha, không bao giờ rộng hơn nó. `min(100%, 340px)` thay
+     cho `width: min(780px, 100vw - 32px)` + translate của bản cũ. */
+  width: 100%;
+  max-width: 340px;
+  margin-inline: auto;
+
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(201, 211, 255, 0.1);
+  background: rgba(18, 25, 43, 0.6);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  text-align: center;
+
+  /* Chữ dài không được tràn ngang ra ngoài thẻ. */
+  overflow-wrap: anywhere;
+}
+
+.app-dl--compact {
+  max-width: 280px;
+  padding: 14px;
+  gap: 10px;
+}
+
+.app-dl__title {
+  margin: 0;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f5f7ff;
+  line-height: 1.35;
+}
+
+.app-dl__desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #94a0b8;
+}
+
+/* ---- QR ---- */
+
+.app-dl__qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(11, 17, 32, 0.72);
+  border: 1px solid rgba(201, 211, 255, 0.1);
+  /* Không `flex: none` kiểu bản cũ — ở đây QR là 1 hàng riêng, co lại theo
+     chiều rộng khối cha nên mobile nhỏ vẫn không tràn. */
+  max-width: 100%;
+  align-self: center;
+}
+
+.app-dl__qr-placeholder {
+  display: block;
+  border-radius: 8px;
+  /* Đúng bằng kích thước QR thật để không nhảy layout khi QR dựng lên. */
+  background: rgba(245, 247, 255, 0.06);
+}
+
+.app-dl__qr-hint {
+  font-size: 10.5px;
+  line-height: 1.4;
+  text-align: center;
+  color: #94a0b8;
+  max-width: 130px;
+}
+
+/* ---- Nút ---- */
+
+/* Vùng chạm >= 44px cho cả 2 nút ở MỌI kích thước — bấm trượt ở nút tải
+   app là trải nghiệm tệ nhất của luồng này. */
+.app-dl__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-family: var(--font-inter), sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  /* Nhãn dài xuống dòng thay vì tràn ra ngoài nút. */
+  overflow-wrap: anywhere;
+  touch-action: manipulation;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.app-dl__btn--primary {
+  color: #070b16;
+  background: linear-gradient(135deg, #7775ff, #45d9e9);
+}
+
+.app-dl__btn--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(119, 117, 255, 0.32);
+}
+
+/* Nút "đang tải" — quay icon, dùng lại @keyframes spin sẵn có trong globals.css
+   thay vì định nghĩa animation thứ hai cho cùng một việc. */
+.app-dl__spin {
+  animation: spin 900ms linear infinite;
+}
+
+.app-dl__btn--primary[aria-disabled="true"] {
+  /* Nút hỏng vẫn phải NHÌN THẤY là không dùng được, không giả vờ bấm được. */
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* "Tiếp tục trên web" — nhẹ hơn hẳn nút tải để không cạnh tranh sự chú ý. */
+.app-dl__btn--ghost {
+  color: #b9c2d8;
+  background: rgba(201, 211, 255, 0.06);
+  border: 1px solid rgba(201, 211, 255, 0.12);
+}
+
+.app-dl__btn--ghost:hover {
+  color: #f5f7ff;
+  background: rgba(201, 211, 255, 0.11);
+}
+
+.app-dl__btn:focus-visible {
+  outline: 2px solid #45d9e9;
+  outline-offset: 2px;
+}
+
+.app-dl__warn {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ffd9a8;
+  background: rgba(255, 193, 87, 0.1);
+  border: 1px solid rgba(255, 193, 87, 0.25);
+}
+
+/* Người dùng giảm chuyển động: bỏ hẳn hiệu ứng nâng nút, không phải chỉ rút
+   thời gian — chuyển động toàn phần cảu thì tắt luôn. */
+@media (prefers-reduced-motion: reduce) {
+  .app-dl__btn {
+    transition: none;
+  }
+
+  .app-dl__btn--primary:hover {
+    transform: none;
+  }
+}

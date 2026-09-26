@@ -247,6 +247,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (trigger === "update" && session?.user?.image !== undefined) {
         token.picture = session.user.image;
       }
+      // Nhét onboardingStatus vào JWT để proxy.ts điều hướng user mới sang
+      // /welcome MÀ KHÔNG cần query DB trên mỗi request.
+      //
+      // Vì sao đưa vào JWT thay vì đọc cookie: cookie do client tự set có thể
+      // bị sửa, còn JWT đã ký bằng AUTH_SECRET nên không giả mạo được — user
+      // tự sửa cookie "đã xem Welcome" sẽ bị bỏ qua.
+      //
+      // Nguồn sự thật vẫn là DB: client gọi useSession().update(...) sau khi
+      // đổi trạng thái nên token được làm mới (xem session callback bên dưới).
+      if (user?.id) {
+        const fresh = await prisma.user
+          .findUnique({
+            where: { id: user.id },
+            // `learningProfile` chỉ đọc 1 field JSON để suy ra cờ
+            // surveyDecidedAt — KHÔNG query DB mỗi request (chỉ lúc login).
+            select: { onboardingStatus: true, learningProfile: true },
+          })
+          .catch(() => null);
+        if (fresh) {
+          token.onboardingStatus = fresh.onboardingStatus;
+          const profile = fresh.learningProfile as { surveyDecidedAt?: string } | null;
+          token.surveyDecidedAt = profile?.surveyDecidedAt ?? null;
+        }
+      }
+      if (trigger === "update" && (session?.user as { onboardingStatus?: string } | undefined)?.onboardingStatus) {
+        token.onboardingStatus = (session!.user as { onboardingStatus: string }).onboardingStatus;
+      }
       return token;
     },
     // Đưa userId từ token vào session.user.id — đây là field mà MỌI
@@ -256,6 +283,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (session.user && token.userId) {
         session.user.id = token.userId as string;
+        // Trạng thái onboarding đi kèm session để client (Welcome, Setup,
+        // Dashboard) biết user có cần thấy empty state hay không.
+        if (token.onboardingStatus) {
+          (session.user as { onboardingStatus?: string }).onboardingStatus = token.onboardingStatus as string;
+        }
+        // Cờ chốt khảo sát: proxy dùng để quyết định có nhắc người dùng ở
+        // các trang học chính hay không. Nguồn sự thật vẫn là DB; đây là cache.
+        if (token.surveyDecidedAt) {
+          (session.user as { surveyDecidedAt?: string | null }).surveyDecidedAt =
+            token.surveyDecidedAt as string;
+        }
       }
       return session;
     },

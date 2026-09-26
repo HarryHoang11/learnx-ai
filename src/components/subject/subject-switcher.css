@@ -1,0 +1,86 @@
+/* ================================================================
+   SUBJECT SWITCHER — chuyển môn, dùng chung
+   ================================================================
+   Mục tiêu thiết kế: trông như MỘT sản phẩm dù đổi môn. Vì vậy KHÔNG tô màu
+   khác nhau theo môn (§32) — chỉ dùng token sẵn có của LearnX. Mỗi môn khác
+   nhau ở icon + nhãn, đúng như brand yêu cầu.
+
+   Mobile: cuộn NGANG (overflow-x) thay vì xuống dòng. Lý do: 9 môn xuống d��ng
+   chiếm ~9 dòng = 200px chiếm mất màn hình học tập. Cuộn ngang giữ đúng 1 hàng
+   ~44px. Vuốt ngang là thao tác tự nhiên trên điện thoại, và `scroll-snap` cho
+   cảm giác "bật" từng môn. */
+.subject-switcher {
+  width: 100%;
+  /* Ẩn thanh cuộn: giữ vùng cuộn nhưng không để UI rối mắt. */
+  scrollbar-width: none;
+}
+
+.subject-switcher::-webkit-scrollbar {
+  display: none;
+}
+
+.subject-switcher__list {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 2px;
+  list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.subject-switcher__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  /* Vùng chạm >= 44px ở MỌI kích thước — bấm trượt khi chuyển môn rất dễ
+     xảy ra trên điện thoại. */
+  min-height: 44px;
+  padding: 0 14px;
+  white-space: nowrap;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  scroll-snap-align: start;
+  touch-action: manipulation;
+  transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease;
+}
+
+.subject-switcher__item:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.subject-switcher__item.is-active {
+  color: var(--text);
+  background: var(--indigo-soft);
+  border-color: rgba(124, 108, 240, 0.45);
+  font-weight: 600;
+}
+
+.subject-switcher__item:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.subject-switcher__icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.subject-switcher__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subject-switcher__item {
+    transition: none;
+  }
+}

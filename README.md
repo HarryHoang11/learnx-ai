@@ -585,8 +585,8 @@ runtime (route cần Node đã khai báo `export const runtime = "nodejs"`, ví 
   (`eslint.config.mjs`), còn repo đang dùng ESLint 8 + `.eslintrc.json`. `npm run lint` hiện chạy được (0 error,
   chỉ warning `react-hooks/exhaustive-deps` và `@next/next/no-img-element`), và Next 16 **không** chạy ESLint trong
   `next build` nên không ảnh hưởng deploy. Nâng cấp cần một đợt migrate cấu hình lint riêng.
-- `lib/storage/localUpload.ts` là code cũ (ghi ra `public/uploads/`) **không còn được import** — ảnh đã chuyển sang
-  lưu DB (`lib/storage/dbUpload.ts` + `/api/profile/photo/[type]`).
+- `lib/storage/localUpload.ts` (code cũ ghi ảnh ra `public/uploads/`) **đã bị xoá** ở đợt dọn dead code —
+  ảnh lưu trong DB qua `lib/storage/dbUpload.ts` + `/api/profile/photo/[type]`.
 - Trang `/mindmap` chưa có chức năng **Import**: JSON export đã chứa đủ `nodes`/`edges`/`parentId` để xây dựng
   tính năng này sau (dùng `parseMindMapData()` trong `lib/mindmap/graph.ts` để validate).
 - Các tác vụ nặng (OCR, xử lý tài liệu dài) vẫn chạy inline trong request; hàng đợi (BullMQ) chỉ là ghi chú TODO.

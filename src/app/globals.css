@@ -78,6 +78,28 @@
   /* Typography tokens — code/math dùng stack riêng, không để mỗi
      component tự chọn font (tránh chữ vỡ, icon ô vuông). */
   --font-code: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* ---- Safe area + thanh nav dưới (mobile) ----
+     env() đọc vùng an toàn của thiết bị (iPhone có notch / thanh home
+     indicator). Bọc trong biến để mọi chỗ chỉ cần `var(--safe-bottom)`,
+     không lặp lại cú pháp env() rườm rà. Fallback 0px cho trình duyệt
+     desktop (nơi env() không tồn tại) — nếu không có fallback, toàn bộ
+     phép tính padding phía dưới sẽ vô hiệu và nội dung dính sát mép. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --bottom-nav-height: 58px;
+  /* Tổng "chiều cao bị chiếm" ở đáy màn hình khi có thanh nav dưới —
+     dùng cho padding-bottom của trang và cho nút nổi, để không đè lên nhau. */
+  --bottom-nav-offset: calc(var(--bottom-nav-height) + var(--safe-bottom));
+
+  /* ---- Floating action stack (góc phải dưới) ----
+     Kích thước & khoảng cách nằm ở biến để App Download bubble tự đứng đúng
+     chỗ phía TRÊN AI Assistant mà không phải hard-code số px ở 2 nơi.
+     Đổi kích thước 1 nút -> cả cục tự dịch, không bao giờ đè nhau. */
+  --fab-size: 56px;        /* AI Assistant (ưu tiên cao nhất) */
+  --fab-app-size: 52px;    /* App Download (thứ cấp) */
+  --fab-gap: 14px;         /* khoảng cách giữa 2 bubble */
+  --fab-edge: 22px;        /* lề từ mép màn hình (desktop) */
+  --fab-edge-mobile: 16px; /* lề từ mép màn hình (mobile) */
 }
 
 /* ================================================================
@@ -190,8 +212,11 @@ h3 {
 }
 
 @media (max-width: 880px) {
+  /* Padding-bottom phải chừa đúng bằng chiều cao thanh nav dưới, nếu không
+     nút "Lưu"/nội dung cuối của trang sẽ nằm DƯỚI thanh nav và không bấm
+     được. offset đã gộp sẵn cả safe-area nên không cần cộng tay ở đây. */
   .main-content {
-    padding: 20px;
+    padding: 20px 16px calc(var(--bottom-nav-offset) + 12px);
   }
 }
 
@@ -354,9 +379,205 @@ h3 {
 }
 
 /* ================================================================
-   GRID UTILITIES — thay cho gridTemplateColumns hard-code inline,
-   để có thể @media override (inline style KHÔNG thể dùng media query).
+   MOBILE NAVIGATION — thanh điều hướng dưới + sheet trượt lên
+   Mạch tư duy: Ở DESKTOP cả khối này bị ẩn hoàn toàn (Sidebar cột bên
+   là nguồn nav), chỉ bật trong @media 880px bên dưới. Khai báo "mặc định
+   ẩn" thay vì "mặc định hiện rồi ẩn ở media query" để một thẻ cấu hình
+   sai (render ngoài AppShell) cũng không phá bố cục desktop.
    ================================================================ */
+.mobile-bottom-nav {
+  display: none;
+}
+
+.bottom-sheet-backdrop {
+  display: none;
+}
+
+@media (max-width: 880px) {
+  /* ---- Thanh nav dưới ---- */
+  .mobile-bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 45;
+    display: flex;
+    align-items: stretch;
+    /* safe-area-bottom nằm TRONG padding của thanh: nội dung ô bấm luôn
+       cách home indicator, còn thanh phủ trọn vùng an toàn (native app
+       làm vậy) nên không hở nền ở iPhone. */
+    padding-bottom: var(--safe-bottom);
+    /* 2 dòng background: dòng trên là nền đục dự phòng cho trình duyệt cũ
+       chưa hỗ trợ color-mix (thiếu thì nền trong suốt và nội dung trang lọt
+       qua thanh nav), dòng dưới là nền kính mờ cho trình duyệt hiện đại. */
+    background: var(--surface-elevated);
+    background: color-mix(in srgb, var(--surface-elevated) 88%, transparent);
+    backdrop-filter: blur(18px);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.28);
+  }
+
+  .mobile-bottom-nav__item {
+    /* 5 ô đều nhau: flex:1 + min-width:0 để ô nào cũng không bị bóp méo
+       khi nhãn dài (vd "AI Gia sư"). min-height 56px là vùng chạm tối
+       thiểu 44px của cả iOS lẫn Android, có dư cho ngón tay. */
+    flex: 1;
+    min-width: 0;
+    min-height: 56px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 2px;
+    border: 0;
+    background: transparent;
+    color: var(--text-faint);
+    font-family: var(--font-inter), sans-serif;
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 1.1;
+    text-decoration: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 150ms ease;
+  }
+
+  .mobile-bottom-nav__item > span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-bottom-nav__item--active {
+    color: var(--indigo-strong);
+  }
+
+  /* Vạch nhỏ dưới ô đang chọn — nhận biết nhanh như app native, khác hẳn
+     kiểu chỉ đổi màu chữ (dễ bỏ sót khi mắt đang ở chỗ khác). */
+  .mobile-bottom-nav__item--active::after {
+    content: "";
+    display: block;
+    width: 22px;
+    height: 3px;
+    margin-top: 2px;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--indigo), var(--cyan));
+  }
+
+  .mobile-bottom-nav__item:focus-visible {
+    outline: 2px solid var(--cyan);
+    outline-offset: -2px;
+    border-radius: 10px;
+  }
+
+  /* ---- Ô gõ của AI Gia sư: dính đáy, nhấc lên trên thanh nav ---- */
+  .tutor-composer {
+    position: sticky;
+    bottom: calc(var(--bottom-nav-offset) + 8px);
+    z-index: 5;
+    /* Nền + viền riêng: composer trôi qua nội dung chat nên cần nền đục,
+       nếu không chữ chat sẽ hiện xuyên qua ô nhập khi đang cuộn. */
+    padding: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border-soft);
+    border-radius: 14px;
+  }
+
+  .tutor-composer input {
+    /* 16px: iOS TỰ phóng to toàn trang khi focus vào input có cỡ chữ < 16px —
+       bàn phím mở lên là trang "nhảy", rất khó chịu trên iPhone. */
+    font-size: 16px;
+  }
+
+  /* ---- Bottom sheet (menu "Thêm", chi tiết node...) ---- */
+  .bottom-sheet-backdrop {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    align-items: flex-end;
+    justify-content: center;
+    /* Nền mờ nhẹ hơn .modal-backdrop (0.75) vì sheet đã nổi hẳn ở đáy và
+       nền chỉ còn vai trò chặn tương tác — nền quá đậm khiến người dùng
+       tưởng màn hình đã đóng. */
+    background: rgba(4, 7, 12, 0.55);
+    backdrop-filter: blur(6px);
+    animation: modal-bg-fade 0.2s ease forwards;
+  }
+
+  .bottom-sheet {
+    position: relative;
+    width: 100%;
+    max-width: 560px;
+    max-height: 88dvh;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface-elevated);
+    border: 1px solid var(--border);
+    /* Chỉ bo 2 góc trên — sheet bám đáy màn hình, bo góc dưới sẽ tách nó
+       khỏi mép màn hình và trông như modal giữa màn hình. */
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
+    /* Dịch chuyển theo ngón tay (transform inline khi kéo) — transition
+       chỉ chạy lúc mở/đóng, bị tắt trong lúc kéo (class .is-dragging) để
+       sheet bám ngón, không trễ 1 nhịp. */
+    transform: translateY(0);
+    transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: bottom-sheet-rise 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .bottom-sheet.is-dragging {
+    transition: none;
+    animation: none;
+  }
+
+  .bottom-sheet-handle {
+    /* touch-action: none ở đây là bắt buộc: mặc định trình duyệt sẽ
+       "chiếm" cử chỉ vuốt dọc để cuộn trang và gửi pointercancel, khiến
+       nhảy sheet giữa chừng. Ở đây ta cố ý giữ cử chỉ cho logic kéo. */
+    touch-action: none;
+    cursor: grab;
+    flex-shrink: 0;
+    padding: 10px 18px 8px;
+    text-align: center;
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  .bottom-sheet-handle:active {
+    cursor: grabbing;
+  }
+
+  .bottom-sheet-grip {
+    display: block;
+    width: 40px;
+    height: 4px;
+    margin: 0 auto;
+    border-radius: 99px;
+    background: var(--border-hover);
+  }
+
+  .bottom-sheet-title {
+    margin: 8px 0 2px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .bottom-sheet-body {
+    /* min-height:0 + flex:1 để phần thân cuộn được bên trong sheet thay vì
+       làm cả sheet tràn (bắt buộc với flex child có overflow). */
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px 16px calc(18px + var(--safe-bottom));
+  }
+}
+
 .grid-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1482,6 +1703,18 @@ h3 {
   flex-shrink: 0;
 }
 
+/* Nút đang chạy tác vụ và chứa .spinner-dot bên trong (vd nút "Bắt đầu
+   kiểm tra" -> "Đang chuẩn bị..."). .spinner-dot mặc định là inline-block
+   nên nếu không có rule này, khi có spinner nút sẽ lệch trái và đổi chiều
+   rộng -> nút "nhảy" đúng lúc user đang nhìn. display:inline-flex +
+   gap cố định giữ nút ổn định giữa hai trạng thái. */
+.btn-with-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
 .profile-info-panel {
   margin-top: 56px;
 }
@@ -1588,10 +1821,67 @@ h3 {
   }
 }
 
-/* --------- Floating AI button (góc phải dưới, mọi trang trong (app)) --------- */
+/* --------- Floating actions (góc phải dưới, mọi trang trong (app)) --------- */
+/*
+ * HỆ THỐNG MỚI: 1 wrapper `.floating-actions` là nguồn sự thật DUY NHẤT cho
+ * vị trí của mọi nút nổi. Trước đây mỗi nút tự `position: fixed` với toạ độ
+ * riêng — đó chính là cách 2 nút cùng góc dễ đè nhau, và mọi thay đổi vị trí
+ * phải sửa ở nhiều file.
+ *
+ * Nay: App Download bubble đứng TRÊN, AI Assistant đứng DƯỚI, cùng cột flex
+ * cách nhau `--fab-gap`. Không thể chồng theo cấu trúc, không phụ thuộc
+ * z-index (cả cục dùng MỘT z-index).
+ *
+ * Ưu tiên: AI Assistant là hành động nổi CHÍNH. App Download là hành động
+ * THỨ CẤP -> đứng phía trên nhưng nhỏ hơn, không cạnh tranh sự chú ý.
+ */
+.floating-actions {
+  position: fixed;
+  right: var(--fab-edge);
+  bottom: var(--fab-edge);
+  /* Cùng tầng với nút AI cũ (60): cao hơn bottom-nav (45) và sidebar
+     overlay (50) để không bị chúng phủ, nhưng THẤP hơn modal (100) để
+     modal vẫn mở đè lên được. */
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--fab-gap);
+  /* pointer-events: none để vùng container rộng (vì popup mở ra bên trái) không
+     chặn click của nội dung phía dưới; các phần tử con tự bật lại. */
+  pointer-events: none;
+}
+
+.floating-actions > * {
+  pointer-events: auto;
+}
+
+@media (max-width: 880px) {
+  .floating-actions {
+    right: var(--fab-edge-mobile);
+    /* offset = chiều cao thanh nav + safe-area + 12px. Thiếu phần này thì nút
+       bị thanh nav đè, không bấm được — lỗi hay gặp khi thêm thanh dưới. */
+    bottom: calc(var(--bottom-nav-offset) + 12px);
+  }
+}
+
+/* --------- AI Assistant (ưu tiên cao nhất — đứng đáy cột) --------- */
+/* Vị trí do `.floating-actions` lo; ở đây CHỈ còn hình dạng + hover. Nhờ vậy
+   đổi kích thước nút không phải chỉnh lại toạ độ của App Download bubble. */
+.floating-ai-button {
+  width: var(--fab-size);
+  height: var(--fab-size);
+  flex: none;
+}
+
 .floating-ai-button:hover {
   transform: translateY(-2px) scale(1.05);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.floating-ai-button:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
 }
 
 /* ================================================================
@@ -1933,27 +2223,8 @@ select:focus {
   outline-offset: 1px;
 }
 
-.sidebar-logo {
-  width: 32px;
-  height: 32px;
-  border-radius: 11px;
-  background: linear-gradient(135deg, var(--indigo), var(--cyan));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-space-grotesk), sans-serif;
-  font-weight: 700;
-  font-size: 15px;
-  color: var(--on-accent);
-  /* Bóng màu theo gradient thương hiệu (mockup) thay vì bóng đen —
-     logo trông "phát sáng" thay vì bị viền tối. */
-  box-shadow: 0 8px 25px rgba(124, 108, 240, 0.3);
-  transition: transform 150ms ease;
-}
-
-a:hover .sidebar-logo {
-  transform: scale(1.05);
-}
+/* Logo sidebar do <LearnXLogo /> render (không còn ô "X" trong ô bo góc).
+   Hiệu ứng hover nằm ở learnx-logo.css để mọi nơi dùng logo đều nhất quán. */
 
 /* --------- Topbar: sticky gọn --------- */
 .topbar {
@@ -1974,6 +2245,15 @@ a:hover .sidebar-logo {
   border-bottom: 1px solid var(--border-soft);
 }
 
+/* --------- Topbar trên mobile: chừa vùng an toàn phía trên --------- */
+@media (max-width: 880px) {
+  /* Topbar dán sát mép màn hình nên trên máy có notch/Dynamic Island, tiêu đề
+     và nút sẽ nằm DƯỚI notch. Vùng an toàn chỉ tồn tại ở mobile (desktop env()
+     trả 0) nên đặt trong media query cho rõ ý. */
+  .topbar {
+    padding-top: calc(10px + var(--safe-top));
+  }
+}
 /* --------- Page entrance: stagger nhẹ, không lạm dụng --------- */
 .page-enter .enter {
   opacity: 0;
@@ -2630,6 +2910,1280 @@ pre {
   to { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes bottom-sheet-rise {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* ================================================================
+   LEARNING ANALYTICS (/progress)
+   ================================================================
+   Mobile-first: metric cards cuộn NGANG thay vì xuống dòng (6 thẻ x 3 hàng
+   tạo thành 1 bức tường số, người dùng phải cuộn rất xa mới tới phần "làm gì
+   tiếp"). Trên desktop chuyển sang lưới cột.
+   ================================================================ */
+.analytics-header {
+  margin-bottom: 14px;
+}
+
+.analytics-header__sub {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.analytics-range {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.analytics-range::-webkit-scrollbar {
+  display: none;
+}
+
+.analytics-range__btn {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-dim);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.analytics-range__btn.is-active {
+  color: var(--text);
+  border-color: var(--indigo);
+  background: linear-gradient(90deg, rgba(124, 108, 240, 0.25), rgba(53, 208, 216, 0.08));
+}
+
+.analytics-body > section {
+  margin-bottom: 26px;
+}
+
+/* Làm mờ nhẹ khi đổi khoảng thời gian: báo "đang cập nhật" mà vẫn giữ
+   layout, không nhảy nháy. */
+.analytics-body.is-refreshing {
+  opacity: 0.6;
+  transition: opacity 150ms ease;
+}
+
+.analytics-section__title {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0 0 12px;
+}
+
+.analytics-subsection__title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin: 16px 0 8px;
+}
+
+.analytics-metrics {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(150px, 1fr);
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.analytics-metrics::-webkit-scrollbar {
+  display: none;
+}
+
+.analytics-metric {
+  scroll-snap-align: start;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: var(--panel);
+}
+
+.analytics-metric__label {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.analytics-metric__value {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.15;
+}
+
+.analytics-metric__delta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.analytics-metric__delta small {
+  color: var(--text-faint);
+  font-weight: 400;
+  margin-left: 2px;
+}
+
+/* Màu KHÔNG phải tín hiệu duy nhất — luôn kèm icon mũi tên (TrendIcon). */
+.analytics-metric__delta.is-up,
+.analytics-card__delta.is-up {
+  color: var(--green);
+}
+
+.analytics-metric__delta.is-down,
+.analytics-card__delta.is-down {
+  color: var(--amber);
+}
+
+.analytics-metric__delta.is-flat,
+.analytics-metric__delta.is-unknown {
+  color: var(--text-faint);
+}
+
+/* ================================================================
+   GETTING STARTED — Dashboard rút gọn cho user mới
+   ================================================================
+   Đây là "first impression" sau Welcome Experience. Thiết kế CỐ Ý giản:
+   1 câu hỏi + 4 lối vào + 1 lời mời. Không phải lưới 10 card tính năng —
+   người mới bị ngợp bởi lựa chọn thì chẳng bắt đầu được gì cả.
+   ================================================================ */
+.getting-started {
+  background:
+    radial-gradient(600px 240px at 82% -10%, rgba(119, 117, 255, 0.16), transparent 65%),
+    var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.getting-started__eyebrow {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--indigo-strong);
+  margin-bottom: 8px;
+}
+
+.getting-started__title {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  margin: 0 0 16px;
+}
+
+.getting-started__ask {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 8px 8px 8px 16px;
+  margin-bottom: 22px;
+}
+
+.getting-started__ask input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--font-inter), sans-serif;
+  /* 16px: iOS tự phóng to khi cỡ chữ < 16px, làm trang "nhảy" khi mở bàn phím. */
+  font-size: 16px;
+}
+
+.getting-started__ask input::placeholder {
+  color: var(--text-faint);
+}
+
+.getting-started__entriesTitle {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 10px;
+}
+
+.getting-started__entries {
+  display: grid;
+  /* 2 cột trên desktop, 1 cột trên mobile (media query bên dưới). 4 lối
+     vào / 2 cột = mỗi ô đủ rộng để chữ không bị cắt. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.getting-started__entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 12px 14px;
+  text-align: left;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: var(--panel);
+  color: var(--text-dim);
+  font-family: var(--font-inter), sans-serif;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.getting-started__entry:hover {
+  background: var(--panel-hover);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+.getting-started__entry:active {
+  transform: translateY(0);
+}
+
+.getting-started__entry:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.getting-started__entryIcon {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--indigo-soft);
+  color: var(--indigo-strong);
+}
+
+.getting-started__entryText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.getting-started__entryText strong {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.getting-started__entryText small {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.getting-started__personalize {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.getting-started__personalize p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  flex: 1;
+  min-width: 180px;
+}
+
+@media (max-width: 620px) {
+  .getting-started {
+    padding: 18px 16px;
+  }
+
+  .getting-started__title {
+    font-size: 19px;
+  }
+
+  /* Mobile: 1 cột cho 4 lối vào — 2 cột sẽ bóp nhãn tiếng Việt dài
+     (vd "Học theo chủ đề") thành 2 dòng rối mắt. */
+  .getting-started__entries {
+    grid-template-columns: 1fr;
+  }
+
+  .getting-started__ask {
+    /* Cột dọc: nút "Bắt đầu học" chiếm hàng riêng = vùng chạm lớn. */
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .getting-started__ask input {
+    padding: 6px 4px 10px;
+  }
+
+  .getting-started__ask button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .getting-started__personalize {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .getting-started__personalize button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ================================================================
+   LEARNING ANALYTICS — phần 2 (cards, insight, journey, chart)
+   ================================================================ */
+.analytics-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.analytics-card {
+  padding: 16px;
+}
+
+.analytics-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.analytics-card__title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-card__delta {
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.analytics-card__issue {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.analytics-evidence {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.analytics-evidence li {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  padding-left: 14px;
+  position: relative;
+}
+
+.analytics-evidence li::before {
+  content: "•";
+  position: absolute;
+  left: 2px;
+  color: var(--cyan);
+}
+
+.analytics-muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-faint);
+  line-height: 1.6;
+}
+
+/* --------- Kết quả: đúng / sai / chưa hoàn thành (§9) --------- */
+/* Thanh phân bổ 1 hàng. Các mảng dùng màu TOKEN sẵn có (green/rose/indigo)
+   nên tự đúng ở cả dark và light mode — không cần bảng màu riêng. */
+.analytics-outcome-bar {
+  display: flex;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+}
+
+.analytics-outcome-bar__seg {
+  height: 100%;
+  /* min-width giữ mảng nhỏ vẫn nhìn thấy — tránh việc 1 lượt sai trong 300
+     lượt biến mất hoàn toàn và làm người dùng tưởng không có lỗi sai. */
+  min-width: 3px;
+  transition: width 260ms ease;
+}
+
+.analytics-outcome-bar__seg.is-correct {
+  background: var(--green);
+}
+
+.analytics-outcome-bar__seg.is-incorrect {
+  background: var(--rose);
+}
+
+.analytics-outcome-bar__seg.is-incomplete {
+  background: var(--indigo);
+}
+
+.analytics-outcome-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.analytics-outcome-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.analytics-outcome-legend__dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 3px;
+}
+
+/* Chấm màu trùng với mảng thanh để liên kết trực quan, nhưng nhãn chữ
+   vẫn hiện nên không phụ thuộc màu để hiểu (§36). */
+.analytics-outcome-legend__item.is-correct .analytics-outcome-legend__dot {
+  background: var(--green);
+}
+
+.analytics-outcome-legend__item.is-incorrect .analytics-outcome-legend__dot {
+  background: var(--rose);
+}
+
+.analytics-outcome-legend__item.is-incomplete .analytics-outcome-legend__dot {
+  background: var(--indigo);
+}
+
+.analytics-outcome-legend__value {
+  font-weight: 700;
+  color: var(--text);
+  /* Con số không được co lại khi chữ dài hơn — giữ cột thẳng hàng. */
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analytics-outcome-bar__seg {
+    transition: none;
+  }
+}
+
+.analytics-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.analytics-actions__btn {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.analytics-insight__source {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--indigo-strong);
+  margin-bottom: 8px;
+}
+
+.analytics-insight__summary {
+  margin: 0 0 10px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.analytics-insight__explanation {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.analytics-journey {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.analytics-journey__item {
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: var(--panel);
+}
+
+.analytics-journey__label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+}
+
+.analytics-journey__item ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.analytics-journey__item li {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.analytics-empty {
+  text-align: center;
+  padding: 34px 20px;
+}
+
+.analytics-empty h3 {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.analytics-empty p {
+  margin: 0 auto 18px;
+  max-width: 420px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.analytics-empty__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.analytics-empty__actions a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* --------- Chart (SVG tự vẽ) --------- */
+.analytics-chart {
+  margin-top: 8px;
+}
+
+.analytics-chart__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+.analytics-chart__grid {
+  stroke: var(--border-soft);
+  stroke-width: 1;
+}
+
+.analytics-chart__axis {
+  fill: var(--text-faint);
+  font-size: 10px;
+  font-family: var(--font-inter), sans-serif;
+}
+
+.analytics-chart__line {
+  stroke: var(--cyan);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.analytics-chart__dot {
+  fill: var(--cyan);
+  stroke: var(--surface-elevated);
+  stroke-width: 2;
+}
+
+.analytics-chart__empty {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+.analytics-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.analytics-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.analytics-bar__label {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-bar__track {
+  height: 8px;
+  border-radius: 99px;
+  background: var(--panel-strong);
+  overflow: hidden;
+}
+
+.analytics-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--indigo), var(--cyan));
+  transition: width 200ms ease;
+}
+
+.analytics-bar__value {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  text-align: right;
+  min-width: 44px;
+}
+
+.analytics-bar__value small {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.analytics-metric-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.analytics-metric-switch__btn {
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.analytics-metric-switch__btn.is-active {
+  color: var(--text);
+  border-color: var(--cyan);
+  background: var(--cyan-soft);
+}
+
+/* ================================================================
+   BỘ LỌC ANALYTICS
+   Wrap + label trên select để không phụ thuộc placeholder nào: label
+   luôn hiện tên trường kể cả khi dropdown đang chọn "Tất cả".
+   ================================================================ */
+.analytics-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.analytics-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  /* Mobile: 3 dropdown + nút xoá không vừa 1 hàng -> mỗi cái chiếm 1/2 hàng. */
+  flex: 1 1 150px;
+}
+
+.analytics-filter > span {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.analytics-filter select {
+  width: 100%;
+  min-height: 38px;
+  /* Cắt chữ dài: tên môn cộng đồng có thể rất dài và làm vỡ layout. */
+  text-overflow: ellipsis;
+}
+
+.analytics-filters__clear {
+  min-height: 38px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+
+.analytics-filters__clear:hover {
+  color: var(--text);
+  border-color: var(--indigo);
+}
+
+.analytics-filters__clear:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.analytics-filter-note {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+/* ================================================================
+   SO SÁNH VỚI CHẨN ĐOÁN ĐẦU TIÊN
+   Mỗi dòng là một chủ đề: nền → hiện tại → chênh lệch (điểm %).
+   ================================================================ */
+.analytics-baseline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.analytics-baseline__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-elevated);
+}
+
+.analytics-baseline__topic {
+  flex: 1 1 140px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-baseline__values {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.analytics-baseline__delta {
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-baseline__delta.is-up {
+  color: var(--green);
+}
+
+.analytics-baseline__delta.is-down {
+  color: var(--amber);
+}
+
+/* ================================================================
+   CẢNH BÁO INSIGHT
+   Tông amber chứ không phải đỏ: đây là tín hiệu cần chú ý, không phải
+   lỗi. Nhấn mạnh bằng viền trái + nền nhạt, không dùng nền đậm.
+   ================================================================ */
+.analytics-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 11px 13px;
+  border: 1px solid var(--amber);
+  border-left-width: 3px;
+  border-radius: 10px;
+  background: var(--amber-soft);
+}
+
+.analytics-warning__icon {
+  flex: none;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.analytics-warning p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+/* Nội dung chỉ dành cho screen reader — bảng số thay cho biểu đồ. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (min-width: 760px) {
+  .analytics-metrics {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow-x: visible;
+  }
+
+  .analytics-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .analytics-metrics {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  /* Nhãn + thanh: 2 hàng thay vì 3 cột — nhãn tiếng Việt dài ("Xác suất có
+     điều kiện") sẽ bị bóp về 1/3 chiều rộng và cắt thành "Xác suất c...". */
+  .analytics-bar {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "label value"
+      "track track";
+    row-gap: 4px;
+  }
+
+  .analytics-bar__label {
+    grid-area: label;
+  }
+
+  .analytics-bar__value {
+    grid-area: value;
+  }
+
+  .analytics-bar__track {
+    grid-area: track;
+  }
+}
+
+/* ================================================================
+   QUICK SETUP (/setup) — form cá nhân hoá ngắn, tuỳ chọn
+   ================================================================
+   Mobile-first: các lựa chọn là CHIPS (nút tròn) thay vì radio truyền
+   thống vì vùng chạm rộng hơn — đây là yêu cầu "dễ bấm bằng ngón tay".
+   ================================================================ */
+.setup-page {
+  /* NGUYÊN NHÂN GỐC lỗi "nội dung dính mép trái, khoảng đen lớn bên phải":
+     trước đây chỉ có `max-width: 720px` mà THIẾU `margin-inline: auto`.
+     Block có max-width nhưng không auto-margin sẽ dán sát mép trái của
+     parent và phần dư chừa đổ hết sang bên phải.
+
+     LƯU Ý: /setup nằm NGOÀI nhóm route (app) nên KHÔNG có .main-content
+     (vốn mới là chỗ cấp padding + khung nội dung). Vì vậy padding gutter
+     phải do chính .setup-page lo — nếu không, trên mobile chữ sẽ sát mép
+     màn hình. */
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+  padding-inline: 20px;
+}
+
+.setup-head {
+  margin-bottom: 14px;
+}
+
+.setup-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--indigo-strong);
+  margin-bottom: 8px;
+}
+
+.setup-sub {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.setup-progress {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.setup-progress__dot {
+  width: 26px;
+  height: 3px;
+  border-radius: 99px;
+  background: var(--panel-strong);
+  border: 1px solid var(--border-soft);
+  transition: background 200ms ease;
+}
+
+.setup-progress__dot.is-active {
+  background: linear-gradient(90deg, var(--indigo), var(--cyan));
+  border-color: transparent;
+}
+
+.setup-step-title {
+  display: block;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.setup-step-sub {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+.setup-step-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.setup-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.setup-option {
+  /* min-height 44px = vùng chạm tối thiểu theo HIG (iOS) và Material
+     (Android). Nhỏ hơn thì khó bấm, đặc biệt khi cầm 1 tay. */
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-dim);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.setup-option:hover {
+  background: var(--panel-hover);
+  color: var(--text);
+}
+
+.setup-option.is-selected {
+  color: var(--text);
+  border-color: var(--indigo);
+  background: linear-gradient(90deg, rgba(124, 108, 240, 0.25), rgba(53, 208, 216, 0.08));
+}
+
+.setup-option:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.setup-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-soft);
+  flex-wrap: wrap;
+}
+
+.setup-footnote {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  /* ĐỔI từ --text-faint sang --text-dim: ở dark mode --text-faint là
+     #68748c, chỉ đạt ~3.9:1 trên nền panel — dưới ngưỡng WCAG AA 4.5:1 cho
+     chữ thường, nên đoạn "Bạn có thể mở lại trang này..." gần như không đọc
+     được. --text-dim (#94a0b8) đạt ~6.9:1 mà vẫn là màu phụ có sẵn của
+     design system (đúng màu .setup-sub đang dùng) nên không phải thêm màu
+     mới, không lệch visual language. */
+  color: var(--text-dim);
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .setup-step-title {
+    font-size: 16px;
+  }
+
+  .setup-actions {
+    /* Mobile: nút chiếm hết chiều ngang, dễ bấm hơn 2 nút nhỏ cạnh nhau. */
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .setup-actions > div,
+  .setup-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ================================================================
+   DASHBOARD — trạng thái "Learning profile" + lời mời cá nhân hoá
+   ================================================================
+   Đây là phần thể hiện rõ nguyên tắc "Profile là GỢI Ý, không phải
+   NGHĨA VỤ": vòng tròn tiến trình + 1 dòng mô tả, KHÔNG có chữ "Bạn
+   chưa hoàn thành hồ sơ" hay bất kỳ thứ gì mang sắc đòi hỏi.
+   ================================================================ */
+.learning-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.learning-profile-card__text {
+  flex: 1;
+  min-width: 180px;
+}
+
+.learning-profile-card__title {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.learning-profile-card__desc {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+@media (max-width: 520px) {
+  .learning-profile-card {
+    gap: 12px;
+  }
+}
+
+/* ================================================================
+   Băng cảnh báo offline / đã kết nối lại --------- */
+.net-banner {
+  position: fixed;
+  /* Đặt ngay dưới status bar, nằm TRÊN mọi thứ (z-index cao hơn bottom nav
+     45 và sheet 120) — người dùng cần thấy ngay cả khi đang mở sheet. */
+  z-index: 200;
+  top: calc(var(--safe-top) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(92vw, 420px);
+  pointer-events: none;
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel-strong);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: center;
+  animation: net-banner-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.net-banner__dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-soft);
+}
+
+@keyframes net-banner-in {
+  from { opacity: 0; transform: translate(-50%, -12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Offline: bỏ hiệu ứng bay lọt (máy yếu, và animation khi mạng chập chờn rất
+   nặng), đồng thời báo cho mọi component biết qua [data-offline]. */
+html[data-offline="true"] *,
+html[data-offline="true"] *::before,
+html[data-offline="true"] *::after {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* Bàn phím mở: ô nhập Tutor và thanh nav dưới phải nhảy lên trên bàn phím.
+   Capacitor đã resize WebView (resize: native) nên chiều cao khung đã co
+   lại — nối thanh nav vào đáy khung là đủ, không cần đo bàn phím bằng JS. */
+html[data-keyboard="open"] .mobile-bottom-nav {
+  display: none;
+}
+
+html[data-keyboard="open"] .tutor-composer {
+  bottom: 8px;
+}
+
+.bottom-sheet-group + .bottom-sheet-group {
+  margin-top: 16px;
+}
+
+.bottom-sheet-group__title {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+
+.bottom-sheet-group__items {
+  display: grid;
+  /* 2 cột: danh sách dài hơn chiều cao sheet nhưng người dùng vẫn nhìn
+     thấy "có bao nhiêu mục" thay vì phải cuộn dọc từng dòng. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.bottom-sheet-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: var(--panel);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.bottom-sheet-link:active {
+  background: var(--panel-hover);
+  color: var(--text);
+}
+
+.bottom-sheet-link--active {
+  color: var(--text);
+  border-color: var(--border);
+  background: linear-gradient(90deg, rgba(124, 108, 240, 0.25), rgba(53, 208, 216, 0.08));
+}
+
 .drawer-header {
   display: flex;
   justify-content: space-between;
@@ -2958,6 +4512,23 @@ pre {
   min-width: 0;
 }
 
+/* Dòng nhắc thao tác chỉ hiện trong bố cục mobile (bảng chi tiết đã nhảy
+   vào bottom sheet), nên đặt trong media query chứ không phải ẩn/hiện
+   bằng JS. */
+.mindmap-mobile-hint {
+  display: none;
+}
+
+@media (max-width: 880px) {
+  .mindmap-mobile-hint {
+    display: block;
+    margin: 10px 2px 2px;
+    color: var(--mm-meta);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+}
+
 @media (max-width: 880px) {
   .mindmap-grid {
     grid-template-columns: 1fr;
@@ -2986,3 +4557,51 @@ pre {
   }
 }
 
+/* ================================================================
+   LEARNING PROFILE PANEL (Account) — xem components/account/
+   LearningProfilePanel.tsx
+   ------------------------------------------------------------
+   Dùng dl/dt cho cẵu cấu nhãn-giá trị (nội dung này không phải định nghĩa
+   ngành nghứa nên): định nghĩa động đều, nội dung nghiêng động dướng.
+   ================================================================ */
+.lp-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 0;
+}
+
+.lp-row {
+  display: grid;
+  grid-template-columns: 128px 1fr;
+  gap: 10px;
+  align-items: start;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.lp-row dt {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.lp-row dd {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere; /* mục tiêu tự do có thể dài — không được làm vỡ đỉ ngang */
+}
+
+.lp-footnote {
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+
+/* Mobile: label và value xuống dòng để không bị bép/khoát động ố âm 128px. */
+@media (max-width: 560px) {
+  .lp-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}

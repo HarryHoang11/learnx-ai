@@ -1,8 +1,8 @@
 // ================================================================
 // CHUẨN BỊ ẢNH UPLOAD ĐỂ LƯU THẲNG VÀO POSTGRES (KHÔNG GHI LOCAL DISK)
 // ================================================================
-// Mạch tư duy: thay thế hoàn toàn cho lib/storage/localUpload.ts cũ
-// (ghi file vào public/uploads/...). File local KHÔNG persistent giữa
+// Mạch tư duy: thay thế hoàn toàn cho lib/storage/localUpload.ts — code cũ ghi file
+// vào public/uploads/ (đã xoá ở đợt dọn dead code). File local KHÔNG persistent giữa
 // các lần deploy/scale và không đáp ứng yêu cầu "ảnh phải nằm trong
 // DB". Hàm ở đây CHỈ validate + trả về Buffer thô cùng mimeType —
 // việc ghi vào cột avatarData/coverData (Bytes) do route gọi

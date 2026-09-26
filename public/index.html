@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>LearnX AI</title>
+    <!--
+      FALLBACK OFFLINE — file này CHỈ được dùng khi app được build mà KHÔNG
+      có CAPACITOR_SERVER_URL. Với bản build bình thường, WebView nạp từ
+      server.url và file này không được mở.
+
+      Nó tồn tại vì 2 lý do cụ thể:
+        1. Capacitor BẮT BUỘC webDir phải là thư mục có thật, thiếu thì
+           `cap sync` báo lỗi và không sinh được assets.
+        2. Khi mất mạng lúc app vừa bật, WebView sẽ không tải được trang;
+           trang này hiện thông báo + nút thử lại thay vì màn hình trắng
+           hoặc trang lỗi trình duyệt.
+      Không tự nhúng bất kỳ dữ liệu/API key nào ở đây.
+    -->
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: #070b16;
+        color: #f5f7ff;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        text-align: center;
+      }
+      .card { max-width: 380px; }
+      .logo {
+        width: 56px; height: 56px; margin: 0 auto 20px;
+        border-radius: 16px; display: flex; align-items: center; justify-content: center;
+        background: linear-gradient(135deg, #7775ff, #45d9e9);
+        color: #070b16; font-weight: 700; font-size: 26px;
+      }
+      h1 { margin: 0 0 8px; font-size: 20px; }
+      p { margin: 0 0 20px; color: #94a0b8; font-size: 14px; line-height: 1.6; }
+      button {
+        border: 0; border-radius: 12px; padding: 12px 22px;
+        background: linear-gradient(135deg, #7775ff, #45d9e9);
+        color: #070b16; font-size: 14px; font-weight: 600; cursor: pointer;
+      }
+      button:active { transform: scale(0.98); }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="logo" aria-hidden="true">X</div>
+      <h1>Chưa kết nối được</h1>
+      <p>LearnX AI cần mạng để tải nội dung. Bạn đang offline hoặc máy chủ chưa sẵn sàng.</p>
+      <button type="button" onclick="location.reload()">Thử lại</button>
+    </div>
+  </body>
+</html>

@@ -22,6 +22,11 @@ import { useSession } from "next-auth/react";
 import Avatar from "@/components/ui/Avatar";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 
+/**
+ * Kích thước nút. Phải khớp `--fab-size` trong globals.css — giá trị đó quyết
+ * định vị trí của các bubble khác trong cột `.floating-actions`, nên lệch ở đây
+ * sẽ làm cả cục lệch.
+ */
 const SIZE = 56;
 
 export default function FloatingAIButton() {
@@ -39,10 +44,14 @@ export default function FloatingAIButton() {
       aria-label={t("tutor.openChat")}
       title={t("nav.tutor")}
       style={{
-        position: "fixed",
-        right: 22,
-        bottom: 22,
-        zIndex: 60,
+        // CHỈ còn hình dạng. Toạ độ (position/right/bottom/z-index) KHÔNG nằm ở
+        // đây nữa: `.floating-actions` (components/layout/FloatingActions.tsx)
+        // là nguồn sự thật DUY NHẤT cho vị trí của mọi nút nổi, và cột flex
+        // của nó tự dồn các nút theo thứ tự ưu tiên — nên nút này không thể bị
+        // App Download bubble đè, kể cả khi kích thước thay đổi.
+        //
+        // Giữ `width/height` ở đây vì `Avatar` cần pixel để vẽ; giá trị khớp
+        // `--fab-size` trong globals.css (56px). Nếu đổi, sửa CẢ HAI.
         width: SIZE,
         height: SIZE,
         borderRadius: "50%",

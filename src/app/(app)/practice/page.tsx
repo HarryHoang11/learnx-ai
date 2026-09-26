@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
 import ExerciseSolver from "@/components/exercise/ExerciseSolver";
+import SubjectSwitcher from "@/components/subject/SubjectSwitcher";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { ApiResponse } from "@/types";
 import type { I18nKey } from "@/lib/i18n/dictionary";
@@ -73,6 +74,38 @@ export default function PracticePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Bấm chip môn để lọc — nhưng bấm lại chip đang chọn thì BỎ LỌC (về "tất cả").
+   *
+   * Vì sao tự tải lại ở đây thay vì bắt bấm nút "Lọc": chuyển môn là hành động
+   * điều hướng trong trải nghiệm đa môn, bắt thêm 1 cú bấm nữa là người dùng tưởng
+   * chip không hoạt động. Các ô text khác (tìm kiếm/chủ đề/độ khó) vẫn giữ nút
+   * Lọc vì đó là bộ lọc tùy ý, người dùng thường gõ xong mới lọc.
+   */
+  function handleSubjectChange(next: string) {
+    // Tính giá trị MỚI ngoài updater. Cố ý KHÔNG gọi fetch bên trong
+    // setState: updater phải thuần khiết, và React StrictMode gọi nó 2 lần
+    // nên side-effect ở đó sẽ bắn request trùng.
+    const nextValue = subject === next ? "" : next;
+    setSubject(nextValue);
+
+    const p = new URLSearchParams({ limit: "20" });
+    if (nextValue) p.set("subject", nextValue);
+    if (topic.trim()) p.set("topic", topic.trim());
+    if (difficulty) p.set("difficulty", difficulty);
+    if (search.trim()) p.set("search", search.trim());
+
+    void fetch(`/api/exercises?${p.toString()}`)
+      .then((r) => r.json() as Promise<ApiResponse<ListData>>)
+      .then((json) => {
+        if (json.success) {
+          setData(json.data);
+          setError(null);
+        }
+      })
+      .catch(() => setError(t("common.connectionError")));
+  }
+
   return (
     <section>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, flexWrap: "wrap", gap: 10 }}>
@@ -96,7 +129,6 @@ export default function PracticePage() {
           style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
         >
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("practice.searchPh")} style={inputStyle} />
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={t("practice.subjectPh")} style={{ ...inputStyle, maxWidth: 140 }} />
           <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder={t("practice.topicPh")} style={{ ...inputStyle, maxWidth: 160 }} />
           <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} style={{ ...inputStyle, maxWidth: 140 }}>
             <option value="">{t("practice.allDiff")}</option>
@@ -106,6 +138,14 @@ export default function PracticePage() {
           </select>
           <button type="submit" className="btn-primary" style={{ fontSize: 13 }}>{t("practice.filter")}</button>
         </form>
+        {/* Chuyển môn: dùng component DÙNG CHUNG (yêu cầu §24 — không hardcode
+            danh sách môn riêng cho trang này). Thay cho ô text "môn học" cũ:
+            ô text bắt học sinh nhớ/chính tả tên môn, còn chip thì bấm 1 cái là
+            xong và luôn khớp với tên môn trong DB. Bấm chip đã chọn lần nữa để
+            bỏ lọc (quay về "tất cả"). */}
+        <div style={{ marginTop: 12 }}>
+          <SubjectSwitcher selected={subject} onSelect={handleSubjectChange} />
+        </div>
       </Panel>
 
       {loading && <StateMessage kind="loading" text={t("practice.loading")} />}

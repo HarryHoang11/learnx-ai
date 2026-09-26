@@ -15,6 +15,9 @@ import Panel from "@/components/ui/Panel";
 import StatCard from "@/components/ui/StatCard";
 import StateMessage from "@/components/ui/StateMessage";
 import EmptyState from "@/components/ui/EmptyState";
+import GettingStarted from "@/components/dashboard/GettingStarted";
+import SubjectProgressPanel from "@/components/subject/SubjectProgressPanel";
+import OnboardingBanner from "@/components/onboarding/OnboardingBanner";
 import Skeleton from "@/components/ui/Skeleton";
 import LevelProgressBar from "@/components/ui/LevelProgressBar";
 import TodaySchedule from "@/components/calendar/TodaySchedule";
@@ -23,6 +26,8 @@ import { getLevelProgressDetails } from "@/lib/constants/xp";
 import { useCountUp } from "@/lib/hooks/useCountUp";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 import { hasKey, localeFor, type I18nKey } from "@/lib/i18n/dictionary";
+import { fetchOnboardingState } from "@/lib/onboarding/client";
+import type { OnboardingState } from "@/lib/onboarding/state";
 import type { ApiResponse, GoalWithRoadmap, SkillMasteryPoint } from "@/types";
 
 interface ProgressData {
@@ -78,6 +83,10 @@ export default function HomePage() {
   const [recentXP, setRecentXP] = useState<XPHistoryItem[] | null>(null);
   const [goals, setGoals] = useState<GoalWithRoadmap[] | null>(null);
   const [streakError, setStreakError] = useState<string | null>(null);
+  // null = chưa biết; false = user mới (chưa có dữ liệu học); true = đã có.
+  // Ba trạng thái thay vì boolean để không nháy layout: trong lúc fetch
+  // chưa xong thì vẫn hiện skeleton chứ không đoán sai rồi đổi layout.
+  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
 
   useEffect(() => {
     fetch("/api/progress")
@@ -121,6 +130,10 @@ export default function HomePage() {
         else setGoals([]);
       })
       .catch(() => setGoals([]));
+
+    // Trạng thái onboarding quyết định hiện Getting Started hay Dashboard
+    // đầy đủ. Gọi chung promise, không chặn các fetch khác.
+    void fetchOnboardingState().then(setOnboarding);
   }, []);
 
   function goToTutor() {
@@ -156,6 +169,16 @@ export default function HomePage() {
   const weakCount = progress?.skillMap.filter((s) => s.isWeak).length ?? 0;
   const learningCount = Math.max(0, (progress?.skillMap.length ?? 0) - mastered - weakCount);
   const continueGoal = goals?.find((g) => g.status === "ACTIVE") ?? null;
+
+  // User mới = chưa có bài làm/tài liệu/lộ trình nào. CHỈ quyết định bố cục,
+  // KHÔNG chặn gì: dù có hay không thì mọi tính năng đều truy cập được từ
+  // thanh điều hướng. Người dùng có thể đã tự học ở nơi khác — họ vẫn cần
+  // thấy Dashboard đầy đủ nếu backend có dữ liệu.
+  const isNewUser = onboarding !== null && !onboarding.hasLearningData;
+  // Chỉ hiện nhắc hoàn thiện khi hồ sơ CÒN THIẾU. Đã hoàn tất thì không gỡi
+  // để nhắc nữa — tránh nhắc nhiễu. Điều kiện hiển thị chi tiết nằm trong
+  // `OnboardingBanner` (dùng chung `needsLearningProfile()` với proxy).
+  const profileIncomplete = onboarding !== null && !onboarding.profileComplete;
 
   return (
     <section className="page-enter">
@@ -207,6 +230,30 @@ export default function HomePage() {
       )}
       {error && <StateMessage kind="error" text={error} />}
 
+      {/* GETTING STARTED (Explore Mode) — thay thế Dashboard đầy đủ khi
+          user chưa có dữ liệu học. Hiển thị TRƯỚC các panel số liệu vì với
+          user mới, "tiến độ = 0" không có ý nghĩa gì. */}
+      {isNewUser && (
+        <div className="enter enter--1">
+          <GettingStarted />
+        </div>
+      )}
+
+      {/*
+        Thến nhắc HOÀN THIỆN HỒ SƠ HỌC TẬP — LỜI MỜI, KHÔNG PHẢI NGHẼN.
+          - 1 card duy nhất, nằm TRÊN Getting Started để thấy ngay.
+          - Điều kiện hiện do `needsLearningProfile()` quyết định (cùng hàm mà
+            proxy dùng) nên proxy và UI không lệch nhau.
+          - Không chặn Dashboard: bấm "Bỏ qua" chỉ ẩn banner, không điều hướng.
+          - Ẩn với user mới vì Getting Started đã có lời mời riêng gới, tránh
+            lặp 2 lần trên cùng 1 màn.
+      */}
+      {!isNewUser && onboarding && profileIncomplete && (
+        <div className="enter enter--1">
+          <OnboardingBanner onboarding={onboarding} />
+        </div>
+      )}
+
       {progress && (
         <>
           <Panel className="dashboard-focus enter enter--1">
@@ -246,6 +293,13 @@ export default function HomePage() {
             <LevelProgressBar lifetimeXP={xp?.lifetimeXP ?? 0} />
           )}
           {streakError && <StateMessage kind="error" text={streakError} />}
+
+          {/* MÔN ĐANG HỌC (đa môn) — trả lời "hôm nay học gì / yếu môn nào".
+              Dùng `progress.skillMap` ĐÃ fetch sẵn ở trên: không phát sinh
+              request thứ hai cho cùng một dữ liệu. */}
+          <div className="enter enter--2">
+            <SubjectProgressPanel skillMap={progress.skillMap} />
+          </div>
 
           {/* Hôm nay: lịch học + ôn tập đến hạn + học tiếp */}
           <div className="grid-progress enter enter--2" style={{ marginBottom: 20 }}>

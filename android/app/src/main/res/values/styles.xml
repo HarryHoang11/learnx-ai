@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+        Theme app. Dùng DayNight để Android 12+ tự chuyển nền theo hệ thống,
+        nhưng MÀU CỐ ĐỊNH cho splash (nền navy) vì app LearnX mở ra luôn ở
+        theme đã lưu trong localStorage — nếu splash nháy màu trắng ở light
+        mode rồi mới chuyển sang nền sáng thì thấy giật.
+    -->
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/ic_launcher_gradient_start</item>
+        <item name="colorPrimaryDark">@color/splash_background</item>
+        <item name="colorAccent">@color/ic_launcher_gradient_end</item>
+    </style>
+
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:background">@null</item>
+        <!-- Nền cửa sổ trùng nền app: tránh 1 sáng trắng giữa splash và WebView. -->
+        <item name="android:windowBackground">@color/splash_background</item>
+    </style>
+
+    <!--
+        SPLASH SCREEN — dùng thư viện androidx core-splashscreen (bắt buộc từ
+        Android 12, và cho cả máy cũ dùng chung 1 code). Icon lấy luôn vector
+        drawable của launcher nên không phải thêm 1 bộ ảnh riêng.
+
+        `postSplashScreenTheme` trỏ về theme thật: sau khi splash kết thúc,
+        hệ thống chuyển sang theme này, nơi nền đã trùng màu nên không nháy.
+    -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+    </style>
+</resources>

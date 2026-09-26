@@ -11,6 +11,8 @@
 import { generateJSON } from "@/lib/ai/router";
 import { buildQuestionGenPrompt } from "@/lib/ai/prompts";
 import { prisma } from "@/lib/db/prisma";
+import { defaultQuestionType } from "@/lib/subjects/engine";
+import { readGradeLevel } from "@/lib/personalization/context";
 import { updateMastery } from "@/services/assessment.service";
 import { recordLearningActivity } from "@/services/learning-activity.service";
 import { syncRoadmapAfterMastery } from "@/services/roadmap.service";
@@ -113,7 +115,39 @@ export async function generateQuizQuestion(
     if (!source) throw new QuizQuestionError("Nguồn học không tồn tại hoặc chưa sẵn sàng.", 404);
     sourceContext = source.summary ?? undefined;
   }
-  const prompt = buildQuestionGenPrompt(normalizedSubject, normalizedTopic, difficulty, sourceContext);
+  // Ngữ cảnh hồ sơ cho AI — đọc mastery THẬT của học sinh ở đúng chủ đề này
+  // để AI nhắm độ khó, thay vì đoán mò. Chỉ đọc 1 dòng LearningProgress theo
+  // unique key [userId, subject, topic] đã có sẵn (xem updateMastery) — KHÔNG
+  // tạo bảng mastery mới, và không truyền userId từ client (đây là userId đã
+  // xác thực từ session).
+  const progress = await prisma.learningProgress.findUnique({
+    where: {
+      userId_subject_topic: { userId, subject: normalizedSubject, topic: normalizedTopic },
+    },
+    select: { mastery: true },
+  });
+
+  // Trình độ lấy từ hồ sơ onboarding (đã có sẵn ở User.learningProfile) —
+  // nhờ vậy AI không phải tự suy đoán "học sinh này lớp mấy".
+  const profile = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { learningProfile: true },
+  });
+  const gradeLevel = readGradeLevel(profile?.learningProfile);
+
+  const prompt = buildQuestionGenPrompt(
+    normalizedSubject,
+    normalizedTopic,
+    difficulty,
+    sourceContext,
+    {
+      questionType: defaultQuestionType(normalizedSubject),
+      gradeLevel,
+      // Không có dòng LearningProgress = chưa từng làm bài chủ đề này. Truyền
+      // `undefined` để prompt nói "chưa có dữ liệu" thay vì bịa 0%.
+      mastery: progress?.mastery,
+    }
+  );
   const question = await generateJSON<GeneratedQuestion>(
     {
       systemPrompt: prompt.system,
