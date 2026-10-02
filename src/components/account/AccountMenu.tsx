@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { ChevronDown, LogOut, Settings, UserPlus, ShieldCheck } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
+import { resolveAvatarUrl } from "@/lib/auth/avatarUrl";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 import { useToast } from "@/components/ui/Toast";
 
@@ -36,7 +37,10 @@ export default function AccountMenu() {
 
   const name = session?.user?.name ?? session?.user?.email ?? t("topbar.student");
   const email = session?.user?.email ?? "";
-  const image = session?.user?.image;
+  // Avatar đi qua `resolveAvatarUrl` (nguồn chuẩn hoá DUY NHẤT) thay vì đọc
+  // thẳng `session.user.image` — xem file đó để hiểu vì sao field đó không
+  // phản ánh ảnh user tự tải lên.
+  const image = resolveAvatarUrl(session?.user?.image);
 
   // Đóng menu khi bấm ra ngoài hoặc nhấn Esc — tránh menu bị "dính" mở khi
   // người dùng đã chuyển sang làm việc khác.

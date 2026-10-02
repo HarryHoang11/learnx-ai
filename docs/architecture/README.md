@@ -40,6 +40,10 @@ Cập nhật doc + CHANGELOG.md nếu thay đổi có ý nghĩa kiến trúc
 | [MOBILE.md](./MOBILE.md) | Task chạm responsive, bottom nav, APK, FAB |
 | [CHANGELOG.md](./CHANGELOG.md) | Trước khi sửa: thay đổi kiến trúc gần đây có liên quan không |
 
+> Rewards / Achievement / Challenge **chưa** có file doc riêng — hiện nằm ở
+> [CODEBASE_MAP.md](./CODEBASE_MAP.md) § Gamification / Rewards (kèm 6 quy tắc
+> vàng). Đọc mục đó trước khi sửa UI thưởng.
+
 ## Quy ước khi đọc source
 
 - **Route handler** ở `src/app/api/**/route.ts`. Lấy `userId` từ session
@@ -64,5 +68,5 @@ npx next build                      # build (bỏ qua prisma generate)
 dev server đang chạy (giữ khoá `query_engine-windows.dll.node`). Dùng
 `npx next build` để verify trong lúc dev.
 
-Baseline hiện tại: **0 type error · 0 lint error (23 warning cố định) · test pass ·
-build pass**. Không được làm tăng warning.
+Baseline hiện tại: **0 type error · 0 lint error (22 warning cố định) · 437 test
+pass · build pass**. Không được làm tăng warning.

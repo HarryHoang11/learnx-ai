@@ -6,6 +6,9 @@
 // ================================================================
 
 import { prisma } from "@/lib/db/prisma";
+// `Prisma.sql` dùng để ghép điều kiện lọc môn ĐỘNG vào câu SQL của
+// getReviewStats — xem giải thích tại chỗ dùng (SQL injection an toàn).
+import { Prisma } from "@prisma/client";
 import { generateJSON } from "@/lib/ai/router";
 import { buildReviewPrompt } from "@/lib/ai/prompts";
 import { recordLearningActivity } from "@/services/learning-activity.service";
@@ -312,14 +315,37 @@ export async function submitReviewAttempt(input: ReviewAttemptInput): Promise<{
 }
 
 // --- 4) GET DUE REVIEWS ---
-export async function getDueReviews(userId: string, limit = 20): Promise<ReviewItemData[]> {
+// Shape THU GỌN: chỉ trả các field mà UI thật sự đọc (trang Review,
+// dashboard, learning-agent) thay vì kéo NGUYÊN row — bỏ metadata Json,
+// sourceType/sourceId, easeFactor, intervalDays, lapses, createdAt...
+// mỗi lần lấy danh sách đến hạn.
+export interface ReviewDueItem {
+  id: string;
+  topic: string;
+  concept: string | null;
+  subject: string | null;
+  prompt: string;
+  answer: string | null;
+  repetitions: number;
+  nextReviewAt: Date | null;
+}
+
+export async function getDueReviews(
+  userId: string,
+  limit = 20,
+  filter?: ReviewFilter,
+): Promise<ReviewDueItem[]> {
   const now = new Date();
   now.setHours(23, 59, 59, 999); // End of today
 
-  const items = await prisma.reviewItem.findMany({
+  return prisma.reviewItem.findMany({
     where: {
       userId,
       nextReviewAt: { lte: now },
+      // `subject` trong DB là `String?` — chỉ lọc khi có truyền, vì
+      // `subject: undefined` bị Prisma bỏ qua (không tương đương với so sánh
+      // NULL) — giữ nguyên hành vi "không lọc" khi UI chưa chọn môn.
+      ...(filter?.subject ? { subject: filter.subject } : {}),
     },
     orderBy: [
       { nextReviewAt: "asc" },
@@ -327,8 +353,95 @@ export async function getDueReviews(userId: string, limit = 20): Promise<ReviewI
       { lapses: "desc" },
     ],
     take: limit,
+    select: {
+      id: true,
+      topic: true,
+      concept: true,
+      subject: true,
+      prompt: true,
+      answer: true,
+      repetitions: true,
+      nextReviewAt: true,
+    },
   });
-  return items as ReviewItemData[];
+}
+
+/**
+ * Filter tuỳ chọn cho ôn tập — trang /review gửi lên để lọc theo môn.
+ *
+ * Vì sao cần: `getDueReviews` trả MỌI môn trộn lẫn, nên học sinh lớp 11
+ * không thể ôn riêng "Toán". Đây là yêu cầu trực tiếp từ flow ôn tập
+ * (chọn môn -> ôn nội dung của môn đó).
+ *
+ * Dùng kiểu "where fragment" thay vì thêm tham số rời rạc vào mọi hàm:
+ *   - `getDueReviews` và `getReviewStats` chia sẻ đúng 1 bộ điều kiện lọc
+ *     => KHÔNG THỂ xảy ra tình trạng "UI lọc môn A nhưng thống kê đếm môn B"
+ *     (rất dễ xảy ra khi mỗi hàm tự viết điều kiện riêng).
+ */
+export interface ReviewFilter {
+  /** Chỉ lấy item của môn này. `undefined` = tất cả. */
+  subject?: string;
+}
+
+/** Chủ đề có nội dung đến hạn, để trang /review hiện môn nào đang ôn được. */
+export interface ReviewSubjectSummary {
+  subject: string;
+  due: number;
+}
+
+/**
+ * SMART REVIEW — tổng hợp "nên ôn gì hôm nay" từ dữ liệu THẬT.
+ *
+ * Không phải gợi ý bịa: mọi con số đều đếm trên bảng ReviewItem của user.
+ * Nhờ đó trang /review có thể nói:
+ *   - có bao nhiêu nội dung đến hạn, theo từng môn (để đề xuất môn).
+ *   - những chủ đề hay sai (nhiều `lapses` hoặc `difficulty` cao) — chính là
+ *     nơi SM-2 hạ lịch ôn ngắn lại.
+ *
+ * Đây là tầng ĐỌC dữ liệu, không tính lại thuật toán SM-2 (thuật toán nằm
+ * ở `calculateNextReview`) — không tạo nguồn sự thật thứ hai.
+ */
+export async function getReviewInsights(userId: string): Promise<{
+  subjects: ReviewSubjectSummary[];
+  weakTopics: { subject: string | null; topic: string; due: number; lapses: number }[];
+}> {
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+
+  // Đếm theo môn: groupBy + _count, tất cả chạy ở DB (không kéo row về Node).
+  const bySubject = await prisma.reviewItem.groupBy({
+    by: ["subject"],
+    where: { userId, nextReviewAt: { lte: endOfToday } },
+    _count: { _all: true },
+  });
+
+  // Chủ đề "hay sai": lấy item đến hạn có lapses > 0, sắp theo lapses giảm dần
+  // rồi difficulty giảm dần. `take` nhỏ vì UI chỉ hiện vài dòng gợi ý.
+  const weak = await prisma.reviewItem.findMany({
+    where: { userId, nextReviewAt: { lte: endOfToday }, lapses: { gt: 0 } },
+    select: { subject: true, topic: true, lapses: true },
+    orderBy: [{ lapses: "desc" }, { difficulty: "desc" }],
+    take: 5,
+  });
+
+  const subjects: ReviewSubjectSummary[] = bySubject
+    .map((row) => ({
+      subject: row.subject ?? "",
+      due: row._count._all,
+    }))
+    // Ẩn nhóm rỗng (item không gán môn) — không phải "môn" nào để chọn.
+    .filter((row) => row.subject !== "")
+    .sort((a, b) => b.due - a.due);
+
+  return {
+    subjects,
+    weakTopics: weak.map((item) => ({
+      subject: item.subject,
+      topic: item.topic,
+      due: 1,
+      lapses: item.lapses,
+    })),
+  };
 }
 
 // --- 5) GET OVERDUE REVIEWS ---
@@ -365,7 +478,10 @@ export async function getUpcomingReviews(userId: string, days = 7): Promise<Revi
 }
 
 // --- 7) GET REVIEW STATS ---
-export async function getReviewStats(userId: string): Promise<{
+export async function getReviewStats(
+  userId: string,
+  filter?: ReviewFilter,
+): Promise<{
   due: number;
   overdue: number;
   upcoming: number;
@@ -375,27 +491,48 @@ export async function getReviewStats(userId: string): Promise<{
   const now = new Date();
   const endOfToday = new Date(now);
   endOfToday.setHours(23, 59, 59, 999);
-  
+
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);
 
-  const [due, overdue, upcoming, all] = await Promise.all([
-    prisma.reviewItem.count({ where: { userId, nextReviewAt: { lte: endOfToday } } }),
-    prisma.reviewItem.count({ where: { userId, nextReviewAt: { lt: startOfToday } } }),
-    prisma.reviewItem.count({ where: { userId, nextReviewAt: { gt: endOfToday } } }),
-    prisma.reviewItem.findMany({ where: { userId }, select: { easeFactor: true } }),
-  ]);
-
-  const avgEaseFactor = all.length > 0
-    ? all.reduce((sum, r) => sum + r.easeFactor, 0) / all.length
-    : 2.5;
+  // MỘT query thay cho bốn (3 × count + findMany nạp TOÀN BỘ row của
+  // user về Node chỉ để tự cộng): COUNT(*) FILTER đếm từng nhóm ngay
+  // trong PostgreSQL và AVG("easeFactor") tính ở DB — không còn O(N)
+  // dữ liệu nào bị kéo qua mạng mỗi lần gọi endpoint này.
+  //
+  // Ngữ nghĩa giữ NGUYÊN 100% so với code cũ:
+  //   - due/upcoming chỉ tính item có nextReviewAt khác NULL (toán tử
+  //     lte/gt cũ vốn bỏ qua NULL — cột này nullable trong schema);
+  //   - total = due + upcoming (KHÔNG gồm item nextReviewAt NULL);
+  //   - averageEaseFactor tính trên TẤT CẢ item của user (findMany cũ
+  //     không lọc nextReviewAt), mặc định 2.5 khi user chưa có item nào.
+  // Cùng pattern $queryRaw + COUNT FILTER đang dùng ở
+  // services/analytics/learning-analytics.service.ts.
+  //
+  // Lọc môn: dùng `Prisma.sql` để ghép điều kiện ĐỘNG — nối chuỗi thô vào
+  // SQL là SQL injection, còn `${...}` trong template literal của
+  // `$queryRaw` thì tự bind thành tham số. Giá trị filter vẫn được bind,
+  // không phải nội suy vào câu lệnh.
+  const subjectClause = filter?.subject ? Prisma.sql`AND "subject" = ${filter.subject}` : Prisma.empty;
+  const [stats] = await prisma.$queryRaw<
+    Array<{ due: number; overdue: number; upcoming: number; avgEase: number }>
+  >`
+    SELECT
+      COUNT(*) FILTER (WHERE "nextReviewAt" <= ${endOfToday})::int AS "due",
+      COUNT(*) FILTER (WHERE "nextReviewAt" < ${startOfToday})::int AS "overdue",
+      COUNT(*) FILTER (WHERE "nextReviewAt" > ${endOfToday})::int AS "upcoming",
+      COALESCE(AVG("easeFactor"), 2.5)::float8 AS "avgEase"
+    FROM "ReviewItem"
+    WHERE "userId" = ${userId}
+    ${subjectClause}
+  `;
 
   return {
-    due,
-    overdue,
-    upcoming,
-    total: due + upcoming,
-    averageEaseFactor: Math.round(avgEaseFactor * 100) / 100,
+    due: stats.due,
+    overdue: stats.overdue,
+    upcoming: stats.upcoming,
+    total: stats.due + stats.upcoming,
+    averageEaseFactor: Math.round(stats.avgEase * 100) / 100,
   };
 }
 

@@ -9,12 +9,12 @@
    ================================================================ */
 
 :root {
-  --bg: #0a0e16;
+  --bg: #070b16;
   /* ---- Bảng màu/bề mặt đồng bộ theo mockup thiết kế (a.txt) ----
      Mockup dùng panel là 1 lớp KÍNH XANH-ĐEN bán trong
      rgba(21,27,40,.72) + viền hơi ngả xanh (rgba(201,211,255,.12)),
      thay vì lớp phủ trắng mờ rgba(255,255,255,.045) như trước — trên
-     nền #0a0e16 thì lớp phủ trắng cho ra màu xám đục, còn lớp kính
+     nền #070b16 thì lớp phủ trắng cho ra màu xám đục, còn lớp kính
      xanh giữ được "chất" glassmorphism của mockup. */
   --panel: rgba(21, 27, 40, 0.72);
   --panel-strong: rgba(27, 34, 51, 0.88);
@@ -23,15 +23,49 @@
   --text: #f5f7ff;
   --text-dim: #94a0b8;
   --text-faint: #68748c;
-  --indigo: #7c6cf0;
-  --indigo-soft: rgba(124, 108, 240, 0.16);
+  --indigo: #7775ff;
+  --indigo-soft: rgba(119, 117, 255, 0.16);
   /* Text-on-soft-indigo-background cần sáng hơn --indigo gốc để đủ
      tương phản (tím/indigo đọc "tối" hơn cyan/amber/rose ở cùng độ
      sáng) — trước đây hardcode #a395fc ngay trong .badge--indigo,
      không theme hoá được. */
   --indigo-strong: #a395fc;
-  --cyan: #35d0d8;
-  --cyan-soft: rgba(53, 208, 216, 0.14);
+  --cyan: #45d9e9;
+  --cyan-soft: rgba(69, 217, 233, 0.14);
+  /* ==============================================================
+     SEMANTIC TOKENS — tên NGỮ NGHĨA, không phải tên màu.
+     ------------------------------------------------------------
+     Bảng màu gốc (--indigo/--cyan/--amber/--rose/--green) trả lời
+     "màu gì", còn UI cần trả lời "ý nghĩa gì". Trước đây 2 khái
+     niệm cùng nghĩa lại mang 2 màu KHÁC NHAU:
+       success → .toast--success dùng CYAN, .badge--success dùng GREEN
+       error   → .badge--error dùng #ef6a7d, trong khi --rose là #f07c91
+     Component còn phải gõ `var(--success, #4ade80)` — fallback vì
+     token KHÔNG tồn tại (xem documents/DocumentCard.tsx). Nay đã có
+     token thật nên fallback xoá được.
+
+     Quy ước: `-soft` = nền nhạt dùng làm nền chip/badge,
+     `-border` = viền, `-on` = màu chữ đặt trên nền `-soft`.
+     Token alias theo --green/--amber/... nên đổi bảng màu gốc là
+     2 khái niệm này tự đổi theo, kể cả ở light mode.
+     ============================================================== */
+  --success: var(--green);
+  --success-soft: var(--green-soft);
+  --success-border: rgba(101, 214, 163, 0.32);
+  --warning: var(--amber);
+  --warning-soft: var(--amber-soft);
+  --warning-border: rgba(245, 199, 106, 0.32);
+  --danger: var(--rose);
+  --danger-soft: rgba(240, 124, 145, 0.15);
+  --danger-border: rgba(240, 124, 145, 0.32);
+  /* Alias theo ngôn ngữ design system quen thuộc (shadcn gọi là
+     "destructive"). Giữ cả 2 tên để 1 khái niệm không bị gọi bằng
+     2 từ khác nhau rải rác khắp codebase. */
+  --destructive: var(--danger);
+  --destructive-soft: var(--danger-soft);
+  --info: var(--cyan);
+  --info-soft: var(--cyan-soft);
+  --info-border: rgba(69, 217, 233, 0.4);
   --amber: #f5c76a;
   --amber-soft: rgba(245, 199, 106, 0.15);
   --rose: #f07c91;
@@ -50,6 +84,72 @@
   --radius-lg: 18px;
   --radius-md: 11px;
   --radius-sm: 8px;
+  /* Bo tròn hoàn toàn (pill) — trước đây 17 chỗ gõ cứng "99px" rải
+     rác ở 9 file khác nhau, nên muốn chỉnh bo góc pill phải sửa 17
+     chỗ. Gộp về 1 token (999px = đúng giá trị cũ, hình dạng không
+     đổi) để từ nay chỉ sửa 1 chỗ. */
+  --radius-pill: 999px;
+  /* ==============================================================
+     TYPOGRAPHY SCALE — gom theo VAI TRÒ, không theo con số
+     --------------------------------------------------------------
+     Vì sao cần: trước đây mỗi component tự gõ fontSize (11 / 11.5 /
+     12 / 12.5 / 13 / 13.5 / 14 / 14.5 / 15 / 18 / 22 / 26...) nên
+     cùng một vai trò "chữ phụ" xuất hiện ở cả 11.5 lẫn 12 — nhìn lệch
+     màu mỗi nơi một kiểu. Nay đặt tên theo vai trò; muốn chỉnh cỡ
+     chữ toàn app thì sửa đúng 1 chỗ thay vì rà hết codebase.
+
+     Font-family tách riêng: --font-display cho tiêu đề/số lớn (Space
+     Grotesk — đã có sẵn trong project, KHÔNG thêm font mới),
+     --font-body cho chữ đọc (Inter), --font-code cho code/công thức.
+     ============================================================== */
+  --font-display: var(--font-space-grotesk), sans-serif;
+  --font-body: var(--font-inter), sans-serif;
+  --text-display: 26px;
+  --text-heading: 15px;
+  --text-body: 13.5px;
+  --text-caption: 12px;
+  --text-label: 11px;
+  --leading-tight: 1.35;
+  --leading-normal: 1.6;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ==============================================================
+     GLASS — thông số lớp kính dùng chung
+     --------------------------------------------------------------
+     .panel trước đây gõ cứng `blur(18px)`, còn các lớp kính khác mỗi
+     chỗ một kiểu nên "độ kính" lệch nhau giữa các trang. Gom vào
+     token để chỉnh 1 lần cho toàn app (và để light mode có thể hạ
+     blur xuống vì blur nặng trên nền sáng chỉ tốn hiệu năng mà không
+     đẹp hơn).
+     ============================================================== */
+  --glass-blur: 18px;
+  --glass-blur-sm: 10px;
+  --glass-border-opacity: 0.12;
+
+  /* ==============================================================
+     SURFACE / TRACK — bề mặt "trũng" dùng để LỚP NỀN bên dưới
+     --------------------------------------------------------------
+     Vì sao cần (root cause của bug light mode): các thanh tiến trình
+     (`.bar-track`, `.level-hero__track`, `.spinner-ring`) và lưới
+     workspace trước đây gõ CỨNG `rgba(255,255,255,0.07)`. Trên nền
+     tối đúng, nhưng light mode nền là #f5f6fb — trắng mờ trên nền
+     sáng gần như vô hình, nên thanh tiến trình/spinner/workspace
+     "biến mất" hoàn toàn. Gộp ra token để mỗi theme tự ghi đè giá
+     trị phù hợp (light mode dùng overlay TỐI, đúng chiều overlay
+     ngược lại so với dark mode).
+     ============================================================== */
+  --track-bg: rgba(255, 255, 255, 0.07);
+  --track-border: rgba(255, 255, 255, 0.06);
+  --spinner-track: rgba(255, 255, 255, 0.25);
+  --spinner-head: #ffffff;
+  --workspace-bg: rgba(8, 12, 22, 0.62);
+  --workspace-panel: rgba(255, 255, 255, 0.025);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+
+
   /* Bề mặt "nổi" phía trên nội dung (modal/tooltip/toast) — trước đây
      3 nơi dùng 3 mã hex GẦN GIỐNG NHƯNG KHÁC NHAU (#10141f, #0e1422,
      #141a28), bypass hoàn toàn hệ token, nên sẽ đứng yên (dark) khi
@@ -74,7 +174,7 @@
   --mm-desc: #b6c2d9;
   --mm-meta: #93a1bc;
   --mm-edge: rgba(201, 211, 255, 0.26);
-  --mm-edge-strong: rgba(53, 208, 216, 0.45);
+  --mm-edge-strong: rgba(69, 217, 233, 0.45);
   /* Typography tokens — code/math dùng stack riêng, không để mỗi
      component tự chọn font (tránh chữ vỡ, icon ô vuông). */
   --font-code: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -100,6 +200,80 @@
   --fab-gap: 14px;         /* khoảng cách giữa 2 bubble */
   --fab-edge: 22px;        /* lề từ mép màn hình (desktop) */
   --fab-edge-mobile: 16px; /* lề từ mép màn hình (mobile) */
+  /* Safe-area ngang. Khai báo ở đây (mặc định 0px) để `--fab-right` dùng
+     `max()` mà không phụ thuộc trình duyệt có hỗ trợ `env()` hay không. */
+  --safe-right: env(safe-area-inset-right, 0px);
+  /* Khoảng lề THỰC TẾ của cột nút nổi = lề chuẩn nhưng không bao giờ nhỏ
+     hơn safe-area thiết bị.
+
+     VÌ SAO CẦN: `env(safe-area-inset-right)` bằng 0 trên desktop và hầu hết
+     điện thoại dọng, NHƯNG khác 0 ở iPhone có tai thỏ khi xoay ngang, hoặc
+     thiết bị có camera viền. Lúc đó `right: 22px` đẩy nút sát mép màn hình
+     (đúng triệu chứng "bị cắt một phần"). `max()` chọn giá trị lớn hơn nên
+     không bao giờ vi phạm safe-area mà vẫn giữ khoảng cách thiết kế ở màn
+     bình thường. */
+  --fab-right: max(var(--fab-edge), var(--safe-right));
+  --fab-right-mobile: max(var(--fab-edge-mobile), var(--safe-right));
+
+  /* ==============================================================
+     MOTION SYSTEM — token cho toàn bộ animation trong app
+     --------------------------------------------------------------
+     Vì sao cần token: trước đây mỗi component tự viết duration/easing riêng
+     nên cùng 1 loại chuyển động lại có nhiều tốc độ khác nhau — cảm giác
+     "rời rạc". 3 thang duration + 1 easing chuẩn giúp mọi chuyển động
+     cùng nhịp.
+
+     Nguyên tắc chọn (xem MOBILE.md / motion principles):
+       - 120ms: phản hồi tức thì (hover, active, focus) — người dùng đã
+         đang chờ, trễ >150ms ở cảm giác chậm.
+       - 200ms: thay đổi trạng thái vừa (tab, toggle, chip).
+       - 320ms: chuyển cảnh (modal, sheet, trang) — đủ thời gian để mắt
+         bắt theo nhưng không làm chờ.
+       - Dùng transform/opacity (GPU) thay vì width/height/top — không
+         kích hoạt layout.
+     ============================================================== */
+  --dur-instant: 120ms;
+  --dur-fast: 200ms;
+  --dur-slow: 320ms;
+  /* Easing chuẩn: ease-out cho vào (cảm giác phản hồi tức), ease-in-out
+     cho chuyển đổi, spring nhẹ cho "pop" (thành tự, XP). */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ==============================================================
+     SPACING SCALE — lưới 4px, dùng để mọi padding/gap/margin thống nhất.
+     8px trên desktop, 12/16 trên mobile là các nhịp lặp chính.
+     ============================================================== */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* ==============================================================
+     DEPTH / ELEVATION — 3 tầng đủ dùng cho sản phẩm này.
+     Trước đây shadow rải rác ở nhiều file với giá trị gần giống nhau
+     (0 8px 22px / 0 8px 28px / 0 10px 30px...), nhìn không có hệ thống.
+     ============================================================== */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.18);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.22);
+  --shadow-lg: 0 20px 55px rgba(0, 0, 0, 0.28);
+  /* Glow dùng cho CTA / phần tử đang "nổi" (AI button, XP gain). */
+  --glow-indigo: 0 0 0 1px rgba(119, 117, 255, 0.35), 0 8px 28px rgba(119, 117, 255, 0.28);
+  --glow-cyan: 0 0 0 1px rgba(69, 217, 233, 0.35), 0 8px 28px rgba(69, 217, 233, 0.24);
+
+  /* ==============================================================
+     RARITY — màu theo độ hiếm của phần thưởng (Reward.rearity trong DB).
+     Gộp vào token để reward card và badge dùng chung 1 bảng màu, không
+     mỗi component tự chọn hex riêng.
+     ============================================================== */
+  --rarity-common: var(--text-dim);
+  --rarity-rare: var(--cyan);
+  --rarity-epic: var(--indigo);
+  --rarity-legendary: var(--amber);
 }
 
 /* ================================================================
@@ -116,6 +290,30 @@
      nền; light mode ngược lại cần lớp phủ TỐI mờ trên nền sáng để tạo
      card khác biệt — cùng cơ chế, đổi chiều overlay. */
   --panel: rgba(15, 23, 42, 0.04);
+
+  /* ---- SEMANTIC TOKENS Ở LIGHT MODE ----
+     Các token alias (--success/--danger/...) KHÔNG cần khai lại vì
+     chúng trỏ tới --green/--rose... mà light mode đã ghi đè riêng.
+     Chỉ token có alpha viết cứng mới phải khai lại: trên nền sáng,
+     viền alpha .32 của bản dark trên #f5f6fb quá nhạt và biến mất. */
+  --success-border: rgba(13, 143, 99, 0.32);
+  --warning-border: rgba(181, 121, 15, 0.34);
+  --danger-border: rgba(201, 56, 84, 0.32);
+  --info-border: rgba(11, 122, 134, 0.34);
+
+  /* ---- SURFACE / TRACK Ở LIGHT MODE ----
+     Bắt buộc phải ghi đè, KHÔNG alias được: bản dark là overlay
+     TRẮNG mờ, mà trên nền #f5f6fb trắng mờ gần như vô hình ⇒ thanh
+     tiến trình, spinner và lưới workspace biến mất. Ở đây đảo
+     chiều overlay sang TỐI mờ, giữ đúng độ tương phản trên nền sáng. */
+  --track-bg: rgba(15, 23, 42, 0.09);
+  --track-border: rgba(15, 23, 42, 0.08);
+  --spinner-track: rgba(15, 23, 42, 0.15);
+  --spinner-head: rgba(15, 23, 42, 0.55);
+  --workspace-bg: rgba(15, 23, 42, 0.04);
+  --workspace-panel: rgba(15, 23, 42, 0.03);
+  --scrollbar-thumb: rgba(15, 23, 42, 0.22);
+
   --panel-strong: rgba(15, 23, 42, 0.065);
   --border: rgba(15, 23, 42, 0.11);
   --border-soft: rgba(15, 23, 42, 0.07);
@@ -127,6 +325,17 @@
      Light mode cần bản ĐẬM hơn cho những chỗ dùng làm màu chữ/icon,
      trong khi bản gốc (--cyan/--amber/--rose) vẫn giữ để dùng cho
      background/gradient nơi độ bão hoà cao mới đẹp. */
+
+  /* ---- SEMANTIC TOKENS Ở LIGHT MODE ----
+     Các token alias (--success/--danger/...) KHÔNG cần khai lại vì
+     chúng trỏ tới --green/--rose... mà light mode đã ghi đè riêng.
+     Chỉ token có alpha viết cứng mới phải khai lại: trên nền sáng,
+     viền alpha .32 của bản dark trên #f5f6fb quá nhạt và biến mất. */
+  --success-border: rgba(13, 143, 99, 0.32);
+  --warning-border: rgba(181, 121, 15, 0.34);
+  --danger-border: rgba(201, 56, 84, 0.32);
+  --info-border: rgba(11, 122, 134, 0.34);
+
   --indigo: #6a4fe0;
   --indigo-soft: rgba(106, 79, 224, 0.09);
   --indigo-strong: #4e35c4;
@@ -150,6 +359,23 @@
   --mm-meta: #5d6779;
   --mm-edge: rgba(15, 23, 42, 0.22);
   --mm-edge-strong: rgba(15, 139, 147, 0.5);
+
+  /* Shadow trên nền sáng: phải nhẹ hơn + có chút xám xanh để đọc là
+     "nổi lên" chứ không phải "vết bẩn". Cùng lý do panel đổi overlay
+     sang lớp tối mờ ở light mode (xem phần trên). */
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 6px 18px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 18px 44px rgba(15, 23, 42, 0.1);
+  /* Glow trên nền sáng phải dùng màu bão hoà cao hơn (bản dark là màu
+     sáng phát trên nền tối; đảo lại sẽ mờ và mất tác dụng). */
+  --glow-indigo: 0 0 0 1px rgba(106, 79, 224, 0.28), 0 6px 20px rgba(106, 79, 224, 0.16);
+  --glow-cyan: 0 0 0 1px rgba(15, 139, 147, 0.28), 0 6px 20px rgba(15, 139, 147, 0.14);
+  /* Rarity trên nền sáng dùng bản ĐẬM hơn (tương tự cyan/amber/rose ở
+     trên): màu sáng trên nền sáng không đủ tương phản cho text/icon. */
+  --rarity-common: var(--text-dim);
+  --rarity-rare: var(--cyan);
+  --rarity-epic: var(--indigo);
+  --rarity-legendary: var(--amber);
 }
 
 /* Tôn trọng prefers-reduced-motion TOÀN APP — thay vì phải rà từng
@@ -183,8 +409,8 @@ body {
 }
 
 body {
-  background: radial-gradient(1200px 700px at 85% -10%, rgba(124, 108, 240, 0.1), transparent 60%),
-    radial-gradient(900px 600px at -10% 90%, rgba(53, 208, 216, 0.07), transparent 55%), var(--bg);
+  background: radial-gradient(1200px 700px at 85% -10%, rgba(119, 117, 255, 0.1), transparent 60%),
+    radial-gradient(900px 600px at -10% 90%, rgba(69, 217, 233, 0.07), transparent 55%), var(--bg);
   color: var(--text);
   font-family: var(--font-inter), sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -230,22 +456,22 @@ h3 {
      sâu 55px. Trước đây chỉ blur 6px và không có bóng nên card trông
      phẳng, gần như dán liền vào nền — đây là khác biệt thị giác lớn
      nhất giữa bản cũ và mockup. */
-  backdrop-filter: blur(18px);
-  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--shadow-md, 0 20px 55px rgba(0, 0, 0, 0.22));
 }
 
 /* --------- Thanh tiến trình / mastery bar dùng nhiều nơi --------- */
 .bar-track {
   height: 9px;
-  border-radius: 99px;
-  background: rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-pill);
+  background: var(--track-bg);
   overflow: hidden;
   flex: 1;
 }
 
 .bar-fill {
   height: 100%;
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
   background: linear-gradient(90deg, var(--cyan), var(--indigo));
 }
 
@@ -282,8 +508,8 @@ h3 {
   width: 6px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 99px;
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-pill);
 }
 
 /* --------- Trạng thái loading/error dùng chung mọi trang fetch --------- */
@@ -291,6 +517,41 @@ h3 {
   color: var(--text-dim);
   font-size: 14px;
   padding: 20px 0;
+  /* Trước đây là <p> (display: block, text-align: left). Giờ là <div> chứa
+     text + nút thử lại, nên dùng flex để nút nằm cạnh chữ thay vì xuống
+     dòng bất tiện. `flex-wrap` để trên 320px nút xuống dòng thay vì ép
+     chữ — tránh overflow ngang. */
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.state-msg__text {
+  /* min-width: 0 + flex: 1 để chữ dài (thông báo lỗi dài, link không ngắt)
+     co lại được thay vì đẩy nút thử lại ra ngoài màn hình. */
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.state-msg__retry {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--panel-strong);
+  color: var(--text);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.state-msg__retry:active {
+  background: var(--panel-hover);
 }
 
 .state-msg.error {
@@ -352,7 +613,7 @@ h3 {
     z-index: 50;
     transform: translateX(-100%);
     transition: transform 0.22s ease;
-    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--shadow-lg, 8px 0 24px rgba(0, 0, 0, 0.35));
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
@@ -414,7 +675,7 @@ h3 {
     background: color-mix(in srgb, var(--surface-elevated) 88%, transparent);
     backdrop-filter: blur(18px);
     border-top: 1px solid var(--border);
-    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.28);
+    box-shadow: var(--shadow-md, 0 -8px 24px rgba(0, 0, 0, 0.28));
   }
 
   .mobile-bottom-nav__item {
@@ -462,7 +723,7 @@ h3 {
     width: 22px;
     height: 3px;
     margin-top: 2px;
-    border-radius: 99px;
+    border-radius: var(--radius-pill);
     background: linear-gradient(90deg, var(--indigo), var(--cyan));
   }
 
@@ -470,6 +731,13 @@ h3 {
     outline: 2px solid var(--cyan);
     outline-offset: -2px;
     border-radius: 10px;
+  }
+
+  /* Phản hồi khi CHẠM. Không dùng :hover làm tín hiệu chính — trên mobile
+     không có con trỏ chuột, :hover chỉ bám lại sau khi bấm và trông như
+     trạng thái sai. `:active` chỉ sáng trong lúc ngón tay đang ở trên ô. */
+  .mobile-bottom-nav__item:active {
+    background: var(--panel-hover);
   }
 
   /* ---- Ô gõ của AI Gia sư: dính đáy, nhấc lên trên thanh nav ---- */
@@ -486,9 +754,35 @@ h3 {
   }
 
   .tutor-composer input {
-    /* 16px: iOS TỰ phóng to toàn trang khi focus vào input có cỡ chữ < 16px —
-       bàn phím mở lên là trang "nhảy", rất khó chịu trên iPhone. */
-    font-size: 16px;
+    /* 16px xử lý ở khối "INPUT 16px TRÊN MOBILE" (dùng `!important` để thắng
+       inline `fontSize: 14`). Rule cũ ở đây bị inline style ghi đè nên là code
+       chết — đã gộp về một chỗ để không ai tưởng nó còn tác dụng. */
+    min-width: 0;
+  }
+
+  /* Nút "Gửi": trên mobile cao tối thiểu 44px cho vùng chạm, và `flex-shrink: 0`
+     để không bị bóp mỏng khi tin nhắn dài đẩy ô nhập. */
+  .tutor-composer__send {
+    flex-shrink: 0;
+    min-height: 44px;
+  }
+
+  /* ---- Nút gợi ý + nút thử lại: chỉ NỚ kích thước vùng chạm ở mobile ----
+     Phần style nền/viền/disabled đã đặt ở khối dùng chung phía trên (mọi nền
+     tảng) để không lặp lại 2 nơi dễ lệch. */
+  .tutor-hints {
+    flex-wrap: wrap;
+  }
+
+  .tutor-hint-btn,
+  .tutor-retry__btn {
+    /* Vùng chạm 44px (nguyên tắc chung của MOBILE.md) — bản gốc cao ~26px,
+       quá nhỏ với ngón tay và dễ bấm trượt sang tin nhắn khác. */
+    min-height: 44px;
+    /* Cỡ chữ lớn hơn trên mobile: nhãn tiếng Việt ngắn ở 12px khó đọc ngoài
+       trời, và nút bấm cũng tránh bị iOS zoom khi focus. */
+    font-size: 14px;
+    padding: 8px 14px;
   }
 
   /* ---- Bottom sheet (menu "Thêm", chi tiết node...) ---- */
@@ -519,7 +813,7 @@ h3 {
     /* Chỉ bo 2 góc trên — sheet bám đáy màn hình, bo góc dưới sẽ tách nó
        khỏi mép màn hình và trông như modal giữa màn hình. */
     border-radius: 20px 20px 0 0;
-    box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.55);
+    box-shadow: var(--shadow-lg, 0 -20px 50px rgba(0, 0, 0, 0.55));
     overflow: hidden;
     /* Dịch chuyển theo ngón tay (transform inline khi kéo) — transition
        chỉ chạy lúc mở/đóng, bị tắt trong lúc kéo (class .is-dragging) để
@@ -555,7 +849,7 @@ h3 {
     width: 40px;
     height: 4px;
     margin: 0 auto;
-    border-radius: 99px;
+    border-radius: var(--radius-pill);
     background: var(--border-hover);
   }
 
@@ -575,6 +869,369 @@ h3 {
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     padding: 14px 16px calc(18px + var(--safe-bottom));
+  }
+}
+
+/* Ô "hỏi AI ngay" trên Trang chủ. */
+.dashboard-ask__btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 400px) {
+  .dashboard-ask__btn {
+    min-height: 44px;
+  }
+}
+
+/* ================================================================
+   COMMUNITY DOCUMENT CARD
+   Thẻ tài liệu cộng đồng. Trước đây hover làm bằng JS
+   (onMouseEnter ghi thẳng e.currentTarget.style) và nhóm nút hành
+   động dùng `<style jsx>` + `:host:hover` — selector `:host` KHÔNG
+   tồn tại trong styled-jsx nên `.card-actions` kẹt ở opacity:0 vĩnh
+   viễn: nút Lưu / Tải xuống không hiện, không bấm được.
+
+   Nay hover do CSS đảm nhiệm, và trên thiết bị cảm ứng (mobile/APK)
+   không có hover nên nhóm nút luôn hiện — chỉ ẩn-khi-hover ở màn
+   hình có con trỏ thật, đánh dấu bằng `@media (hover: hover)`.
+   ================================================================ */
+.community-doc-card {
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: var(--panel-strong);
+  cursor: pointer;
+  transition: transform var(--dur-instant) var(--ease-out),
+    box-shadow var(--dur-instant) var(--ease-out),
+    border-color var(--dur-instant) var(--ease-out);
+}
+
+.community-doc-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-hover);
+}
+
+/* Vì thẻ có onClick nên phải là nút về mặt a11y: role + tabIndex +
+   xử lý Enter/Space, và có focus ring rõ ràng khi điều hướng bằng
+   bàn phím (chỉ hiện với :focus-visible để không thừa vòng khi bấm
+   chuột). */
+.community-doc-card:focus-visible {
+  outline: 2px solid var(--indigo);
+  outline-offset: 2px;
+}
+
+.community-doc-card__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  justify-content: flex-end;
+}
+
+.community-doc-card__action {
+  padding: 6px 12px;
+  font-size: 12px;
+  min-height: 34px;
+}
+
+@media (hover: hover) {
+  .community-doc-card__actions {
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease-out);
+  }
+
+  .community-doc-card:hover .community-doc-card__actions,
+  .community-doc-card:focus-within .community-doc-card__actions {
+    opacity: 1;
+  }
+}
+
+/* ================================================================
+   DESIGN SYSTEM — BADGE
+   Nhãn trạng thái dùng chung: rarity phần thưởng, achievement, level,
+   trạng thái đổi thưởng. Trước đây mỗi chỗ tự dựng inline → lệch nhau.
+   ================================================================ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-family: var(--font-inter), sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.5;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  /* Badge không phải tương tác -> không có tap highlight. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.badge--icon {
+  padding: 4px;
+  border-radius: 999px;
+}
+
+.badge--neutral {
+  background: var(--panel-hover);
+  color: var(--text-dim);
+  border-color: var(--border-soft);
+}
+
+.badge--indigo {
+  background: var(--indigo-soft);
+  color: var(--indigo-strong);
+  border-color: rgba(119, 117, 255, 0.24);
+}
+
+.badge--cyan {
+  background: var(--cyan-soft);
+  color: var(--cyan);
+  border-color: rgba(69, 217, 233, 0.24);
+}
+
+.badge--green {
+  background: var(--green-soft);
+  color: var(--green);
+  border-color: rgba(101, 214, 163, 0.24);
+}
+
+.badge--amber {
+  background: var(--amber-soft);
+  color: var(--amber);
+  border-color: rgba(245, 199, 106, 0.24);
+}
+
+.badge--rose {
+  background: rgba(240, 124, 145, 0.14);
+  color: var(--rose);
+  border-color: rgba(240, 124, 145, 0.24);
+}
+
+/* Rarity: nền dùng màu chức năng đã pha mờ sẵn ở token (--cyan-soft...),
+   viền màu đậm hơn 1 bậc để "tầng" hiện rõ khi xếp cạnh nhau. */
+.badge--reward {
+  background: var(--panel-hover);
+  border-color: var(--border);
+}
+
+.badge--common {
+  color: var(--rarity-common);
+  background: var(--panel-hover);
+  border-color: var(--border-soft);
+}
+
+.badge--rare {
+  color: var(--rarity-rare);
+  background: var(--cyan-soft);
+  border-color: rgba(69, 217, 233, 0.28);
+}
+
+.badge--epic {
+  color: var(--rarity-epic);
+  background: var(--indigo-soft);
+  border-color: rgba(119, 117, 255, 0.3);
+}
+
+.badge--legendary {
+  color: var(--rarity-legendary);
+  background: var(--amber-soft);
+  border-color: rgba(245, 199, 106, 0.3);
+}
+
+/* Light mode: viền raritity phải đậm hơn (màu sáng trên nền sáng không đủ
+   tương phản cho 1px border). Chỉ đổi màu viền — nền dùng chung token
+   --*-soft đã được theme hoá ở khối [data-theme="light"]. */
+:root[data-theme="light"] .badge--rare {
+  border-color: rgba(15, 139, 147, 0.34);
+}
+
+:root[data-theme="light"] .badge--epic {
+  border-color: rgba(106, 79, 224, 0.34);
+}
+
+:root[data-theme="light"] .badge--legendary {
+  border-color: rgba(181, 121, 15, 0.36);
+}
+
+:root[data-theme="light"] .badge--cyan {
+  border-color: rgba(15, 139, 147, 0.3);
+}
+
+:root[data-theme="light"] .badge--indigo {
+  border-color: rgba(106, 79, 224, 0.3);
+}
+
+:root[data-theme="light"] .badge--rose {
+  border-color: rgba(201, 56, 84, 0.3);
+}
+
+:root[data-theme="light"] .badge--green {
+  border-color: rgba(13, 143, 99, 0.3);
+}
+
+/* ================================================================
+   DESIGN SYSTEM — ANIMATED NUMBER (XP / LXP / streak)
+   Số đếm chạy; đây là phần tạo CẢM GIÁC nhận thưởng khi học.
+   ================================================================ */
+.animated-number {
+  font-variant-numeric: tabular-nums;
+  /* tabular-nums là BẮT BUỘC: font mặc định dùng chữ số tỉ lệ (proportional)
+     nên khi số chạy, chiều rộng từng chữ nhảy theo (1 → 8 → 11) làm cả dòng
+     rung sang trái/phải. tabular-nums giữ mọi chữ số cùng bề ngang. */
+}
+
+@media (max-width: 880px) {
+  .badge {
+    padding: 4px 10px;
+    font-size: 11.5px;
+  }
+}
+
+/* ================================================================
+   MÀN RẤT HẸP (<=360px) — 320px là mức phổ biến trên Android giá rẻ.
+   Đặt ở TOP-LEVEL vì CSS không cho `@media` lồng trong `@media`.
+   ================================================================ */
+@media (max-width: 360px) {
+  /* Thanh nav dưới: 5 ô chỉ còn ~64px mỗi ô, nhãn tiếng Việt ("Học tập",
+     "Luyện tập") bị bóp. Cho phép nhãn xuống 2 dòng thay vì cắt bằng ellipsis
+     — đọc được nguyên nghĩa và ô cao hơn một chút (tốt cho vùng chạm). */
+  .mobile-bottom-nav__item {
+    padding: 6px 1px;
+    font-size: 9.5px;
+  }
+
+  .mobile-bottom-nav__item > span {
+    white-space: normal;
+    overflow: visible;
+    line-height: 1.05;
+  }
+
+  /* Main content: giảm lề ngang 16px -> 12px để nội dung có thêm 8px,
+     tránh card bị quá hẹp ở 320px. */
+  .main-content {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+/* Khung chat AI Gia sư.
+   Desktop: chiều cao cố định 560px — GIỮ NGUYÊN hành vi cũ.
+   Mobile: bám khung nhìn động (dvh) với trần tối đa 560px. Bàn phím Android
+   mở làm khung nhìn co còn ~350px; nếu panel vẫn cao 560px thì ô nhập
+   sticky ở đáy panel bị đẩy vượt ra ngoài màn hình → mở bàn phím là mất
+   ô nhập. `min-height` nhỏ giữ khung chat vẫn dùng được khi màn hình thấp
+   (điện thoại nằm ngang). */
+.tutor-panel {
+  display: flex;
+  flex-direction: column;
+  height: 560px;
+}
+
+/* Hàng nút gợi ý / hàng nút thử lại trong khung chat — cùng style ở mọi nền
+   tảng, chỉ khác kích thước vùng chạm (xem @media 880px bên dưới). */
+.tutor-hints {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tutor-retry {
+  margin-top: 8px;
+  align-self: flex-start;
+}
+
+/* ---- Chỉ báo "AI đang trả lời" ----
+   3 chấm nhịp sóng thay cho dòng chữ tĩnh: dùng animation nhẹ (transform
+   thuần, không kích hoạt layout/paint nặng) nên vẫn mượt trên máy yếu. Với
+   prefers-reduced-motion (đã có rule toàn app) chúng đứng yên — chấp nhận
+   được vì thông tin vẫn hiện qua vùng sr-only cho screen reader. */
+.tutor-typing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 12px 15px;
+  border-radius: 14px;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+}
+
+.tutor-typing__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  animation: tutor-typing-bounce 1.2s ease-in-out infinite;
+}
+
+.tutor-typing__dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.tutor-typing__dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes tutor-typing-bounce {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+/* Link mở tài liệu trong thẻ nguồn học. Tách class thay vì inline để tăng vùng
+   chạm trên mobile: bản gốc là chữ 12.5px không padding (~20px cao), quá nhỏ
+   để bấm bằng ngón tay. */
+.tutor-resource__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px 2px;
+  color: var(--cyan);
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.tutor-hint-btn,
+.tutor-retry__btn {
+  font-family: var(--font-inter), sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 11px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-dim);
+}
+
+.tutor-hint-btn:disabled,
+.tutor-retry__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Không dùng :hover làm tín hiệu chính trên mobile (không có con trỏ chuột);
+   :active mới là phản hồi đúng khi chạm. */
+.tutor-hint-btn:active:not(:disabled),
+.tutor-retry__btn:active:not(:disabled) {
+  background: var(--panel-hover);
+  color: var(--text);
+}
+
+@media (max-width: 880px) {
+  .tutor-panel {
+    height: min(560px, 72dvh);
+    min-height: 320px;
   }
 }
 
@@ -614,7 +1271,7 @@ h3 {
   gap: 20px;
   margin: 18px 0 20px;
   padding: 24px 26px;
-  border-color: rgba(53, 208, 216, 0.2);
+  border-color: rgba(69, 217, 233, 0.2);
   background: radial-gradient(circle at 85% 0%, var(--cyan-soft), transparent 50%), var(--panel);
 }
 
@@ -706,12 +1363,12 @@ h3 {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: rgba(8, 12, 22, 0.62);
+  background: var(--workspace-bg);
 }
 
 .workspace-sources,
 .workspace-ai-panel {
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--workspace-panel);
   padding: 18px;
 }
 
@@ -763,7 +1420,7 @@ h3 {
 .workspace-source:hover,
 .workspace-source--selected {
   background: var(--indigo-soft);
-  border-color: rgba(124, 108, 240, 0.42);
+  border-color: rgba(119, 117, 255, 0.42);
 }
 
 .workspace-source-icon {
@@ -893,7 +1550,7 @@ h3 {
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  border: 1px solid rgba(53, 208, 216, 0.35);
+  border: 1px solid rgba(69, 217, 233, 0.35);
   background: var(--cyan-soft);
   border-radius: var(--radius-md);
   font-size: 13.5px;
@@ -906,7 +1563,7 @@ h3 {
   height: 8px;
   border-radius: 50%;
   background: var(--cyan);
-  box-shadow: 0 0 0 4px rgba(53, 208, 216, 0.2);
+  box-shadow: 0 0 0 4px rgba(69, 217, 233, 0.2);
   flex-shrink: 0;
 }
 
@@ -917,7 +1574,7 @@ h3 {
 
 .workspace-session-summary {
   padding: 14px 16px;
-  border: 1px solid rgba(53, 208, 216, 0.3);
+  border: 1px solid rgba(69, 217, 233, 0.3);
   background: var(--panel);
   border-radius: var(--radius-md);
 }
@@ -1054,7 +1711,7 @@ h3 {
 }
 
 .workspace-quiz-result--correct {
-  border: 1px solid rgba(53, 208, 216, 0.35);
+  border: 1px solid rgba(69, 217, 233, 0.35);
   background: var(--cyan-soft);
 }
 
@@ -1213,7 +1870,7 @@ h3 {
   gap: 3px;
   padding: 8px 10px;
   border-left: 2px solid var(--cyan);
-  background: rgba(53, 208, 216, 0.06);
+  background: rgba(69, 217, 233, 0.06);
 }
 
 .workspace-citation span {
@@ -1285,7 +1942,7 @@ h3 {
 }
 
 .review-card:hover {
-  border-color: rgba(53, 208, 216, 0.6);
+  border-color: rgba(69, 217, 233, 0.6);
   transform: translateY(-2px);
 }
 
@@ -1519,7 +2176,213 @@ h3 {
   border-radius: var(--radius-md);
   font-size: 14px;
   font-family: var(--font-inter), sans-serif;
+  /* `line-height` + `height` khai báo TƯỜNG MINH (không để mặc định của
+     browser): `<input>` và `<select>` gốc có chiều cao nội tuyến khác nhau,
+     nên khi đặt cạnh nhau chữ bị lệch dọc (input thấp hơn select). Khai báo
+     cùng `height` + `line-height` cho cả hai là mọi field cùng hàng có
+     baseline giống hệt — không cần margin-top vá từng ô. */
+  line-height: 20px;
+  /* Không để input/textarea co lại dưới 16px trên màn hình hẹp — xem khối
+     "INPUT 16px TRÊN MOBILE" bên dưới (bắt buộc cho bàn phím, đặc biệt
+     trong WebView của app Android). */
 }
+
+/* Ô nhập 1 dòng: chiều cao cố định để khớp `<select>` cùng hàng. */
+.form-input {
+  height: 42px;
+}
+
+/* ---- SELECT dùng chung ----
+   `<select>` gốc để mỗi trình duyệt/OS tự vẽ nút mũi tên (Windows khác macOS
+   khác Android) ⇒ form trông không đồng bộ. Ở đây tắt nút gốc (`appearance:
+   none`) và chèn icon riêng qua `.form-select-wrap` + `.form-select-caret`.
+
+   `padding-right` chừa chỗ cho icon; icon có `pointer-events: none` nên
+   không chặn thao tác bấm vào select. */
+.form-select-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.form-select {
+  width: 100%;
+  height: 42px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 38px 10px 12px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  line-height: 20px;
+  font-family: var(--font-inter), sans-serif;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+
+.form-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Icon mũi tên: `pointer-events: none` để click xuyên xuống select, và canh
+   giữa bằng `top: 50% + translateY(-1px)` để khớp đúng optical center với
+   chữ (nếu dùng flex sẽ lệch vài px vì icon có baseline riêng). */
+.form-select-caret {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-1px);
+  pointer-events: none;
+  color: var(--text-faint);
+  line-height: 0;
+}
+
+/* Vòng focus chung cho mọi control — dùng `:focus-visible` để không hiện
+   viền khi người dùng chỉ bấm chuột, nhưng bàn phím vẫn thấy rõ. */
+.form-input:focus-visible,
+.form-textarea:focus-visible,
+.form-select:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+  border-color: var(--cyan);
+}
+
+/* Nhãn bắt buộc: dấu * màu accent, không dùng chữ "bắt buộc" dài. */
+.form-req {
+  color: var(--rose);
+  margin-left: 2px;
+}
+
+/* Lỗi hiển thị SÁT field gây lỗi (không đẩy lên đầu form). */
+.form-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--rose);
+}
+
+.form-error--global {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(244, 114, 182, 0.32);
+  background: rgba(244, 114, 182, 0.08);
+}
+
+/* Gợi ý nhỏ dưới field (vd "tối đa 50MB", "không bắt buộc"). */
+.form-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-faint);
+}
+
+/* ---- Footer hành động của form ----
+   Desktop: 2 nút căn phải, cách nhau một nhịp spacing.
+   Mobile: 2 nút đều nhau chiều rộng (ưu tiên đủ lớn để bấm), xuống dòng khi
+   hẹp. `margin-top` dùng token spacing, không hardcode px lẻ. */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: var(--space-5, 24px);
+}
+
+@media (max-width: 560px) {
+  .form-actions {
+    /* 2 nút ngang nhau, mỗi nút ≥44px chiều cao (MOBILE.md). */
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .form-actions > * {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  /* Mobile nên để nút chính nổi hơn: chiếm cả hàng, nút phụ thu nhỏ lại. */
+  .form-actions--stack-primary {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions--stack-primary > *:last-child {
+    order: -1;
+  }
+}
+
+/* ================================================================
+   INPUT 16px TRÊN MOBILE — bắt buộc cho bàn phím, KHÔNG phải sở thích thẩm mỹ
+   ----------------------------------------------------------------
+   Vì sao: trên iOS Safari và WebView, khi focus vào input có cỡ chữ
+   < 16px thì trình duyệt TỰ PHÓNG TO cả trang — người dùng phải cuộn
+   ngược lại mới gõ nổi, và bàn phím che mất nội dung. Với input của
+   LearnX (chat Tutor, form đăng nhập, ô trả lời quiz...) điều này
+   hỏng đúng trải nghiệm lõi của app.
+
+   Vì sao đặt ở đây thay vì sửa từng component: nhiều chỗ dùng inline
+   style fontSize 14 (login, register, PasswordInput, Tutor...) — inline
+   style ĐẤT THẮNG mọi rule thường của stylesheet, nên rule
+   ".tutor-composer input { font-size: 16px }" sẵn có trong globals.css
+   thực tế là VÔ HIỆU với chính cái input nó nhắm tới. Không có important
+   thì không có cách nào trong CSS thắng inline style. Vì vậy một rule toàn
+   cục + important là cách ít xâm lấn nhất: không sửa hàng chục file
+   component, không đổi API, desktop giữ 14px.
+   Chỉ áp ở <=880px: desktop giữ nguyên cỡ chữ hiện tại.
+   ================================================================ */
+@media (max-width: 880px) {
+  /* `!important` là BẮT BUỘC ở đây (xem giải thích phía trên): không có nó,
+     inline `style={{ fontSize: 14 }}` của các component sẽ thắng và quy tắc
+     này trở thành code chết. Chỉ trong media query nên desktop không đổi. */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+    /* Nhiều input đặt cứng `width: 100%` + padding lớn; `max-width: 100%`
+       bảo đảm chúng không tràn khỏi khung ở 320px. */
+    max-width: 100%;
+  }
+
+  /* Ô nhập của Login/Register: nới thành chiều cao chuẩn vùng chạm và bỏ
+     viền focus gốc (focus xanh đã đủ để báo trạng thái).
+     Dùng class CỦA AUTH MỚI (`.auth-input` trong components/auth/auth.css)
+     thay vì `.auth-card input` — khung auth đã chuyển sang AuthShell. */
+  .auth-input {
+    min-height: 46px;
+  }
+}
+
+/* ================================================================
+   AUTH CARD (Login / Register) — ĐÃ CHUYỂN SANG components/auth/auth.css
+   ----------------------------------------------------------------
+   Toàn bộ style trang Login/Register giờ nằm ở `auth.css` (theo pattern
+   welcome.css / onboarding.css / rewards.css) và dùng class `.auth-*`.
+   `AuthCard.tsx` đã bị xoá vì không còn caller nào — 2 trang dùng
+   `AuthShell` (khung split-layout desktop / 1 cột mobile).
+
+   Safe-area cho vùng auth GIỜ nằm trong auth.css:
+     .auth-brand  → padding-top: calc(48px + var(--safe-top))
+     .auth-form   → padding-top/bottom có --safe-top/--safe-bottom
+   Nguyên tắc giữ nguyên: `capacitor.config.ts` đặt
+   `StatusBar.overlaysWebView = true`, nên không chừa safe-area thì logo và
+   tiêu đề nằm ngay dưới camera punch-hole trên Android.
+   ================================================================ */
+
+/* ================================================================
+   MÀN HÌNH THẤP — dùng chung (không còn gắn riêng cho .auth-card)
+   Điện thoại nằm ngang hoặc bàn phím đang mở trên web: layout
+   `align-items: center` sẽ cắt đầu nội dung. Các trang tự xử lý bằng
+   `align-items: flex-start` + `overflow-y: auto` trong media query riêng.
+   ================================================================ */
 
 .form-input:disabled {
   opacity: 0.6;
@@ -1677,8 +2540,8 @@ h3 {
 .spinner-ring {
   width: 22px;
   height: 22px;
-  border: 3px solid rgba(255, 255, 255, 0.25);
-  border-top-color: #fff;
+  border: 3px solid var(--spinner-track);
+  border-top-color: var(--spinner-head);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -1728,7 +2591,7 @@ h3 {
   background: var(--panel-strong);
   border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-lg, 0 18px 40px rgba(0, 0, 0, 0.35));
   padding: 6px;
   z-index: 40;
 }
@@ -1837,7 +2700,7 @@ h3 {
  */
 .floating-actions {
   position: fixed;
-  right: var(--fab-edge);
+  right: var(--fab-right);
   bottom: var(--fab-edge);
   /* Cùng tầng với nút AI cũ (60): cao hơn bottom-nav (45) và sidebar
      overlay (50) để không bị chúng phủ, nhưng THẤP hơn modal (100) để
@@ -1858,7 +2721,7 @@ h3 {
 
 @media (max-width: 880px) {
   .floating-actions {
-    right: var(--fab-edge-mobile);
+    right: var(--fab-right-mobile);
     /* offset = chiều cao thanh nav + safe-area + 12px. Thiếu phần này thì nút
        bị thanh nav đè, không bấm được — lỗi hay gặp khi thêm thanh dưới. */
     bottom: calc(var(--bottom-nav-offset) + 12px);
@@ -1876,7 +2739,7 @@ h3 {
 
 .floating-ai-button:hover {
   transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-lg, 0 12px 30px rgba(0, 0, 0, 0.45));
 }
 
 .floating-ai-button:focus-visible {
@@ -1986,10 +2849,10 @@ select:focus {
   padding: 26px 28px;
   margin-bottom: 24px;
   background:
-    linear-gradient(135deg, rgba(124, 108, 240, 0.14), rgba(53, 208, 216, 0.08)),
+    linear-gradient(135deg, rgba(119, 117, 255, 0.14), rgba(69, 217, 233, 0.08)),
     var(--panel-strong);
-  border: 1px solid rgba(124, 108, 240, 0.28);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 32px rgba(124, 108, 240, 0.12);
+  border: 1px solid rgba(119, 117, 255, 0.28);
+  box-shadow: var(--shadow-lg, 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 32px rgba(119, 117, 255, 0.12));
   backdrop-filter: blur(8px);
 }
 
@@ -1998,7 +2861,7 @@ select:focus {
   inset: -60px -40px auto auto;
   width: 340px;
   height: 220px;
-  background: radial-gradient(closest-side, rgba(124, 108, 240, 0.28), transparent);
+  background: radial-gradient(closest-side, rgba(119, 117, 255, 0.28), transparent);
   pointer-events: none;
 }
 
@@ -2019,7 +2882,7 @@ select:focus {
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, var(--indigo), var(--cyan));
-  box-shadow: 0 0 24px rgba(124, 108, 240, 0.45), inset 0 0 0 3px rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 24px rgba(119, 117, 255, 0.45), inset 0 0 0 3px rgba(255, 255, 255, 0.18);
   color: var(--on-accent);
 }
 
@@ -2075,7 +2938,7 @@ select:focus {
   display: inline-block;
   margin-left: 8px;
   padding: 2px 10px;
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
   font-size: 12px;
   font-weight: 700;
   color: var(--on-accent);
@@ -2096,17 +2959,17 @@ select:focus {
 
 .level-hero__track {
   height: 14px;
-  border-radius: 99px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-pill);
+  background: var(--track-bg);
+  border: 1px solid var(--track-border);
   overflow: hidden;
 }
 
 .level-hero__fill {
   height: 100%;
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
   background: linear-gradient(90deg, var(--cyan), var(--indigo));
-  box-shadow: 0 0 12px rgba(53, 208, 216, 0.5);
+  box-shadow: 0 0 12px rgba(69, 217, 233, 0.5);
 }
 
 .level-hero__bottom {
@@ -2139,15 +3002,15 @@ select:focus {
 @keyframes badge-pulse {
   0% {
     transform: scale(1);
-    box-shadow: 0 0 24px rgba(124, 108, 240, 0.45);
+    box-shadow: 0 0 24px rgba(119, 117, 255, 0.45);
   }
   35% {
     transform: scale(1.08);
-    box-shadow: 0 0 44px rgba(53, 208, 216, 0.65);
+    box-shadow: 0 0 44px rgba(69, 217, 233, 0.65);
   }
   100% {
     transform: scale(1);
-    box-shadow: 0 0 24px rgba(124, 108, 240, 0.45);
+    box-shadow: 0 0 24px rgba(119, 117, 255, 0.45);
   }
 }
 
@@ -2213,7 +3076,7 @@ select:focus {
   /* Mockup: mục đang chọn dùng gradient ngang indigo→cyan rất nhẹ cộng
      1 vạch cyan 2px ở mép trái (box-shadow inset) làm "điểm neo" thị
      giác — nhìn ra ngay đang ở trang nào, rõ hơn kiểu chỉ đổi nền. */
-  background: linear-gradient(90deg, rgba(124, 108, 240, 0.25), rgba(53, 208, 216, 0.08));
+  background: linear-gradient(90deg, rgba(119, 117, 255, 0.25), rgba(69, 217, 233, 0.08));
   border-color: var(--border);
   box-shadow: inset 2px 0 var(--cyan);
 }
@@ -2283,6 +3146,36 @@ select:focus {
   }
 }
 
+/* Dấu ✓ trong huy hiệu "Đã hoàn thành" của thẻ thử thách (spec §12/§13).
+   Khai báo Ở ĐÂY vì `.challenge-card__check` nằm trong
+   `components/rewards/rewards.css`, mà file .css của component đi qua
+   PostCSS transform của Next và sẽ báo "Unknown at rule: @keyframes" nếu
+   chứa khai báo keyframes. Xem note trong `rewards.css`. */
+@keyframes challenge-check-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-18deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+/* Dấu ✓ trong badge "Đã mở khoá" của thẻ thành tựu (`ach-card__check`).
+   Khai báo Ở ĐÂY vì `.ach-card__check` nằm trong `rewards.css` — file .css
+   của component bị PostCSS transform của Next từ chối at-rule `@keyframes`. */
+@keyframes ach-check-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-18deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
 /* --------- Card hover: border glow nhẹ --------- */
 .panel {
   transition: border-color 180ms ease, box-shadow 180ms ease;
@@ -2291,8 +3184,8 @@ select:focus {
 a .panel:hover,
 button .panel:hover,
 .glass-card--hoverable:hover {
-  border-color: rgba(124, 108, 240, 0.35);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3), 0 0 24px rgba(124, 108, 240, 0.1);
+  border-color: rgba(119, 117, 255, 0.35);
+  box-shadow: var(--shadow-md, 0 8px 28px rgba(0, 0, 0, 0.3), 0 0 24px rgba(119, 117, 255, 0.1));
 }
 
 /* --------- Focus chung cho accessibility --------- */
@@ -2335,7 +3228,7 @@ input:focus-visible {
   font-size: 12.5px;
   color: var(--text);
   white-space: nowrap;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.45));
   animation: tooltip-in 0.15s ease;
 }
 
@@ -2545,19 +3438,19 @@ pre {
   font-size: 13.5px;
   background: var(--surface-elevated);
   border: 1px solid var(--border);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.45));
 }
 
 .toast--success {
-  border-color: rgba(53, 208, 216, 0.5);
+  border-color: var(--success-border);
 }
 
 .toast--error {
-  border-color: rgba(239, 106, 125, 0.55);
+  border-color: var(--danger-border);
 }
 
 .toast--info {
-  border-color: rgba(124, 108, 240, 0.5);
+  border-color: var(--info-border);
 }
 
 .toast-close {
@@ -2608,7 +3501,7 @@ pre {
 
 .btn-primary:hover:not(:disabled) {
   opacity: 0.92;
-  box-shadow: 0 4px 18px rgba(124, 108, 240, 0.35);
+  box-shadow: 0 4px 18px rgba(119, 117, 255, 0.35);
 }
 
 .btn-secondary:hover:not(:disabled) {
@@ -2770,7 +3663,7 @@ pre {
   align-items: center;
   gap: 5px;
   padding: 3px 9px;
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -2780,13 +3673,13 @@ pre {
 .badge--indigo {
   background: var(--indigo-soft);
   color: var(--indigo-strong);
-  border: 1px solid rgba(124, 108, 240, 0.3);
+  border: 1px solid rgba(119, 117, 255, 0.3);
 }
 
 .badge--cyan {
   background: var(--cyan-soft);
   color: var(--cyan);
-  border: 1px solid rgba(53, 208, 216, 0.3);
+  border: 1px solid rgba(69, 217, 233, 0.3);
 }
 
 .badge--amber {
@@ -2808,21 +3701,21 @@ pre {
 }
 
 .badge--success {
-  background: var(--green-soft);
-  color: var(--green);
-  border: 1px solid rgba(101, 214, 163, 0.3);
+  background: var(--success-soft);
+  color: var(--success);
+  border: 1px solid var(--success-border);
 }
 
 .badge--warning {
-  background: var(--amber-soft);
-  color: var(--amber);
-  border: 1px solid rgba(240, 169, 65, 0.3);
+  background: var(--warning-soft);
+  color: var(--warning);
+  border: 1px solid var(--warning-border);
 }
 
 .badge--error {
-  background: rgba(239, 106, 125, 0.15);
-  color: var(--rose);
-  border: 1px solid rgba(239, 106, 125, 0.3);
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
 }
 
 /* --------- Modal / Dialog --------- */
@@ -2844,7 +3737,7 @@ pre {
   background: var(--surface-elevated);
   border: 1px solid var(--border);
   border-radius: 16px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  box-shadow: var(--shadow-lg, 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05));
   overflow: hidden;
   animation: modal-zoom-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -2965,7 +3858,7 @@ pre {
 .analytics-range__btn.is-active {
   color: var(--text);
   border-color: var(--indigo);
-  background: linear-gradient(90deg, rgba(124, 108, 240, 0.25), rgba(53, 208, 216, 0.08));
+  background: linear-gradient(90deg, rgba(119, 117, 255, 0.25), rgba(69, 217, 233, 0.08));
 }
 
 .analytics-body > section {
@@ -3606,7 +4499,7 @@ pre {
 
 .analytics-bar__track {
   height: 8px;
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
   background: var(--panel-strong);
   overflow: hidden;
 }
@@ -3614,7 +4507,7 @@ pre {
 .analytics-bar__fill {
   display: block;
   height: 100%;
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
   background: linear-gradient(90deg, var(--indigo), var(--cyan));
   transition: width 200ms ease;
 }
@@ -3879,12 +4772,18 @@ pre {
 
      LƯU Ý: /setup nằm NGOÀI nhóm route (app) nên KHÔNG có .main-content
      (vốn mới là chỗ cấp padding + khung nội dung). Vì vậy padding gutter
-     phải do chính .setup-page lo — nếu không, trên mobile chữ sẽ sát mép
-     màn hình. */
+     + vùng an toàn phải do chính .setup-page lo — nếu không, trên mobile
+     chữ sẽ sát mép màn hình và tiêu đề nằm dưới camera punch-hole
+     (app Android tràn nội dung qua status bar, xem capacitor.config.ts). */
   width: 100%;
   max-width: 720px;
   margin-inline: auto;
   padding-inline: 20px;
+  /* safe-top/bottom: trang này chạy cả 2 lần — sau khi đăng nhập và cả từ
+     luồng onboarding. Không chừa vùng an toàn thì trên máy có notch phần
+     trên bị status bar che, phần dưới bị thanh gesture che. */
+  padding-top: calc(24px + var(--safe-top));
+  padding-bottom: calc(24px + var(--safe-bottom));
 }
 
 .setup-head {
@@ -3919,7 +4818,7 @@ pre {
 .setup-progress__dot {
   width: 26px;
   height: 3px;
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
   background: var(--panel-strong);
   border: 1px solid var(--border-soft);
   transition: background 200ms ease;
@@ -3986,7 +4885,7 @@ pre {
 .setup-option.is-selected {
   color: var(--text);
   border-color: var(--indigo);
-  background: linear-gradient(90deg, rgba(124, 108, 240, 0.25), rgba(53, 208, 216, 0.08));
+  background: linear-gradient(90deg, rgba(119, 117, 255, 0.25), rgba(69, 217, 233, 0.08));
 }
 
 .setup-option:focus-visible {
@@ -4094,7 +4993,7 @@ pre {
   border: 1px solid var(--border);
   background: var(--panel-strong);
   backdrop-filter: blur(14px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-lg, 0 10px 30px rgba(0, 0, 0, 0.4));
   color: var(--text);
   font-size: 12.5px;
   font-weight: 500;
@@ -4181,7 +5080,7 @@ html[data-keyboard="open"] .tutor-composer {
 .bottom-sheet-link--active {
   color: var(--text);
   border-color: var(--border);
-  background: linear-gradient(90deg, rgba(124, 108, 240, 0.25), rgba(53, 208, 216, 0.08));
+  background: linear-gradient(90deg, rgba(119, 117, 255, 0.25), rgba(69, 217, 233, 0.08));
 }
 
 .drawer-header {
@@ -4247,7 +5146,7 @@ html[data-keyboard="open"] .tutor-composer {
   background: var(--indigo-soft);
   color: var(--indigo);
   padding: 1px 6px;
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
 }
 
 /* --------- Progress Ring --------- */
@@ -4293,7 +5192,7 @@ html[data-keyboard="open"] .tutor-composer {
   border: 1px solid var(--border);
   border-radius: 14px;
   background:
-    radial-gradient(circle at 50% 50%, rgba(53, 208, 216, 0.08), transparent 42%),
+    radial-gradient(circle at 50% 50%, rgba(69, 217, 233, 0.08), transparent 42%),
     linear-gradient(rgba(201, 211, 255, 0.035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(201, 211, 255, 0.035) 1px, transparent 1px),
     var(--surface-elevated);
@@ -4372,7 +5271,7 @@ html[data-keyboard="open"] .tutor-composer {
   border-bottom-color: var(--border);
   border-left-color: var(--border);
   border-radius: 12px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-sm, 0 10px 24px rgba(0, 0, 0, 0.2));
   /* Node KHÔNG khoá height: chiều cao do nội dung quyết định rồi được
      ResizeObserver đo lại (xem MindMapPage). min-height cố định ở đây chỉ
      để node 1 dòng không trông quá mỏng — không dùng min-height theo số đo,
@@ -4391,13 +5290,13 @@ html[data-keyboard="open"] .tutor-composer {
    hơn, bóng sâu hơn. Không dùng glow mạnh để các node con vẫn nổi. */
 .mindmap-node--root {
   border-radius: 14px;
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.32);
+  box-shadow: var(--shadow-md, 0 14px 32px rgba(0, 0, 0, 0.32));
 }
 
 .mindmap-node:hover,
 .mindmap-node:focus-visible {
   outline: none;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(53, 208, 216, 0.24);
+  box-shadow: var(--shadow-md, 0 12px 28px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(69, 217, 233, 0.24));
 }
 
 /* Node đang chọn: ring indigo để nhận ra ngay. Đặt SAU hover và lặp selector
@@ -4405,14 +5304,14 @@ html[data-keyboard="open"] .tutor-composer {
 .mindmap-node.mindmap-node--selected,
 .mindmap-node.mindmap-node--selected:hover,
 .mindmap-node.mindmap-node--selected:focus-visible {
-  box-shadow: 0 0 0 2px var(--indigo), 0 14px 30px rgba(0, 0, 0, 0.34);
+  box-shadow: var(--shadow-md, 0 0 0 2px var(--indigo), 0 14px 30px rgba(0, 0, 0, 0.34));
 }
 
 /* Node khớp từ khoá tìm kiếm: viền cyan + ring mảnh. KHÔNG làm mờ các node
    khác — mô tả của chúng sẽ chìm mất, trong khi yêu cầu là highlight mà vẫn
    đọc được (yêu cầu 15). */
 .mindmap-node.mindmap-node--hit {
-  box-shadow: 0 0 0 1px var(--cyan), 0 10px 24px rgba(0, 0, 0, 0.24);
+  box-shadow: var(--shadow-md, 0 0 0 1px var(--cyan), 0 10px 24px rgba(0, 0, 0, 0.24));
 }
 
 /* Typography của node (yêu cầu 2): title 14px (> node con cùng cỡ chữ tiêu đề

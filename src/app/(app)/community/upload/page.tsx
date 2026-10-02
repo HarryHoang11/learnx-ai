@@ -4,14 +4,23 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 import Panel from "@/components/ui/Panel";
 import StateMessage from "@/components/ui/StateMessage";
+import {
+  flattenTopicOptions,
+  shouldOfferGeneralTopic,
+  type RawTopic,
+} from "@/lib/community/topicOptions";
 import type { ApiResponse } from "@/types";
 
 const ALLOWED_TYPES = ["pdf", "docx", "doc", "pptx", "ppt", "txt", "md"];
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
+/** Số ký tự tối đa cho tiêu đề — chặn sớm ở UI, server vẫn validate lại. */
+const TITLE_MAX = 200;
 
 const DIFFICULTY_OPTIONS = [
   { value: "easy", label: "Dễ" },
@@ -41,10 +50,16 @@ const REPORT_REASONS = [
   { value: "OTHER", label: "Khác" },
 ];
 
+/** Lỗi hiển thị SÁT field, không gom lên đầu form. */
+type FieldErrors = {
+  file?: string;
+  title?: string;
+  subjectId?: string;
+};
+
 export default function CommunityUploadPage() {
   const router = useRouter();
   const [subjects, setSubjects] = useState<any[]>([]);
-  const [topics, setTopics] = useState<any[]>([]);
 
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -52,7 +67,17 @@ export default function CommunityUploadPage() {
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadedDocId, setUploadedDocId] = useState<string | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // KHÔNG khai báo `fileInputRef`.
+  //
+  // Lịch sử: bản cũ có `fileInputRef` + `<label onClick={() => ref.current?.click()}>`.
+  // Vì `<label>` ĐÃ tự kích hoạt input khi bấm (chuẩn HTML), 1 cú bấm gọi
+  // `click()` 2 lần ⇒ lần 2 không còn user activation ⇒ Chrome cảnh báo
+  // "File chooser dialog can only be shown with a user activation".
+  //
+  // Bỏ `onClick` là đủ. Ref từ đó thành vô dụng — nhưng vẫn còn một dòng
+  // khai báo treo lơ lửng (và từng bị khai báo TRÙNG 2 lần do chỉnh sửa chồng
+  // nhau). Giữ một ref mà không đọc `.current` ở đâu là cruft sinh lại đúng loại
+  // bug vừa gặp, nên đã XOÁ HẲN thay vì giữ "một declaration duy nhất".
 
   const [formData, setFormData] = useState({
     title: "",
@@ -69,6 +94,26 @@ export default function CommunityUploadPage() {
   const [selectedSubject, setSelectedSubject] = useState<any>(null);
   const [loadingSubjects, setLoadingSubjects] = useState(true);
   const [subjectsError, setSubjectsError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+
+  /**
+   * Danh sách chủ đề của môn đang chọn, đã làm phẳng cả tầng `children`.
+   *
+   * Bản cũ dùng state `topics` + chỉ đọc `subject.topics`, bỏ rơi `children`
+   * ⇒ các chuyên đề như "Python", "C++" (con của "Lập trình") không bao giờ
+   * hiện. Suy ra từ `selectedSubject` bằng `useMemo` để không phải giữ 2 nguồn
+   * sự thật (state + props) cho cùng một dữ liệu.
+   */
+  const topicOptions = useMemo(
+    () => flattenTopicOptions(selectedSubject?.topics as RawTopic[] | undefined),
+    [selectedSubject]
+  );
+
+  /** Môn chỉ có 1 topic thì ép "Tổng hợp" là vô nghĩa — xem `topicOptions.ts`. */
+  const showGeneralTopic = useMemo(
+    () => shouldOfferGeneralTopic(selectedSubject?.topics as RawTopic[] | undefined),
+    [selectedSubject]
+  );
 
   useEffect(() => {
     loadSubjects();
@@ -88,29 +133,43 @@ export default function CommunityUploadPage() {
     }
   }
 
-  function handleSubjectChange(subjectId: string) {
-    const subject = subjects.find(s => s.id === subjectId);
+  /**
+   * Đổi môn học. Nhận `ChangeEvent` (không nhận `string`) cho khớp chữ ký
+   * `ChangeEventHandler<HTMLSelectElement>` — bản cũ dùng `as any` để lách,
+   * làm mất type-safety ở đúng chỗ quan trọng nhất.
+   */
+  function handleSubjectChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const subjectId = e.target.value;
+    const subject = subjects.find((s) => s.id === subjectId);
     setSelectedSubject(subject);
-    setFormData(prev => ({ ...prev, subjectId, topicId: "" }));
-    if (subject) setTopics(subject.topics || []);
-    else setTopics([]);
+    // Xoá `topicId` cũ vì nó thuộc môn trước. KHÔNG tự chọn topic đầu tiên:
+    // nếu auto-select, tài liệu "Cân bằng hóa học" sẽ bị gán cứng "Hóa học
+    // vô cơ" chỉ vì nó là phần tử đầu của danh sách — đúng lỗi domain mà
+    // spec §7 nêu. Chọn là quyền của người dùng.
+    setFormData((prev) => ({ ...prev, subjectId, topicId: "" }));
+    setFieldErrors((prev) => ({ ...prev, subjectId: undefined }));
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const picked = e.target.files?.[0];
+    // Bấm "Hủy" trong hộp thoại ⇒ files rỗng. Không coi đây là lỗi.
+    if (!picked) return;
 
-    if (!ALLOWED_TYPES.includes(file.name.split(".").pop()?.toLowerCase() || "")) {
-      setUploadError("Định dạng file không được hỗ trợ. Chỉ chấp nhận: " + ALLOWED_TYPES.join(", "));
+    if (!ALLOWED_TYPES.includes(picked.name.split(".").pop()?.toLowerCase() || "")) {
+      setFieldErrors(prev => ({
+        ...prev,
+        file: "Định dạng file không được hỗ trợ. Chỉ chấp nhận: " + ALLOWED_TYPES.join(", "),
+      }));
       return;
     }
 
-    if (file.size > MAX_FILE_SIZE) {
-      setUploadError("File quá lớn. Kích thước tối đa 50MB.");
+    if (picked.size > MAX_FILE_SIZE) {
+      setFieldErrors(prev => ({ ...prev, file: "File quá lớn. Kích thước tối đa 50MB." }));
       return;
     }
 
-    setFile(file);
+    setFile(picked);
+    setFieldErrors(prev => ({ ...prev, file: undefined }));
     setUploadError(null);
   }
 
@@ -129,18 +188,18 @@ export default function CommunityUploadPage() {
     e.preventDefault();
     setUploadError(null);
 
-    if (!file) {
-      setUploadError("Vui lòng chọn file");
-      return;
-    }
+    // Validate TẠI CHỖ field + gán lỗi cạnh ô tương ứng. `setUploadError` kiểu
+    // cũ gộp hết lỗi lên đầu form khiến người dùng không biết sửa ô nào.
+    const errors: FieldErrors = {};
+    if (!file) errors.file = "Vui lòng chọn file.";
+    if (!formData.title.trim()) errors.title = "Vui lòng nhập tiêu đề tài liệu.";
+    if (!formData.subjectId) errors.subjectId = "Vui lòng chọn môn học.";
 
-    if (!formData.title.trim()) {
-      setUploadError("Vui lòng nhập tiêu đề tài liệu");
-      return;
-    }
-
-    if (!formData.subjectId) {
-      setUploadError("Vui lòng chọn môn học");
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      // Đưa tiêu điểm về ô đầu tiên sai để bàn phím/mobile không phải cuộn tìm.
+      const firstBad = document.getElementById("cu-file") ?? document.getElementById("cu-title");
+      firstBad?.focus();
       return;
     }
 
@@ -149,14 +208,17 @@ export default function CommunityUploadPage() {
 
     try {
       const formDataToSend = new FormData();
-      formDataToSend.append("file", file);
-      formDataToSend.append("title", formData.title);
+      formDataToSend.append("file", file!);
+      formDataToSend.append("title", formData.title.trim());
       if (formData.description) formDataToSend.append("description", formData.description);
       formDataToSend.append("subjectId", formData.subjectId);
+      // topicId rỗng => KHÔNG gửi. Server lưu `undefined` (xem
+      // community-document.service.ts) ⇒ tài liệu đa lĩnh vực không bị gán
+      // nhầm một chủ đề vô nghĩa.
       if (formData.topicId) formDataToSend.append("topicId", formData.topicId);
       if (formData.difficulty) formDataToSend.append("difficulty", formData.difficulty);
       if (formData.language) formDataToSend.append("language", formData.language);
-      if (formData.grade) formDataToSend.append("grade", formData.grade);
+      if (formData.grade.trim()) formDataToSend.append("grade", formData.grade.trim());
       if (formData.tags) formDataToSend.append("tags", formData.tags);
       if (formData.visibility) formDataToSend.append("visibility", formData.visibility);
 
@@ -172,6 +234,8 @@ export default function CommunityUploadPage() {
         } else {
           setUploadError(result.error || "Không thể tải lên tài liệu");
         }
+        // Cố ý KHÔNG reset form: người dùng giữ nguyên mọi thứ đã nhập để sửa
+        // rồi bấm lại (spec §3 "Error").
         return;
       }
 
@@ -179,7 +243,9 @@ export default function CommunityUploadPage() {
       setUploadedDocId(result.data.documentId);
       setUploadError(null);
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Không thể upload tài liệu");
+      setUploadError(
+        err instanceof Error ? err.message : "Không thể upload tài liệu"
+      );
     } finally {
       setUploading(false);
     }
@@ -233,6 +299,22 @@ export default function CommunityUploadPage() {
           {/* File Upload */}
           <Panel>
             <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>📁 Chọn file</div>
+            {/* Vùng chọn file — mở picker bằng CƠ CHẾ NATIVE của `<label>`,
+                  không dùng JS.
+
+                  `<label>` bao `<input type="file">` thì bấm vào label sẽ kích
+                  hoạt input, và vì chạy NGAY trong event của người dùng nên
+                  luôn giữ user activation.
+
+                  Trước đây ở đây có thêm
+                  `onClick={() => fileInputRef.current?.click()}` ⇒ 1 cú bấm mở
+                  dialog 2 lần, lần 2 không còn activation ⇒ Chrome cảnh báo
+                  "File chooser dialog can only be shown with a user activation".
+                  Đã bỏ `onClick`; xem note ở phần khai báo state.
+
+                  GIỮ NGUYÊN: validation (định dạng + 50MB trong
+                  `handleFileChange`), preview tên/dung lượng, loading state,
+                  error state. Chỉ sửa cách mở file picker. */}
             <label
               style={{
                 display: "block",
@@ -240,14 +322,12 @@ export default function CommunityUploadPage() {
                 borderRadius: 12,
                 padding: 40,
                 textAlign: "center",
-                cursor: "pointer",
+                cursor: uploading ? "not-allowed" : "pointer",
                 transition: "all 0.15s ease",
                 background: uploading ? "var(--cyan-soft)" : "var(--panel)",
               }}
-              onClick={() => fileInputRef.current?.click()}
             >
               <input
-                ref={fileInputRef}
                 type="file"
                 onChange={handleFileChange}
                 accept={ALLOWED_TYPES.map(t => "." + t).join(",")}
@@ -277,116 +357,238 @@ export default function CommunityUploadPage() {
             {uploadError && <div style={{ color: "var(--rose)", fontSize: 13, marginTop: 8 }}>{uploadError}</div>}
           </Panel>
 
-          {/* Form Fields */}
-          <Panel>
-            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 16 }}>📝 Thông tin tài liệu</div>
+          {/* Thông tin tài liệu.
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              SỬA (spec §5, §6, §11, §15, §16):
+              - Bỏ toàn bộ inline style, dùng class dùng chung `.form-*` như
+                Login/Review/Onboarding → đồng bộ design system.
+              - Mọi `<select>` bọc `.form-select-wrap` + icon ChevronDown →
+                không còn để mỗi OS tự vẽ mũi tên khác nhau.
+              - `id`/`htmlFor` liên kết thật label ↔ control (trước đây
+                `<label>` không `htmlFor`, không nhấn được vào ô).
+              - Lỗi hiện ngay dưới ô + `aria-invalid`/`aria-describedby`. */}
+          <Panel>
+            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>📝 Thông tin tài liệu</div>
+
+            {/* `grid-form-2col` có sẵn trong globals.css: 1 cột ở mobile,
+                2 cột từ tablet — không hardcode grid ở đây. */}
+            <div className="grid-form-2col">
               <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Tiêu đề *</label>
+                <label className="form-label" htmlFor="cu-title">
+                  Tiêu đề<span className="form-req">*</span>
+                  <span className="form-label-counter">
+                    {formData.title.length}/{TITLE_MAX}
+                  </span>
+                </label>
                 <input
+                  id="cu-title"
+                  className="form-input"
                   type="text"
                   name="title"
                   value={formData.title}
                   onChange={handleInputChange}
                   placeholder="Tiêu đề tài liệu"
-                  style={{ width: "100%", padding: "10px 12px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", fontSize: 14 }}
-                  required
+                  maxLength={TITLE_MAX}
+                  aria-invalid={!!fieldErrors.title}
+                  aria-describedby={fieldErrors.title ? "cu-title-err" : undefined}
                 />
+                {fieldErrors.title && (
+                  <p className="form-error" id="cu-title-err" role="alert">
+                    {fieldErrors.title}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Môn học *</label>
-                <select
-                  name="subjectId"
-                  value={formData.subjectId}
-                  onChange={e => { handleSubjectChange(e.target.value); handleInputChange({ target: { name: "subjectId", value: e.target.value } } as any); }}
-                  style={{ width: "100%", padding: "10px 12px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", fontSize: 14 }}
-                  disabled={loadingSubjects}
-                >
-                  <option value="">{loadingSubjects ? "Đang tải môn học..." : "Chọn môn học"}</option>
-                  {!loadingSubjects && subjects.map(s => <option key={s.id} value={s.id}>{s.icon} {s.name}</option>)}
-                </select>
-                {subjectsError && <p style={{ color: "var(--rose)", fontSize: 12, marginTop: 4 }}>{subjectsError}</p>}
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-              <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Chủ đề</label>
-                <select
-                  name="topicId"
-                  value={formData.topicId}
-                  onChange={handleInputChange}
-                  style={{ width: "100%", padding: "10px 12px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", fontSize: 14 }}
-                  disabled={!topics.length}
-                >
-                  <option value="">Chọn chủ đề (tùy chọn)</option>
-                  {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Độ khó</label>
-                <select
-                  name="difficulty"
-                  value={formData.difficulty}
-                  onChange={handleInputChange}
-                  style={{ width: "100%", padding: "10px 12px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", fontSize: 14 }}
-                >
-                  {DIFFICULTY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+                <label className="form-label" htmlFor="cu-subject">
+                  Môn học<span className="form-req">*</span>
+                </label>
+                <span className="form-select-wrap">
+                  <select
+                    id="cu-subject"
+                    className="form-select"
+                    name="subjectId"
+                    value={formData.subjectId}
+                    onChange={handleSubjectChange}
+                    disabled={loadingSubjects}
+                    aria-invalid={!!fieldErrors.subjectId}
+                    aria-describedby={fieldErrors.subjectId ? "cu-subject-err" : undefined}
+                  >
+                    <option value="">
+                      {loadingSubjects ? "Đang tải môn học..." : "Chọn môn học"}
+                    </option>
+                    {!loadingSubjects &&
+                      subjects.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.icon} {s.name}
+                        </option>
+                      ))}
+                  </select>
+                  <ChevronDown className="form-select-caret" size={16} aria-hidden="true" />
+                </span>
+                {fieldErrors.subjectId && (
+                  <p className="form-error" id="cu-subject-err" role="alert">
+                    {fieldErrors.subjectId}
+                  </p>
+                )}
+                {subjectsError && <p className="form-error">{subjectsError}</p>}
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div className="grid-form-2col">
+              {/* Chủ đề — spec §7/§8/§9: danh sách lấy từ taxonomy thật (kể cả
+                  tầng `children`), KHÔNG tự chọn sẵn, và mốc rỗng = "Tổng hợp"
+                  cho tài liệu đa lĩnh vực. */}
               <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Ngôn ngữ</label>
-                <select
-                  name="language"
-                  value={formData.language}
-                  onChange={handleInputChange}
-                  style={{ width: "100%", padding: "10px 12px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", fontSize: 14 }}
-                >
-                  {LANGUAGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+                <label className="form-label" htmlFor="cu-topic">
+                  Chủ đề
+                </label>
+                <span className="form-select-wrap">
+                  <select
+                    id="cu-topic"
+                    className="form-select"
+                    name="topicId"
+                    value={formData.topicId}
+                    onChange={handleInputChange}
+                    disabled={!topicOptions.length}
+                  >
+                    <option value="">
+                      {!formData.subjectId
+                        ? "Chọn môn học trước"
+                        : topicOptions.length
+                          ? "Tổng hợp (nhiều chủ đề)"
+                          : "Môn này chưa có chủ đề"}
+                    </option>
+                    {topicOptions.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="form-select-caret" size={16} aria-hidden="true" />
+                </span>
+                {showGeneralTopic && !formData.topicId && (
+                  <p className="form-hint">
+                    Tài liệu trải qua nhiều mảng? Để trống là coi như “Tổng hợp”.
+                  </p>
+                )}
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Khối/Lớp (tùy chọn)</label>
+                <label className="form-label" htmlFor="cu-difficulty">
+                  Độ khó
+                </label>
+                <span className="form-select-wrap">
+                  <select
+                    id="cu-difficulty"
+                    className="form-select"
+                    name="difficulty"
+                    value={formData.difficulty}
+                    onChange={handleInputChange}
+                  >
+                    {DIFFICULTY_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="form-select-caret" size={16} aria-hidden="true" />
+                </span>
+              </div>
+            </div>
+
+            <div className="grid-form-2col">
+              <div>
+                <label className="form-label" htmlFor="cu-language">
+                  Ngôn ngữ
+                </label>
+                <span className="form-select-wrap">
+                  <select
+                    id="cu-language"
+                    className="form-select"
+                    name="language"
+                    value={formData.language}
+                    onChange={handleInputChange}
+                  >
+                    {LANGUAGE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="form-select-caret" size={16} aria-hidden="true" />
+                </span>
+              </div>
+
+              {/* Khối/Lớp — spec §12: TUỲ CHỌN, không hardcode "11", không tự
+                  điền từ profile (vẫn gõ tay được, chỉ gợi ý bằng
+                  placeholder). `.form-input` khai báo `height` + `line-height`
+                  nên khớp đúng `.form-select` cùng hàng — trước đây lệch dọc
+                  vì inline style không có 2 thuộc tính đó. */}
+              <div>
+                <label className="form-label" htmlFor="cu-grade">
+                  Khối/Lớp
+                </label>
                 <input
+                  id="cu-grade"
+                  className="form-input"
                   type="text"
                   name="grade"
                   value={formData.grade}
                   onChange={handleInputChange}
-                  placeholder="Ví dụ: 10, 11, 12, ĐH, Cao đẳng..."
-                  style={{ width: "100%", padding: "10px 12px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", fontSize: 14 }}
+                  placeholder="VD: 10, 11, 12, ĐH…"
                 />
               </div>
             </div>
 
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Mô tả (tùy chọn)</label>
+              <label className="form-label" htmlFor="cu-desc">
+                Mô tả
+              </label>
+              {/* `data-gramm="false"` + `spellCheck={false}` (spec §2):
+                  Grammarly extension cắm icon vào góc dưới phải textarea và
+                  che mất phần text vừa gõ.
+
+                  KHÔNG dùng CSS/div trắng để che — chính overlay đó cũng bị che
+                  và cách đó chỉ "giấu" triệu chứng. Cách đúng là yêu cầu
+                  extension không chèn ở field này.
+
+                  `spellCheck={false}` hợp lý vì nội dung là tiếng Việt + thuật
+                  ngữ học thuật, gạch đỏ chỉ gây nhiễu. KHÔNG tắt ở các ô
+                  tiếng Anh khác của app. */}
               <textarea
+                id="cu-desc"
+                className="form-textarea"
                 name="description"
                 value={formData.description}
                 onChange={handleInputChange}
                 rows={4}
-                placeholder="Mô tả ngắn gọn nội dung tài liệu..."
-                style={{ width: "100%", padding: "10px 12px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", fontSize: 14, fontFamily: "inherit", resize: "vertical" }}
+                maxLength={2000}
+                placeholder="Mô tả ngắn gọn nội dung tài liệu…"
+                spellCheck={false}
+                data-gramm="false"
+                data-gramm_editor="false"
+                data-enable-grammarly="false"
               />
+              <p className="form-hint">Không bắt buộc · tối đa 2000 ký tự</p>
             </div>
 
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Tags (cách nhau bằng dấu phẩy)</label>
+              <label className="form-label" htmlFor="cu-tags">
+                Tags
+              </label>
               <input
+                id="cu-tags"
+                className="form-input"
                 type="text"
                 name="tags"
                 value={formData.tags}
                 onChange={handleTagsChange}
-                placeholder="Ví dụ: dynamic programming, algorithm, dp, knapsack"
-                style={{ width: "100%", padding: "10px 12px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", fontSize: 14 }}
+                placeholder="dynamic programming, algorithm, dp"
               />
+              {/* Báo rõ sẽ gửi gì: số tag sau khi bỏ trùng/khoảng trắng thừa
+                  (spec §14) — thay vì bắt người dùng tự đếm. */}
+              <p className="form-hint">{tagSummary(formData.tags)}</p>
             </div>
           </Panel>
 
@@ -414,13 +616,35 @@ export default function CommunityUploadPage() {
             </div>
           </Panel>
 
-          {/* Submit */}
-          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
-            <button type="button" className="btn-secondary" onClick={() => router.push("/community")} disabled={uploading}>
+          {/* Lỗi submit/API: hiện 1 khối ngay trên footer để người dùng thấy
+              ngay sau khi bấm, nhưng dữ liệu form ĐÃ NHẬP vẫn giữ nguyên để
+              sửa rồi bấm lại (spec §3 "Error"). */}
+          {uploadError && (
+            <p className="form-error form-error--global" role="alert">
+              {uploadError}
+            </p>
+          )}
+
+          {/* Footer hành động — spec §3/§4.
+              `form-actions`: desktop 2 nút căn phải · mobile 2 nút đều nhau,
+              cao ≥44px (MOBILE.md). `form-actions--stack-primary` đưa nút
+              chính lên hàng trên ở mobile để ngón cái bấm được dễ hơn. */}
+          <div className="form-actions form-actions--stack-primary">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => router.push("/community")}
+              disabled={uploading}
+            >
               Hủy
             </button>
-            <button type="submit" className="btn-primary" disabled={uploading} style={{ padding: "12px 24px", fontSize: 14.5 }}>
-              {uploading ? "Đang tải lên..." : "📤 Tải lên Cộng đồng"}
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={uploading || loadingSubjects || !file}
+              aria-busy={uploading}
+            >
+              {uploading ? "Đang tải lên…" : "📤 Tải lên Cộng đồng"}
             </button>
           </div>
         </form>
@@ -434,4 +658,22 @@ function formatNumber(num: number) {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
   if (num >= 1000) return (num / 1000).toFixed(1) + "K";
   return num.toString();
+}
+
+/**
+ * Tóm tắt trạng thái ô Tags (spec §14).
+ *
+ * Hiển thị đúng những gì sẽ được gửi đi: đã cắt khoảng trắng, bỏ rỗng, bỏ
+ * trùng (không phân biệt hoa/thường) — vì `handleTagsChange` gửi chuỗi thô
+ * xuống server, nên người dùng cần biết server sẽ thấy bao nhiêu tag.
+ */
+function tagSummary(raw: string): string {
+  const seen = new Set<string>();
+  for (const part of raw.split(",")) {
+    const t = part.trim();
+    if (t) seen.add(t.toLowerCase());
+  }
+  const n = seen.size;
+  if (n === 0) return "Không bắt buộc · cách nhau bằng dấu phẩy";
+  return `${n} tag sẽ được gửi${n === 1 ? "" : "s"}`;
 }

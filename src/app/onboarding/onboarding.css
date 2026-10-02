@@ -70,7 +70,7 @@
   background: linear-gradient(160deg, rgba(22, 29, 49, 0.88) 0%, rgba(15, 20, 35, 0.92) 100%);
   border: 1px solid rgba(201, 211, 255, 0.12);
   border-radius: 20px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-lg, 0 24px 60px rgba(0, 0, 0, 0.45));
   padding: clamp(20px, 5vw, 34px);
 }
 
@@ -202,7 +202,7 @@
 
 .onb-option.is-selected {
   border-color: var(--indigo);
-  background: rgba(124, 108, 240, 0.16);
+  background: rgba(119, 117, 255, 0.16);
   color: #fff;
 }
 
@@ -381,7 +381,7 @@
 
 .onb-primary {
   border: none;
-  background: linear-gradient(135deg, #7c6cf0 0%, #5b8cf0 100%);
+  background: linear-gradient(135deg, #7775ff 0%, #45d9e9 100%);
   color: #fff;
 }
 

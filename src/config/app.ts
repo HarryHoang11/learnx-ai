@@ -19,6 +19,49 @@
 // đây là URL công khai, TUYỆT ĐỐI không đặt secret ở đây.
 // ================================================================
 
+// ================================================================
+// URL CÔNG KHAI CỦA APP — nguồn sự thật DUY NHẤT
+// ================================================================
+// Vì sao phải ở tầng `config/`: có 2 chỗ cần biết "URL công khai của
+// app" là gì, và trước đây chúng tự liệt kê env KHÁC NHAU:
+//   - src/auth.ts            đọc AUTH_URL, NEXTAUTH_URL
+//   - src/app/layout.tsx     đọc APP_URL, NEXTAUTH_URL  (metadataBase)
+// Project đặt `APP_URL` ⇒ metadataBase chạy được nhưng `publicAuthUrl`
+// undefined ⇒ `trustHost = false` ⇒ MỌI endpoint /api/auth/* (session,
+// providers, csrf) trả 503 trong khi phần còn lại của app vẫn chạy bình
+// thường — triệu chứng "401/503 ở auth nhưng app không sập", rất khó
+// chẩn đoán. Đặt danh sách ở đây (không phụ thuộc NextAuth/Prisma) để
+// cả hai cùng import mà không kéo auth vào layout.
+//
+// Thứ tự ưu tiên: biến Auth.js hiểu (AUTH_URL) → NEXTAUTH_URL → APP_URL.
+export const PUBLIC_URL_ENV_NAMES = ["AUTH_URL", "NEXTAUTH_URL", "APP_URL"] as const;
+
+/**
+ * Đọc URL công khai từ env — DUY NHẤT một chỗ hiện thực.
+ *
+ * Hàm thuần (nhận `env` làm tham số) để test được không cần mock
+ * `process.env`. Trả `null` khi không có biến nào hợp lệ.
+ *
+ * Bỏ qua biến rỗng và biến không phải URL tuyệt đối (`new URL()` throw)
+ * thay vì dừng ở biến hỏng đầu tiên — nếu không, đặt `AUTH_URL` sai sẽ
+ * chặn luôn `APP_URL` đúng, tái tạo đúng lỗi đang sửa.
+ */
+export function resolvePublicUrl(
+  env: Record<string, string | undefined> = process.env
+): string | null {
+  for (const name of PUBLIC_URL_ENV_NAMES) {
+    const raw = env[name];
+    if (typeof raw !== "string" || raw.trim() === "") continue;
+    try {
+      const parsed = new URL(raw.trim());
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") return raw.trim();
+    } catch {
+      // Env sai định dạng — bỏ qua, thử biến tiếp theo.
+    }
+  }
+  return null;
+}
+
 export interface AndroidAppInfo {
   /** Đường dẫn tương đối tới file APK trong thư mục public/ (mặc định). */
   readonly apkPath: string;

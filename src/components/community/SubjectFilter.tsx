@@ -123,7 +123,7 @@ function SubjectFilter({
                   <span style={{
                     fontSize: 11,
                     padding: "2px 6px",
-                    borderRadius: 99,
+                    borderRadius: "var(--radius-pill)",
                     background: "var(--indigo)",
                     color: "var(--on-accent)",
                     fontWeight: 700,

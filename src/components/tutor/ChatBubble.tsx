@@ -33,7 +33,7 @@ export default function ChatBubble({ role, content, tag }: ChatBubbleProps) {
         fontSize: 14,
         lineHeight: 1.55,
         background: isUser ? "var(--indigo-soft)" : "var(--panel-strong)",
-        border: isUser ? "1px solid rgba(124,108,240,0.3)" : "1px solid var(--border)",
+        border: isUser ? "1px solid rgba(119, 117, 255,0.3)" : "1px solid var(--border)",
         // `pre-wrap` chỉ đúng cho tin nhắn USER (text thuần, giữ
         // nguyên dấu xuống dòng người dùng đã gõ). Áp lên CẢ nhánh AI
         // (đã qua MarkdownLite -> HTML thật, có <p>/<br>/list riêng)

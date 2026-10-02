@@ -199,10 +199,18 @@ export default function ProgressPage() {
       )}
 
       {/* Lỗi KHÔNG xoá dữ liệu đang hiện: đổi khoảng lỗi thì người dùng vẫn
-          thấy phần cũ thay vì màn hình trắng. */}
+          thấy phần cũ thay vì màn hình trắng.
+          Kèm nút "Thử lại": gọi lại đúng bộ lọc đang chọn. Trên mobile, lỗi
+          mạng là chuyện thường ngày và bắt người dùng tự bấm tải lại trang là
+          mất phần dữ liệu đang xem. */}
       {error && (
-        <div className="analytics-error" role="alert">
-          <StateMessage kind="error" text={error} />
+        <div className="analytics-error">
+          <StateMessage
+            kind="error"
+            text={error}
+            onRetry={() => void load(range, filters)}
+            retryLabel={t("common.retry")}
+          />
         </div>
       )}
 

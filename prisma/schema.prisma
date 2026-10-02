@@ -185,11 +185,18 @@ model Assessment {
   status            String    @default("in_progress")
   startedAt         DateTime  @default(now())
   completedAt       DateTime?
+  // ---- CẤP/LỚP CỦA BÀI KIỂM TRA (thêm sau, NULLABLE để dữ liệu cũ an toàn) ----
+  // `diagnosticGrade` CỐ Ý TÁCH khỏi `User.learningProfile.grade` (currentGrade):
+  // học sinh lớp 11 có thể kiểm tra lại lớp 10 mà KHÔNG được ghi đè "lớp hiện
+  // tại". Cả 2 field nullable + mặc định null => assessment cũ đọc vẫn chạy.
+  educationStage    String?
+  grade             String?
   user              User      @relation(fields: [userId], references: [id])
   attempts          Attempt[]
   diagnosticSessions DiagnosticSession[]
 
   @@index([userId])
+  @@index([userId, grade])
 }
 
 model Attempt {
@@ -593,6 +600,10 @@ model DiagnosticSession {
   assessmentId      String?
   subject           String?
   topic             String?
+  // Cấp/lớp bài kiểm tra (NULLABLE — dữ liệu cũ không có thì đọc vẫn bình
+  // thường). Tách khỏi currentGrade trong learningProfile, xem Assessment.
+  educationStage    String?
+  grade             String?
   status            String    @default("in_progress")
   currentDifficulty Float     @default(0.5)
   totalQuestions    Int       @default(0)
@@ -788,6 +799,21 @@ enum RewardType {
   LEARNING
   REAL_WORLD
   MILESTONE
+
+  // ---- Cosmetic (thêm 2026-10-04) ----
+  // Mở RỐNG enum, KHÔNG đổi/xoá giá trị cũ ⇒ dữ liệu Reward đã có không bị
+  // ảnh hưởng. 4 giá trị đầu là nhóm "phần thưởng có giá trị thực" (đổi bằng
+  // LXP / milestone); 6 giá trị sau là nhóm "trang trí cá nhân" — chỉ biểu
+  // đạt, TUYỆT ĐỐI không cộng điểm hay tạo lợi thế học thuật.
+  //
+  // Logic phân loại nằm ở `src/lib/rewards/cosmetic.ts` (hàm thuần, test
+  // được). Đổi enum ở đây KHÔNG đòi sửa component.
+  PET
+  AVATAR_FRAME
+  PROFILE_EFFECT
+  CHAT_STICKER
+  CHAT_GIF
+  BADGE
 }
 
 enum RewardRarity {

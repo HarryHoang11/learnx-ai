@@ -15,7 +15,10 @@
 "use client";
 
 import { isValidElement, useState, type ReactElement, type ReactNode } from "react";
-import katex from "katex";
+// Render KaTeX đi qua helper DÙNG CHUNG với SafeMath (lib/math/render.ts):
+// parse nghiêm trước, tự cứu công thức lỗi, rồi mới vẽ lỗi — tránh lộ
+// chữ đỏ "Undefined control sequence" khi AI sinh `\textsuperscript`.
+import { renderMathHtml } from "../../lib/math/render";
 // Import tương đối (không dùng alias @/) vì vitest của project chưa
 // cấu hình resolve alias — Next.js build vẫn resolve bình thường.
 import { splitMathSegments } from "../math/SafeMath";
@@ -202,13 +205,7 @@ export function tryParseTable(lines: string[]): ParsedTable | null {
 // phá layout và sai semantics. Vì vậy node này KHÔNG được phép nằm trong
 // <p>; xem renderParagraph() bên dưới.
 function renderDisplayMath(latex: string, key: string) {
-  const html = katex.renderToString(latex, {
-    throwOnError: false,
-    displayMode: true,
-    output: "html",
-    strict: false,
-    trust: false,
-  });
+  const html = renderMathHtml(latex, true);
   return (
     <div
       key={key}
@@ -274,13 +271,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
       // container cho phép <div> (<li>, <td>, <th>, <blockquote>); ở <p>
       // thì display math đã được tách ra bởi renderParagraph() trước rồi.
       if (seg.display) return renderDisplayMath(seg.content, `${keyPrefix}-m${si}`);
-      const html = katex.renderToString(seg.content, {
-        throwOnError: false,
-        displayMode: false,
-        output: "html",
-        strict: false,
-        trust: false,
-      });
+      const html = renderMathHtml(seg.content, false);
       return (
         <span
           key={`${keyPrefix}-m${si}`}

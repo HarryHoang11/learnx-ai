@@ -14,6 +14,7 @@ import {
   isProfileComplete,
   mergeLearningProfile,
   sanitizeLearningProfile,
+  SCHOOL_MAX,
   type LearningProfile,
 } from "../profile";
 
@@ -108,6 +109,38 @@ describe("sanitizeLearningProfile", () => {
     expect(profile.version).toBe(1);
     expect(computeProfileCompletion(profile)).toBe(0);
   });
+
+  it("trường học: trim, \"\" = xoá, quá dài/sai kiểu = báo lỗi (không nuốt im lặng)", () => {
+    // Trường là text tự do nên KHÔNG có danh sách enum: chỉ trim + giới hạn
+    // độ dài, đúng y như các text field khác.
+    expect(sanitizeLearningProfile({ school: "  THPT chuyên Lê Hồng Phong  " }).profile.school)
+      .toBe("THPT chuyên Lê Hồng Phong");
+
+    // "" là tín hiệu "xoá" -> merge sẽ gỡ field khỏi profile (đi qua merge để
+    // kiểm chứng đúng đường đi, vì sanitize chỉ trả về tín hiệu).
+    const cleared = sanitizeLearningProfile({ school: "   " });
+    expect(cleared.profile.school).toBe("");
+    expect(cleared.errors).toEqual([]);
+    expect(mergeLearningProfile({ version: 1, school: "THPT X" }, cleared.profile)).not.toHaveProperty(
+      "school"
+    );
+
+    // Quá dài -> BÁO LỖI chứ không cắt cụt (người dùng phải biết mình gõ dư).
+    const tooLong = sanitizeLearningProfile({ school: "x".repeat(SCHOOL_MAX + 1) });
+    expect(tooLong.errors.length).toBeGreaterThan(0);
+    expect(tooLong.profile.school).toBeUndefined();
+
+    // Không gửi field -> không đụng field (không xoá nhầm dữ liệu đã lưu).
+    expect(sanitizeLearningProfile({}).profile).not.toHaveProperty("school");
+  });
+
+  it("lớp hiện tại lưu trong hồ sơ, tách khỏi lớp của bài kiểm tra", () => {
+    // currentGrade của profile là 1 con số; lớp kiểm tra nằm riêng ở
+    // Assessment.grade. Ở đây chỉ khẳng định hồ sơ chỉ giữ 1 lớp hiện tại.
+    const { profile } = sanitizeLearningProfile({ educationStage: "THPT", grade: "11" });
+    expect(profile.grade).toBe("11");
+    expect(profile).not.toHaveProperty("diagnosticGrade");
+  });
 });
 
 describe("mergeLearningProfile", () => {
@@ -135,6 +168,26 @@ describe("mergeLearningProfile", () => {
     const merged = mergeLearningProfile(null, { version: 1, studyTime: "1_2_HOURS" });
     expect(merged.studyTime).toBe("1_2_HOURS");
     expect(merged.version).toBe(1);
+  });
+
+  it("sửa trường học không đụng cấp/lớp/môn đã lưu", () => {
+    const merged = mergeLearningProfile(
+      { ...base, school: "THPT chuyên Lê Hồng Phong" },
+      { version: 1, school: "THPT Chu Văn An" }
+    );
+    expect(merged.school).toBe("THPT Chu Văn An");
+    expect(merged.grade).toBe("11");
+    expect(merged.educationStage).toBe("THPT");
+    expect(merged.subjects).toEqual(["Toán"]);
+  });
+
+  it("lần lưu sau không kèm trường -> giữ nguyên trường đã có (không mất dữ liệu)", () => {
+    const merged = mergeLearningProfile(
+      { ...base, school: "THPT chuyên Lê Hồng Phong" },
+      { version: 1, subjects: ["Toán", "Lý"] }
+    );
+    expect(merged.school).toBe("THPT chuyên Lê Hồng Phong");
+    expect(merged.subjects).toEqual(["Toán", "Lý"]);
   });
 });
 

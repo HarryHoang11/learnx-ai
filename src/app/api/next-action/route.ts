@@ -19,7 +19,7 @@ import { getDailyPlan } from "@/services/learning-agent.service";
 import { getCurrentStreak, getUserProgress } from "@/services/learning-activity.service";
 import { generateJSON } from "@/lib/ai/router";
 import type { ApiResponse } from "@/types";
-import type { ReviewItemData } from "@/services/spaced-repetition.service";
+import type { ReviewDueItem } from "@/services/spaced-repetition.service";
 
 export type ActionType =
   | "review"
@@ -111,11 +111,13 @@ async function buildContext(userId: string): Promise<NextActionContext> {
       masteryPercent: s.masteryPercent,
       isWeak: s.isWeak,
     })),
-    dueReviews: dueReviews.map((r: ReviewItemData) => ({
+    dueReviews: dueReviews.map((r: ReviewDueItem) => ({
       id: r.id,
       topic: r.topic,
-      concept: r.concept,
-      subject: r.subject,
+      // Chuẩn hoá null -> undefined cho khớp NextActionContext (và để
+      // '"null"' không lọt vào chuỗi prompt AI khi nội suy concept).
+      concept: r.concept ?? undefined,
+      subject: r.subject ?? undefined,
     })),
     overdueCount: overdueReviews.length,
     activeGoal: activeGoal

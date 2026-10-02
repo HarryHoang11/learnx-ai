@@ -8,6 +8,11 @@ import SummaryDrawer from "@/components/documents/SummaryDrawer";
 import { plainPreviewText } from "@/components/documents/DocumentCard";
 import EmptyState from "@/components/ui/EmptyState";
 import StateMessage from "@/components/ui/StateMessage";
+// Nội dung quiz/flashcard do AI sinh CÓ THỂ chứa LaTeX (đơn vị, công thức).
+// Render qua SafeMath — cùng hệ thống toán của app — để không lộ raw
+// \text{...}/\textsuperscript khi AI quên delimiter hoặc dùng cú pháp
+// kiểu HTML. Text thường đi qua SafeMath vẫn hiện y hệt.
+import SafeMath from "@/components/math/SafeMath";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 import type { ApiResponse, GoalWithRoadmap } from "@/types";
 
@@ -471,7 +476,9 @@ export default function WorkspacePage() {
                       onClick={() => setFlashcardRevealed(true)}
                     >
                       <span className="review-card-label">{flashcardRevealed ? t("workspace.flashcardBack") : t("workspace.flashcardFront")}</span>
-                      <span className="review-card-text">{flashcardRevealed ? flashcards[flashcardIndex].back : flashcards[flashcardIndex].front}</span>
+                      <span className="review-card-text">
+                        <SafeMath text={flashcardRevealed ? flashcards[flashcardIndex].back : flashcards[flashcardIndex].front} />
+                      </span>
                       {!flashcardRevealed && <span className="review-card-hint"><RotateCcw size={15} /> {t("review.tapToReveal")}</span>}
                     </button>
                     <div className="workspace-flashcards-nav">
@@ -518,7 +525,7 @@ export default function WorkspacePage() {
                         <p className="workspace-muted">{quiz.text}</p>
                       ) : (
                         <>
-                          <p>{quiz.text}</p>
+                          <p><SafeMath text={quiz.text} /></p>
                           {quiz.options.map((option, optionIndex) => {
                             const isSelected = selectedOption === optionIndex;
                             const isRevealedCorrect = quizResult && optionIndex === quizResult.correctIndex;
@@ -531,7 +538,7 @@ export default function WorkspacePage() {
                                 disabled={!!quizResult}
                                 onClick={() => setSelectedOption(optionIndex)}
                               >
-                                {String.fromCharCode(65 + optionIndex)}. {option}
+                                {String.fromCharCode(65 + optionIndex)}. <SafeMath text={option} />
                               </button>
                             );
                           })}
@@ -543,10 +550,16 @@ export default function WorkspacePage() {
                             <div className={`workspace-quiz-result ${quizResult.isCorrect ? "workspace-quiz-result--correct" : "workspace-quiz-result--wrong"}`}>
                               <strong>{quizResult.isCorrect ? t("workspace.quizCorrect") : t("workspace.quizIncorrect")}</strong>
                               {!quizResult.isCorrect && quizResult.correctAnswer && (
-                                <p>{t("workspace.quizCorrectAnswerLabel")}: {quizResult.correctAnswer}</p>
+                                <p>
+                                  {t("workspace.quizCorrectAnswerLabel")}:{" "}
+                                  <SafeMath text={quizResult.correctAnswer} />
+                                </p>
                               )}
                               {quizResult.explanation && (
-                                <p><em>{t("workspace.quizExplanationLabel")}:</em> {quizResult.explanation}</p>
+                                <p>
+                                  <em>{t("workspace.quizExplanationLabel")}:</em>{" "}
+                                  <SafeMath text={quizResult.explanation} />
+                                </p>
                               )}
                               <button className="btn-secondary" style={{ marginTop: 8 }} onClick={() => createQuizQuestion(targetedTopic ? { subject: quiz.subject, topic: quiz.topic } : undefined)}>
                                 {t("workspace.quizNextQuestion")}

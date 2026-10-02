@@ -221,6 +221,8 @@ export function buildDiagnosticPrompt(params: {
   topic?: string;
   goal?: string;
   questionCount: number;
+  /** Trình độ lớp ĐANG kiểm tra — AI bám chương trình lớp này để sinh câu hỏi. */
+  gradeLevel?: string;
 }): { system: string; user: string } {
   return {
     system: `Bạn là AI tạo bài kiểm tra năng lực thích ứng cho LearnX.
@@ -247,6 +249,7 @@ Các câu hỏi phải đa dạng loại, độ khó phân bố đều, và phù
     user: `Môn học: ${params.subject}
 ${params.topic ? `Chủ đề: ${params.topic}` : ""}
 ${params.goal ? `Mục tiêu: ${params.goal}` : ""}
+${params.gradeLevel ? `Trình độ ĐANG KIỂM TRA: ${params.gradeLevel} — câu hỏi phải nằm trong chương trình của đúng lớp này.` : ""}
 Số câu hỏi: ${params.questionCount}
 
 Hãy tạo bài kiểm tra với các câu hỏi đa dạng loại (trắc nghiệm, tự luận, code reasoning, debugging, conceptual, problem solving), độ khó từ dễ đến khó, bao phủ các khái niệm cốt lõi.`,

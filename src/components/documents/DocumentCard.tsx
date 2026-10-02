@@ -122,7 +122,7 @@ export default function DocumentCard({ doc, onOpenSummary, onRetry, retrying }: 
       {(doc.subject || doc.topic || doc.difficulty) && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }} aria-label="Thông tin tài liệu">
           {doc.subject && (
-            <span style={{ fontSize: 11.5, background: "var(--indigo-soft)", color: "var(--indigo)", padding: "3px 9px", borderRadius: 99, fontWeight: 600 }}>
+            <span style={{ fontSize: 11.5, background: "var(--indigo-soft)", color: "var(--indigo)", padding: "3px 9px", borderRadius: "var(--radius-pill)", fontWeight: 600 }}>
               {doc.subject}
             </span>
           )}
@@ -273,10 +273,10 @@ function StatusLine({ status }: { status: string }) {
     );
   }
   if (status === "ready") {
-    return <div style={{ fontSize: 12.5, color: "var(--success, #4ade80)" }}>{t("doc.ready")}</div>;
+    return <div style={{ fontSize: 12.5, color: "var(--success)" }}>{t("doc.ready")}</div>;
   }
   if (status === "failed") {
-    return <div style={{ fontSize: 12.5, color: "var(--danger, #f87171)" }}>{t("doc.failed")}</div>;
+    return <div style={{ fontSize: 12.5, color: "var(--danger)" }}>{t("doc.failed")}</div>;
   }
   return <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{status}</div>;
 }

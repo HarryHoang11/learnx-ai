@@ -18,7 +18,7 @@
   padding: 14px;
   border-radius: 12px;
   background: var(--indigo-soft);
-  border: 1px solid rgba(124, 108, 240, 0.28);
+  border: 1px solid rgba(119, 117, 255, 0.28);
 }
 
 .subject-progress__focus-head {
@@ -45,7 +45,7 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--indigo-strong);
-  background: rgba(124, 108, 240, 0.18);
+  background: rgba(119, 117, 255, 0.18);
 }
 
 .subject-progress__badge.is-weak {

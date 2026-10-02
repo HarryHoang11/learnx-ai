@@ -31,9 +31,30 @@ Ngược lại: đừng đẩy dữ liệu query được vào JSON (analytics c
 | `Exercise` | — | `Exercise` có `@@index([subject, topic])` |
 | `ExerciseAttempt` | `[userId, exerciseId]` | Practice |
 | `MistakeLog` | — | ghi 1 lần mỗi lần sai (input cho mistake-analysis) |
-| `Assessment` | — | Diagnostic |
-| `DiagnosticSession` | — | Diagnostic |
+| `Assessment` | — | Diagnostic. Có `educationStage` + `grade` **nullable** = lớp ĐANG kiểm tra (xem bên dưới) |
+| `DiagnosticSession` | — | Diagnostic. Cùng 2 cột nullable `educationStage` + `grade` |
 | `QuizQuestionCache` | `[questionId]` | giữ đáp án server-side, TTL 24h |
+
+### Lớp hiện tại vs lớp đang kiểm tra
+
+Hai khái niệm khác nhau, cố tình KHÔNG dùng chung một cột:
+
+| Khái niệm | Nơi lưu | Ý nghĩa |
+|---|---|---|
+| **Lớp hiện tại** (`currentGrade`) | `User.learningProfile.grade` (JSON) | Học sinh đang học lớp mấy. Chỉ đổi khi người dùng tự sửa hồ sơ. |
+| **Lớp đang kiểm tra** (`diagnosticGrade`) | `Assessment.grade`, `DiagnosticSession.grade` | Lớp của riêng bài kiểm tra đó, lưu **theo từng bài**. |
+
+Nhờ tách vậy, học sinh đang lớp 11 vẫn kiểm tra được lớp 10 mà `currentGrade`
+**không bị đổi**. Mỗi lần kiểm tra là một dòng riêng ⇒ lịch sử không bị ghi đè.
+
+Cột mới **luôn nullable** và **không backfill**: bài làm trước khi có tính năng đọc
+được với `grade = null`, thay vì bịa số lớp cho dữ liệu lịch sử.
+
+Nguồn sự thật khi sinh câu hỏi: `resolveDiagnosticLevel()`
+(`services/personalization.service.ts`) đọc hồ sơ trong DB, validate lớp xin
+kiểm tra theo `gradeOptionsFor(educationStage)`, và **không bao giờ ghi ngược**
+vào hồ sơ.
+
 
 **`LearningProgress` là xương sống.** Mọi thứ — analytics, gợi ý ôn tập, prompt
 AI, roadmap, subject progress — đều đọc từ đây. Đổi công thức mastery ở
@@ -87,6 +108,7 @@ npm run db:studio
 | `Exercise` | `[subject, topic]`, `[difficulty]` | lọc ngân hàng bài |
 | `DocumentChunk` | pgvector | similarity search |
 | `LearningGoal` | `[userId, status, priority]` | sắp xếp mục tiêu |
+| `Assessment` | `[userId, grade]` | lọc bài kiểm tra theo lớp đang kiểm tra |
 
 **Chỉ thêm index khi đã phân tích query.** Đừng thêm bừa.
 

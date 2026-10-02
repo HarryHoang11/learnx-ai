@@ -21,7 +21,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { getAssessmentHistoryBySubject } from "@/services/assessment.service";
-import { getSuggestedDiagnosticSubjects } from "@/services/personalization.service";
+import {
+  getSuggestedDiagnosticSubjects,
+  resolveDiagnosticLevel,
+} from "@/services/personalization.service";
 import type { ApiResponse } from "@/types";
 
 export async function GET(req: NextRequest) {
@@ -39,9 +42,42 @@ export async function GET(req: NextRequest) {
       console.warn("[api/diagnostic/status] Không dựng được gợi ý môn:", err);
     }
 
-    return NextResponse.json<ApiResponse<{ history: typeof history; suggestedSubjects: string[] }>>({
+    // Cấp/lớp để UI dựng bộ chọn lớp — lấy từ DB (nguồn sự thật), không
+    // hardcode "10/11/12" ở frontend. `availableGrades` rỗng = hồ sơ chưa khai
+    // cấp, UI bỏ qua bộ chọn và dùng mặc định của server.
+    let level = {
+      educationStage: null as string | null,
+      grade: null as string | null,
+      availableGrades: [] as string[],
+    };
+    try {
+      const resolved = await resolveDiagnosticLevel(userId);
+      level = {
+        educationStage: resolved.educationStage,
+        grade: resolved.grade,
+        availableGrades: resolved.availableGrades,
+      };
+    } catch (err) {
+      console.warn("[api/diagnostic/status] Không đọc được cấp/lớp:", err);
+    }
+
+    return NextResponse.json<
+      ApiResponse<{
+        history: typeof history;
+        suggestedSubjects: string[];
+        educationStage: string | null;
+        grade: string | null;
+        availableGrades: string[];
+      }>
+    >({
       success: true,
-      data: { history, suggestedSubjects },
+      data: {
+        history,
+        suggestedSubjects,
+        educationStage: level.educationStage,
+        grade: level.grade,
+        availableGrades: level.availableGrades,
+      },
     });
   } catch (err) {
     console.error("[api/diagnostic/status] Error:", err);

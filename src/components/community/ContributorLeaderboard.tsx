@@ -197,7 +197,7 @@ export default function ContributorLeaderboard({
                     style={{
                       fontSize: 11,
                       padding: "2px 8px",
-                      borderRadius: 99,
+                      borderRadius: "var(--radius-pill)",
                       background: "var(--indigo-soft)",
                       color: "var(--indigo)",
                       fontWeight: 600,

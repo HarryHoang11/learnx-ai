@@ -9,6 +9,7 @@ import {
   generateDiagnosticQuestions,
   toPublicDiagnosticQuestion,
 } from "@/services/diagnostic.service";
+import { resolveDiagnosticLevel } from "@/services/personalization.service";
 import type { ApiResponse } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -16,7 +17,12 @@ export async function POST(req: NextRequest) {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
 
-    const body = await req.json() as { subject?: unknown; topic?: unknown; goal?: unknown };
+    const body = await req.json() as {
+      subject?: unknown;
+      topic?: unknown;
+      goal?: unknown;
+      grade?: unknown;
+    };
     const subject = typeof body.subject === "string" ? body.subject.trim() : "";
     const topic = typeof body.topic === "string" ? body.topic.trim() || undefined : undefined;
     const goal = typeof body.goal === "string" ? body.goal.trim() || undefined : undefined;
@@ -28,10 +34,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Lớp đang kiểm tra lấy từ hồ sơ trong DB, có validate lớp user xin
+    // kiểm tra, và KHÔNG ghi đè currentGrade (xem resolveDiagnosticLevel).
+    const level = await resolveDiagnosticLevel(
+      userId,
+      typeof body.grade === "string" ? body.grade : undefined
+    );
+
     // Generate before persisting a session so an AI failure cannot leave
     // an empty in-progress diagnostic in the user's history.
-    const questions = await generateDiagnosticQuestions({ subject, topic, goal, questionCount: 15 });
-    const session = await createDiagnosticSession({ userId, subject, topic, questions });
+    const questions = await generateDiagnosticQuestions({
+      subject,
+      topic,
+      goal,
+      questionCount: 15,
+      gradeLevel: level.gradeLevel,
+    });
+    const session = await createDiagnosticSession({
+      userId,
+      subject,
+      topic,
+      questions,
+      educationStage: level.educationStage,
+      grade: level.grade,
+    });
 
     return NextResponse.json<ApiResponse<{ sessionId: string; questions: ReturnType<typeof toPublicDiagnosticQuestion>[] }>>({
       success: true,

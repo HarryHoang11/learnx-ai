@@ -56,6 +56,8 @@ export const SUBJECT_MAX = 120;
  */
 const FUTURE_GOAL_MAX = 40;
 const LIST_MAX = 8;
+/** Tên trường học: chuỗi tự do, độ dài tương tự `otherSubject`. */
+export const SCHOOL_MAX = 120;
 
 /** 1 mục tiêu người dùng khai trong onboarding. */
 export interface LearningGoalDraft {
@@ -77,6 +79,8 @@ export interface LearningProfile {
   educationStage?: string;
   grade?: string;
   track?: string;
+  /** Trường học (tự nhập, tùy chọn) — dùng cho AI Tutor/giáo viên tham chiếu. */
+  school?: string;
   intents?: string[];
   goalCategory?: string;
   goals?: LearningGoalDraft[];
@@ -285,6 +289,17 @@ export function sanitizeLearningProfile(input: unknown): SanitizedProfile {
     else errors.push("track không hợp lệ.");
   }
 
+  // Trường học: tự do nên KHÔNG có danh sách enum (hệ thống không có "danh
+  // sách trường" và không được bịa). Dùng `readTextField` như các text field
+  // khác: "" = xoá, sai kiểu/quá dài = báo lỗi. `cleanString` sẽ NUỐT mất
+  // cả hai trường hợp -> người dùng xoá ô mà vẫn thấy giá trị cũ còn trong DB.
+  if (input.school !== undefined) {
+    const school = readTextField(input.school, SCHOOL_MAX, "school");
+    if (school.kind === "value") profile.school = school.value;
+    else if (school.kind === "clear") profile.school = "";
+    else if (school.kind === "invalid") errors.push(school.reason);
+  }
+
   // --- Mục đích ---
   if (input.intents !== undefined) {
     profile.intents = cleanEnumList(input.intents, INTENT_VALUES, LIST_MAX + 4);
@@ -426,6 +441,7 @@ export function mergeLearningProfile(
     "educationStage",
     "grade",
     "track",
+    "school",
     "goalCategory",
     "otherSubject",
     "careerStatus",

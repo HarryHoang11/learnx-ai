@@ -18,3 +18,15 @@ tsconfig.tsbuildinfo
 /public/uploads
 *.log
 *-out.txt
+
+# --- Artifact sinh TỰ ĐỘNG — không thuộc source, không commit ---
+# graphify-out/: output của công cụ dựng code-graph (JSON/HTML/cache AST).
+# Nặng ~13MB / 141 file, sinh lại được, và gây nhiễu diff mỗi lần chạy.
+graphify-out/
+
+# IDE — cấu hình máy từng người, không liên quan tới dự án
+.idea/
+.vscode/
+
+# Ảnh chụp màn hình QA tạm
+_qa_shot*.png

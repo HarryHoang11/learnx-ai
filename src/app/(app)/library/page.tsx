@@ -29,6 +29,9 @@ import StateMessage from "@/components/ui/StateMessage";
 import DocumentCard from "@/components/documents/DocumentCard";
 import DocumentDetailModal, { type LibraryDocument } from "@/components/documents/DocumentDetailModal";
 import { useLanguage } from "@/components/providers/LanguageProvider";
+// readApi/describeError/ApiError: đọc response an toàn + diễn giải lỗi để
+// không lộ "Unexpected token '<'" hay "Failed to fetch" ra UI (xem file).
+import { readApi, describeError, ApiError } from "@/lib/api/readApi";
 import type { ApiResponse } from "@/types";
 
 import { SUBJECTS, CUSTOM_SUBJECT_VALUE } from "@/lib/constants/subjects";
@@ -133,14 +136,21 @@ export default function LibraryPage() {
       if (metaDescription.trim()) formData.append("description", metaDescription.trim());
 
       const res = await fetch("/api/documents/upload", { method: "POST", body: formData });
-      const json: ApiResponse<{ documentId: string }> = await res.json();
-      if (!json.success) throw new Error(json.error);
+      // readApi: server/proxy có thể trả HTML khi 5xx (502/504 rất hay gặp khi
+      // upload file lớn qua mạng di động). `res.json()` sẽ ném SyntaxError với
+      // message "Unexpected token '<'" — và bản gốc đẩy đúng message đó ra UI
+      // ở catch bên dưới. Đây là màn hình người dùng thấy rõ nhất khi lỗi.
+      const json = await readApi<{ documentId: string }>(res, "POST /api/documents/upload");
+      // ApiError (không phải Error thường) để describeError BIẾT message này
+      // đã được API viết cho người dùng và giữ nguyên; lỗi mạng/parse thì
+      // rơi về key i18n dự phòng.
+      if (!json.success) throw new ApiError(json.error);
 
       setUploadStage(t("library.stageExtract"));
       await loadDocs();
       ensurePolling();
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : t("library.uploadFail"));
+      setUploadError(describeError(err, t("library.uploadFail")));
     } finally {
       setUploading(false);
       setUploadStage(null);
@@ -154,13 +164,13 @@ export default function LibraryPage() {
     setUploadError(null);
     try {
       const res = await fetch(`/api/documents/${docId}/retry`, { method: "POST" });
-      const json: ApiResponse<{ documentId: string }> = await res.json();
-      if (!json.success) throw new Error(json.error);
+      const json = await readApi<{ documentId: string }>(res, "POST /api/documents/[id]/retry");
+      if (!json.success) throw new ApiError(json.error);
 
       await loadDocs();
       ensurePolling();
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : t("library.retryFail"));
+      setUploadError(describeError(err, t("library.retryFail")));
     } finally {
       setRetryingId(null);
     }

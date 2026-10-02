@@ -144,6 +144,21 @@ export function labelFor(value: string): string {
  * prompt rỗng tốt hơn prompt bịa. Lưu ý `learningProfile` là cột JSON, có thể
  * là `null`, hoặc là object thiếu field, nên đọc kiểu phòng vệ.
  */
+/**
+ * Câu mô tả trình độ lớp ĐÃ LƯU, dùng chung cho mọi prompt (`"học sinh lớp 11"`).
+ *
+ * Tách ra để nơi đọc dữ liệu lớp đã lưu (ví dụ `Assessment.grade` của bài kiểm
+ * tra đang chạy) diễn đạt ĐÚNG CÁCH với `readGradeLevel` — cùng một cách nói
+ * trong prompt, không phải mỗi chỗ tự chế chuỗi ("lớp 11" / "cấp 3 lớp 11" /...).
+ * Trả `undefined` khi giá trị rỗng/không phải số ("OTHER") — prompt rỗng tốt
+ * hơn prompt bịa.
+ */
+export function gradeLevelText(grade: string | null | undefined): string | undefined {
+  if (typeof grade !== "string") return undefined;
+  const trimmed = grade.trim();
+  return /^\d+$/.test(trimmed) ? `học sinh lớp ${trimmed}` : undefined;
+}
+
 export function readGradeLevel(learningProfile: unknown): string | undefined {
   if (!learningProfile || typeof learningProfile !== "object") return undefined;
   const profile = learningProfile as Record<string, unknown>;
@@ -158,7 +173,7 @@ export function readGradeLevel(learningProfile: unknown): string | undefined {
 
   if (stage === "THCS" || stage === "THPT") {
     // `grade` chỉ chứa số ("10", "11") khi thuộc nhóm này; "OTHER"/"" = chưa biết.
-    return /^\d+$/.test(grade) ? `học sinh lớp ${grade}` : undefined;
+    return gradeLevelText(grade);
   }
   if (stage === "UNIVERSITY" || stage === "POSTGRAD") {
     return field ? `sinh viên ngành ${field}` : "sinh viên đại học";
@@ -184,9 +199,51 @@ export function readGradeLevel(learningProfile: unknown): string | undefined {
  * gì" thì AI sẽ bắt đầu tự suy đoán — đúng thứ ta cấm. Service chỉ nối khối
  * này vào prompt khi nó khác rỗng.
  */
+/**
+ * NGUYÊN TẮC DẠY THEO TRÌNH ĐỘ (yêu cầu §9 + §10).
+ *
+ * "Thích nghi" KHÔNG phải "luôn giải thích thật đơn giản":
+ *  - Chủ đề YẾU (<50%): dựng nền tảng trước (khái niệm đơn giản → vì sao →
+ *    ví dụ trực quan → liên hệ kiến thức đã biết → MỚI tới công thức), tuyệt đối
+ *    không nhảy thẳng vào công thức nâng cao.
+ *  - Chủ đề VỮNG (>=80%): rút gọn phần cơ bản, đi thẳng bản chất, dùng thuật
+ *    ngữ phù hợp và nâng bài tập lên — hạ trình độ chỗ đã vững là lãng phí.
+ *
+ * Hàm thuần tuý để test được; `skills` là dữ liệu THẬT từ LearningProgress
+ * (mastery 0-100), không phải tự khai của học sinh.
+ */
+export function buildAdaptiveTeachingRules(input: {
+  weakTopics: string[];
+  strongTopics: string[];
+  grade?: string | null;
+}): string[] {
+  const lines: string[] = [];
+  if (input.grade) {
+    lines.push(
+      `CÁCH DẠY BẮT BUỘC theo trình độ lớp ${input.grade}: nội dung, ví dụ và bài tập phải nằm trong chương trình lớp đó — KHÔNG dùng ví dụ vượt xa trình độ (ví dụ giải tích đại học cho học sinh lớp 10).`
+    );
+  }
+  if (input.weakTopics.length > 0) {
+    lines.push(
+      `VỚI CHỦ ĐỀ ĐANG YẾU (${input.weakTopics.join(", ")}): dựng lại nền tảng theo thứ tự (1) khái niệm đơn giản, (2) "vì sao" đúng như vậy, (3) ví dụ trực quan, (4) liên hệ kiến thức học sinh đã biết, (5) mới đến công thức, (6) ví dụ có số, (7) để học sinh tự thử. KHÔNG nhảy thẳng vào công thức nâng cao.`
+    );
+  }
+  if (input.strongTopics.length > 0) {
+    lines.push(
+      `VỚI CHỦ ĐỀ HỌC SINH ĐÃ VỮNG (${input.strongTopics.join(", ")}): bỏ phần giải thích cơ bản, đi thẳng vào bản chất, dùng thuật ngữ chuẩn và đưa bài tập khó hơn — hạ trình độ chỗ đã vững là lãng phí thời gian học sinh.`
+    );
+  }
+  return lines;
+}
+
 export function buildLearningContext(input: LearningContextInput): LearningContext {
   const { profile, goals, skills = [] } = input;
   const weakTopics = skills.filter((s) => s.isWeak).map((s) => `${s.subject}/${s.topic}`);
+  // Ngưỡng "vững" = 80% (khớp với ngưỡng `skillsMastered` ở Analytics) để
+  // AI và thống kê nói cùng 1 ngôn ngữ về năng lực học sinh.
+  const strongTopics = skills
+    .filter((s) => !s.isWeak && s.masteryPercent >= 80)
+    .map((s) => `${s.subject}/${s.topic}`);
 
   const summary: LearningContextSummary = {
     hasProfile: Boolean(profile),
@@ -290,6 +347,17 @@ export function buildLearningContext(input: LearningContextInput): LearningConte
         : `Chủ đề đang yếu (dữ liệu thật): ${weakTopics.join(", ")}`
     );
   }
+
+  // --- QUY TẮC DẠY THEO TRÌNH ĐỘ (§9 + §10) ---
+  // Dùng dữ liệu thật (LearningProgress) + lớp trong hồ sơ: mạnh thì đi
+  // nhanh, yếu thì dựng nền tảng — KHÔNG hạ trình độ đại trày.
+  lines.push(
+    ...buildAdaptiveTeachingRules({
+      weakTopics,
+      strongTopics,
+      grade: profile?.grade ?? null,
+    })
+  );
 
   // --- Chỉ dẫn hành vi từ tuỳ chọn AI ---
   const behaviors = summary.aiPreferences

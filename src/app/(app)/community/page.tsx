@@ -409,32 +409,32 @@ function CommunityPageInner() {
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
               <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("com.filters")}</span>
               {filters.subjectId && subjects.find(s => s.id === filters.subjectId) && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", background: "var(--indigo-soft)", borderRadius: 99, fontSize: 12, color: "var(--indigo)" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", background: "var(--indigo-soft)", borderRadius: "var(--radius-pill)", fontSize: 12, color: "var(--indigo)" }}>
                   {subjects.find(s => s.id === filters.subjectId)?.icon} {subjects.find(s => s.id === filters.subjectId)?.name}
                   <button onClick={() => setFilters(p => ({ ...p, subjectId: "", topicId: "", page: 1 }))} style={{ marginLeft: 4, background: "none", border: "none", color: "inherit", cursor: "pointer", padding: 0, lineHeight: 1 }}>✕</button>
                 </span>
               )}
               {filters.topicId && subjects.find(s => s.id === filters.subjectId)?.topics?.find(t => t.id === filters.topicId) && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", background: "var(--indigo-soft)", borderRadius: 99, fontSize: 12, color: "var(--indigo)" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", background: "var(--indigo-soft)", borderRadius: "var(--radius-pill)", fontSize: 12, color: "var(--indigo)" }}>
                   {subjects.find(s => s.id === filters.subjectId)?.topics?.find(t => t.id === filters.topicId)?.name}
                   <button onClick={() => setFilters(p => ({ ...p, topicId: "", page: 1 }))} style={{ marginLeft: 4, background: "none", border: "none", color: "inherit", cursor: "pointer", padding: 0, lineHeight: 1 }}>✕</button>
                 </span>
               )}
               {filters.difficulty && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", background: "var(--amber-soft)", borderRadius: 99, fontSize: 12, color: "var(--amber)" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", background: "var(--amber-soft)", borderRadius: "var(--radius-pill)", fontSize: 12, color: "var(--amber)" }}>
                   {t(DIFF_KEYS[filters.difficulty] ?? "com.diff.medium")}
                   <button onClick={() => setFilters(p => ({ ...p, difficulty: "", page: 1 }))} style={{ marginLeft: 4, background: "none", border: "none", color: "inherit", cursor: "pointer", padding: 0, lineHeight: 1 }}>✕</button>
                 </span>
               )}
               {filters.trustLevel && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", background: "var(--rose-soft)", borderRadius: 99, fontSize: 12, color: "var(--rose)" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", background: "var(--rose-soft)", borderRadius: "var(--radius-pill)", fontSize: 12, color: "var(--rose)" }}>
                   {t(TRUST_KEYS.find((o) => o.value === filters.trustLevel)?.labelKey ?? "com.trust.NEW")}
                   <button onClick={() => setFilters(p => ({ ...p, trustLevel: "", page: 1 }))} style={{ marginLeft: 4, background: "none", border: "none", color: "inherit", cursor: "pointer", padding: 0, lineHeight: 1 }}>✕</button>
                 </span>
               )}
               <button
                 onClick={() => setFilters(p => ({ ...p, subjectId: "", topicId: "", difficulty: "", trustLevel: "", page: 1 }))}
-                style={{ padding: "4px 10px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: 99, fontSize: 12, color: "var(--text-dim)", cursor: "pointer" }}
+                style={{ padding: "4px 10px", background: "var(--panel-strong)", border: "1px solid var(--border)", borderRadius: "var(--radius-pill)", fontSize: 12, color: "var(--text-dim)", cursor: "pointer" }}
               >
                 {t("com.clearFilters")}
               </button>

@@ -102,6 +102,21 @@ describe("cấu trúc HTML hợp lệ (block math không nằm trong <p>)", () =
     expect(html).not.toContain('class="math-block"');
   });
 
+  // ---------------------------------------------------------------------
+  // CASE LỖI THẬT: AI sinh đáp án trần, dùng cú pháp kiểu HTML
+  // (`\; \text{(m/s\textsuperscript{2})}`) — trước đây lộ NGUYÊN chuỗi
+  // này ra UI, hoặc KaTeX vẽ chữ đỏ. Test ở mức component để chặn tái
+  // phát ở đúng tầng render thật sự dùng trong app.
+  // ---------------------------------------------------------------------
+  it("render đáp án LaTeX TRẦN + \\textsuperscript thành công thức, KHÔNG lộ raw", () => {
+    const html = render("\\;\\text{(m/s\\textsuperscript{2})}");
+
+    expect(html).toContain("math-inline");
+    expect(html).not.toContain("textsuperscript");
+    expect(html).not.toContain("mathcolor=\"#cc0000\"");
+    expect(html).toContain("mord mathrm");
+  });
+
   it("công thức hiển thị giữ nguyên nội dung LaTeX (không mất \\frac, \\cdot)", () => {
     const html = render(`${D}\n${CEVA}\n${D}`);
     // KaTeX sinh .frac và .cdot thành phần tử riêng — chứng minh công thức

@@ -53,24 +53,15 @@ export default function CommunityDocumentCard({
 
   return (
     <div
+      className="community-doc-card"
       onClick={onClick}
-      style={{
-        padding: "16px",
-        borderRadius: 12,
-        border: "1px solid var(--border-soft)",
-        background: "var(--panel-strong)",
-        cursor: "pointer",
-        transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-      }}
-      onMouseEnter={(e) => { 
-        e.currentTarget.style.transform = "translateY(-2px)"; 
-        e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)";
-        e.currentTarget.style.borderColor = "var(--indigo)";
-      }}
-      onMouseLeave={(e) => { 
-        e.currentTarget.style.transform = "translateY(0)"; 
-        e.currentTarget.style.boxShadow = "none";
-        e.currentTarget.style.borderColor = "var(--border-soft)";
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
       }}
     >
       {/* Header */}
@@ -83,7 +74,7 @@ export default function CommunityDocumentCard({
             fontSize: 11,
             fontWeight: 600,
             padding: "3px 8px",
-            borderRadius: 99,
+            borderRadius: "var(--radius-pill)",
             background: `${trustColor}20`,
             color: trustColor,
             whiteSpace: "nowrap",
@@ -112,7 +103,7 @@ export default function CommunityDocumentCard({
               display: "inline-flex",
               alignItems: "center",
               padding: "2px 8px",
-              borderRadius: 99,
+              borderRadius: "var(--radius-pill)",
               fontSize: 11,
               fontWeight: 600,
               background:
@@ -166,7 +157,7 @@ export default function CommunityDocumentCard({
               style={{
                 fontSize: 11,
                 padding: "2px 8px",
-                borderRadius: 99,
+                borderRadius: "var(--radius-pill)",
                 background: "var(--panel)",
                 border: "1px solid var(--border-soft)",
                 color: "var(--text-dim)",
@@ -204,56 +195,28 @@ export default function CommunityDocumentCard({
         </div>
       </div>
 
-      {/* Action buttons (overlay on hover) */}
-      <div style={{ display: "flex", gap: 8, marginTop: 12, opacity: 0, transition: "opacity 0.15s ease", justifyContent: "flex-end" }} className="card-actions">
+      {/* Action buttons.
+          On touch (mobile/APK) there is no hover, so these are ALWAYS
+          visible there and only fade in on hover-capable pointers.
+          The previous version used `<style jsx>` + `:host:hover`, which
+          never matches in styled-jsx => the row stayed at opacity 0
+          and the Save/Download buttons were permanently invisible. */}
+      <div className="community-doc-card__actions">
         <button
+          type="button"
+          className="btn-secondary community-doc-card__action"
           onClick={(e) => { e.stopPropagation(); onSave(); }}
-          style={{
-            padding: "8px 12px",
-            borderRadius: 8,
-            border: "1px solid var(--border)",
-            background: "var(--panel-strong)",
-            color: "var(--text)",
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            transition: "all 0.15s ease",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--indigo-soft)"; e.currentTarget.style.borderColor = "var(--indigo)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--panel-strong)"; e.currentTarget.style.borderColor = "var(--border)"; }}
         >
           {saved ? t("com.card.saved") : t("com.card.save")}
         </button>
         <button
+          type="button"
+          className="btn-secondary community-doc-card__action"
           onClick={(e) => { e.stopPropagation(); onDownload(); }}
-          style={{
-            padding: "8px 12px",
-            borderRadius: 8,
-            border: "1px solid var(--border)",
-            background: "var(--panel-strong)",
-            color: "var(--text)",
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            transition: "all 0.15s ease",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--indigo-soft)"; e.currentTarget.style.borderColor = "var(--indigo)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--panel-strong)"; e.currentTarget.style.borderColor = "var(--border)"; }}
         >
           {t("com.card.download")}
         </button>
       </div>
-
-      <style jsx>{`
-        .card-actions { opacity: 0; }
-        :host:hover .card-actions { opacity: 1; }
-      `}</style>
     </div>
   );
 }

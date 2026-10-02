@@ -80,7 +80,7 @@ export default function CommunityDocumentDetail({
                   fontSize: 12,
                   fontWeight: 600,
                   padding: "4px 10px",
-                  borderRadius: 99,
+                  borderRadius: "var(--radius-pill)",
                   background: `${TRUST_COLORS[trustLevel] || "var(--text-dim)"}20`,
                   color: TRUST_COLORS[trustLevel] || "var(--text-dim)",
                 }}
@@ -93,7 +93,7 @@ export default function CommunityDocumentDetail({
                     fontSize: 12,
                     fontWeight: 600,
                     padding: "4px 10px",
-                    borderRadius: 99,
+                    borderRadius: "var(--radius-pill)",
                     background: "var(--cyan-soft)",
                     color: "var(--cyan)",
                   }}
@@ -109,7 +109,7 @@ export default function CommunityDocumentDetail({
                 <span
                   style={{
                     padding: "2px 8px",
-                    borderRadius: 99,
+                    borderRadius: "var(--radius-pill)",
                     fontSize: 11,
                     fontWeight: 600,
                     background:
@@ -210,7 +210,7 @@ export default function CommunityDocumentDetail({
                   style={{
                     fontSize: 12,
                     padding: "4px 10px",
-                    borderRadius: 99,
+                    borderRadius: "var(--radius-pill)",
                     background: "var(--panel)",
                     border: "1px solid var(--border-soft)",
                     color: "var(--text-dim)",

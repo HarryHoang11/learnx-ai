@@ -150,10 +150,11 @@ prisma/
 
 src/
 ├── auth.ts                Cấu hình Auth.js TRUNG TÂM (Google + Credentials, JWT, PrismaAdapter)
-├── proxy.ts               Chặn page chưa đăng nhập -> /login (Next.js 16: thay cho middleware.ts)
+├── proxy.ts               Chặn page chưa đăng nhập -> /login (Next.js 16: thay cho middleware.ts);
+│                          miễn trừ asset công khai: downloads, brand, manifest.webmanifest
 │
 ├── app/
-│   ├── layout.tsx, globals.css, icon.png
+│   ├── layout.tsx, manifest.ts (PWA metadata route), globals.css, icon.png
 │   ├── login/, register/          Ngoài route group (app) — không có sidebar
 │   ├── (app)/                     Route group dùng chung AppShell (Sidebar + Topbar + drawer)
 │   │   ├── dashboard, workspace, library, mindmap, diagnostic, progress,
@@ -172,6 +173,8 @@ src/
 ├── lib/
 │   ├── db/prisma.ts                   Prisma singleton + pooling cho serverless
 │   ├── auth/session.ts                getCurrentUserId() (xác minh user còn tồn tại) + unauthorizedResponse()
+│   ├── api/reviewDue.ts               client helper GET /api/review/due (khử trùng request đang bay)
+│   ├── math/                          segments.ts (normalizer LaTeX dùng chung) + render.ts (KaTeX dùng chung)
 │   ├── ai/                            router.ts (fallback chain) + providers/* + prompts.ts + gemini.ts
 │   ├── mindmap/                       graph.ts (kiểu dữ liệu + validate), layout.ts (tính toạ độ), export.ts (5 format)
 │   ├── documents/                     extractText.ts (đọc mọi định dạng), docErrors.ts (error code + gợi ý)

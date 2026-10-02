@@ -24,6 +24,8 @@ export interface DiagnosticConfig {
   topic?: string;
   goal?: string;
   questionCount?: number;
+  /** Trình độ lớp ĐANG kiểm tra (từ hồ sơ) để sinh câu đúng chương trình. */
+  gradeLevel?: string;
 }
 
 export interface DiagnosticQuestion {
@@ -216,6 +218,7 @@ export async function generateDiagnosticQuestions(config: DiagnosticConfig): Pro
     topic: config.topic,
     goal: config.goal,
     questionCount: count,
+    gradeLevel: config.gradeLevel,
   });
 
   return generateJSON<DiagnosticQuestion[]>(
@@ -340,6 +343,9 @@ export async function createDiagnosticSession(params: {
   subject: string;
   topic?: string;
   assessmentId?: string;
+  // Lớp đang kiểm tra — nullable, KHÔNG đụng currentGrade trong hồ sơ.
+  educationStage?: string | null;
+  grade?: string | null;
   questions?: DiagnosticQuestion[];
 }): Promise<{ id: string }> {
   const session = await prisma.diagnosticSession.create({
@@ -348,6 +354,8 @@ export async function createDiagnosticSession(params: {
       subject: params.subject,
       topic: params.topic,
       assessmentId: params.assessmentId,
+      educationStage: params.educationStage ?? null,
+      grade: params.grade ?? null,
       status: "in_progress",
       currentDifficulty: 0.5,
       totalQuestions: params.questions?.length ?? 0,

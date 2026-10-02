@@ -38,7 +38,16 @@ const REQUIRED_PRODUCTION_ENV = [
   "DATABASE_URL|POSTGRES_PRISMA_URL|POSTGRES_URL|DATABASE_URL_UNPOOLED|POSTGRES_URL_NON_POOLING",
 ];
 const RECOMMENDED_PRODUCTION_ENV = [
-  "AUTH_SECRET", // ký session JWT — nên set riêng; thiếu thì src/auth.ts tự dẫn xuất từ connection string DB
+  // kẻ session JWT nên set riêng; thiếu thì src/auth.ts tự dẫn xuất từ
+  // connection string DB.
+  "AUTH_SECRET",
+  // `AUTH_URL` HOẶC `AUTH_TRUST_HOST` — self-host (Nginx / Cloudflare Tunnel /
+  // Docker) BẮT BUỘC có 1 trong 2. Auth.js assert `trustHost` TRƯỚC `secret`
+  // nên thiếu cả hai thì MỌI endpoint /api/auth/* trả 500 với body dạng
+  // TEXT ⇒ Auth.js client parse JSON thất bại ("Unexpected token '<'"). Đây là
+  // kiểu 500 dễ chẩn đoán nhầm nhất: app vẫn chạy, chỉ có auth chết.
+  // Xem docs/architecture/AUTH.md § Env.
+  "AUTH_URL|AUTH_TRUST_HOST",
 ];
 const OPTIONAL_ENV = [
   "GEMINI_API_KEY", // provider AI chính

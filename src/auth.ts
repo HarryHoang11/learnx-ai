@@ -26,6 +26,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { createHash } from "node:crypto";
 import { prisma, resolveDatabaseUrl } from "@/lib/db/prisma";
+import { PUBLIC_URL_ENV_NAMES, resolvePublicUrl } from "@/config/app";
 
 // ----------------------------------------------------------------
 // CHUẨN HOÁ ENV + CHẨN ĐOÁN LỖI CẤU HÌNH Ở PRODUCTION
@@ -113,18 +114,21 @@ if (derivedAuthSecret) {
 }
 
 function readPublicUrl(): string | undefined {
-  const raw = readEnv("AUTH_URL", "NEXTAUTH_URL");
-  if (!raw) return undefined;
-  try {
-    const parsed = new URL(raw.trim());
-    if (parsed.protocol === "http:" || parsed.protocol === "https:") return raw;
-  } catch {
-    // rơi xuống log bên dưới (không in giá trị)
+  // ROOT CAUSE (sửa 2026-10-05): trước đây hàm này chỉ đọc
+  // `AUTH_URL`/`NEXTAUTH_URL`, còn `resolveMetadataBase()` trong
+  // src/app/layout.tsx đọc `APP_URL`/`NEXTAUTH_URL`. Project đặt `APP_URL`
+  // nên `publicAuthUrl` = undefined ⇒ `trustHost` = false ⇒ MỌI endpoint
+  // /api/auth/* (session, providers, csrf) trả 503 trong khi phần còn lại
+  // của app vẫn chạy bình thường. Nay CẢ HAI cùng gọi `resolvePublicUrl()`
+  // ở tầng config — không còn khả năng lệch danh sách biến nữa.
+  const url = resolvePublicUrl();
+  if (!url && PUBLIC_URL_ENV_NAMES.some((n) => readEnv(n))) {
+    console.error(
+      `[auth] Không biến nào trong ${PUBLIC_URL_ENV_NAMES.join(" / ")} là URL tuyệt đối hợp lệ ` +
+        "(cần dạng https://domain) — sẽ không tin Host header, /api/auth/* sẽ không phục vụ được."
+    );
   }
-  console.error(
-    "[auth] AUTH_URL/NEXTAUTH_URL không phải URL tuyệt đối hợp lệ (cần dạng https://domain) — tạm bỏ qua biến này."
-  );
-  return undefined;
+  return url ?? undefined;
 }
 
 const publicAuthUrl = readPublicUrl();
@@ -244,6 +248,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // không cần logout/login lại, không cần F5.
     async jwt({ token, user, trigger, session }) {
       if (user?.id) token.userId = user.id;
+      // FALLBACK BẮT BUỘC cho JWT "cũ": Auth.js luôn tự set `token.sub` =
+      // user.id ngay khi tạo JWT, nhưng claim `token.userId` chỉ có từ khi
+      // dòng trên tồn tại — token phát hành TRƯỚC đó (hoặc qua luồng không
+      // truyền `user` vào callback) hoàn toàn có thể thiếu `userId`.
+      // Hệ quả nếu thiếu: session callback bên dưới không gán được
+      // `session.user.id` -> getCurrentUserId() trả null -> MỌI API protected
+      // trả 401 trong khi /api/auth/session vẫn 200 (session vẫn tồn tại)
+      // và proxy vẫn cho qua (req.auth.user truthy) — đúng triệu chứng
+      // "401 dù session 200" rất khó chẩn đoán.
+      // jwt callback chạy TRƯỚC session callback trên mọi lần đọc JWT nên
+      // chỉ cần 1 dòng này là mọi request sau đó đều có userId đầy đủ.
+      if (!token.userId && token.sub) token.userId = token.sub;
       if (trigger === "update" && session?.user?.image !== undefined) {
         token.picture = session.user.image;
       }
@@ -281,8 +297,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // để biết chính xác "request này thuộc về user nào" mà KHÔNG tin
     // bất kỳ userId nào gửi từ phía client.
     async session({ session, token }) {
-      if (session.user && token.userId) {
-        session.user.id = token.userId as string;
+      if (session.user) {
+        // user.id lấy từ token.userId và FALLBACK token.sub (JWT cũ thiếu
+        // claim userId — xem giải thích ở callback jwt phía trên). Field
+        // này là nguồn DUY NHẤT cho getCurrentUserId(); nếu để thiếu, mọi
+        // API protected trả 401 dù session hoàn toàn hợp lệ.
+        session.user.id = (token.userId as string | undefined) ?? token.sub ?? session.user.id;
         // Trạng thái onboarding đi kèm session để client (Welcome, Setup,
         // Dashboard) biết user có cần thấy empty state hay không.
         if (token.onboardingStatus) {

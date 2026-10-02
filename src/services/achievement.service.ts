@@ -6,6 +6,7 @@
 // ================================================================
 
 import { prisma } from "@/lib/db/prisma";
+import { grantCosmetic } from "@/services/reward-cosmetic.service";
 
 export interface AchievementDefinition {
   code: string;
@@ -42,6 +43,8 @@ export interface UnlockResult {
     icon?: string;
     xpReward: number;
     lxpReward: number;
+    /** Cosmetic được cấp kèm (rỗng nếu achievement này không có cosmetic). */
+    grantedCosmetics?: { rewardId: string; name: string; icon: string | null }[];
   };
   reason?: string;
 }
@@ -389,6 +392,7 @@ async function unlockAchievement(userId: string, code: string): Promise<{
   category: string;
   xpReward: number;
   lxpReward: number;
+  grantedCosmetics: { rewardId: string; name: string; icon: string | null }[];
 } | null> {
   const achievement = await prisma.achievement.findUnique({ where: { code } });
   if (!achievement) return null;
@@ -397,7 +401,24 @@ async function unlockAchievement(userId: string, code: string): Promise<{
   const existing = await prisma.userAchievement.findUnique({
     where: { userId_achievementId: { userId, achievementId: achievement.id } },
   });
-  if (existing) return existing as any;
+
+  if (existing) {
+    // Bản cũ `return existing as any` trả shape của `UserAchievement`
+    // (userId/achievementId/unlockedAt) thay vì `Achievement` ⇒ caller đọc
+    // `xpReward` thành `undefined` và có thể cộng `NaN` vào XP. Trả đúng shape
+    // ở đây. `grantedCosmetics` rỗng vì lần này không có gì được cấp.
+    return {
+      id: achievement.id,
+      code: achievement.code,
+      title: achievement.title,
+      description: achievement.description,
+      icon: achievement.icon,
+      category: achievement.category,
+      xpReward: achievement.xpReward,
+      lxpReward: achievement.lxpReward,
+      grantedCosmetics: [],
+    };
+  }
 
   // Create user achievement
   await prisma.userAchievement.create({
@@ -406,6 +427,12 @@ async function unlockAchievement(userId: string, code: string): Promise<{
       achievementId: achievement.id,
     },
   });
+
+  // ---- Grant cosmetic gắn với achievement này (spec §8) ----
+  // Chỉ chạy SAU khi `userAchievement` đã tạo ⇒ achievement đã được server
+  // xác minh trước khi cấp đồ. Đây là nguồn duy nhất cấp cosmetic từ
+  // achievement (không có đường nào khác để client tự mở khoá).
+  const grantedCosmetics = await grantCosmeticsForAchievement(userId, achievement.code);
 
   // Return achievement with reward info for caller to record activity
   return {
@@ -417,7 +444,54 @@ async function unlockAchievement(userId: string, code: string): Promise<{
     category: achievement.category,
     xpReward: achievement.xpReward,
     lxpReward: achievement.lxpReward,
+    grantedCosmetics,
   };
+}
+
+/**
+ * Cấp mọi cosmetic có `requirements.grantAchievement === achievementCode`.
+ *
+ * Server-side hoàn toàn: client không gửi rewardId. `skipIfOwned: true` nên
+ * nếu user đã tự đổi item đó bằng LXP trước đó thì không cấp trùng — và vì
+ * `@@unique([userId, rewardId])` nên không thể tạo bản ghi trùng.
+ *
+ * KHÔNG ném lỗi: lỗi cấp cosmetic không được làm hỏng việc unlock achievement
+ * (và cũng không được cộng thêm XP/LXP ở đây — XP/LXP do
+ * `recordLearningActivity` xử lý).
+ */
+async function grantCosmeticsForAchievement(
+  userId: string,
+  achievementCode: string
+): Promise<{ rewardId: string; name: string; icon: string | null }[]> {
+  try {
+    const rewards = await prisma.reward.findMany({
+      where: { active: true },
+      select: { id: true, name: true, icon: true, requirements: true },
+    });
+
+    const matched = rewards.filter((r) => {
+      const req = r.requirements;
+      return (
+        req &&
+        typeof req === "object" &&
+        !Array.isArray(req) &&
+        (req as Record<string, unknown>).grantAchievement === achievementCode
+      );
+    });
+
+    const granted: { rewardId: string; name: string; icon: string | null }[] = [];
+    for (const reward of matched) {
+      const result = await grantCosmetic(userId, reward.id, { skipIfOwned: true });
+      if (result.granted) {
+        granted.push({ rewardId: reward.id, name: reward.name, icon: reward.icon });
+      }
+    }
+    return granted;
+  } catch (err) {
+    // Ghi log để điều tra được, nhưng KHÔNG làm fail việc unlock achievement.
+    console.error("[achievement] Không cấp được cosmetic:", err);
+    return [];
+  }
 }
 
 export async function getOrCreateAchievement(def: AchievementDefinition) {

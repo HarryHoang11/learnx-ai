@@ -17,7 +17,7 @@ export default function SubjectTopicItem({ topic, isSelected, onClick }: Subject
       onClick={onClick}
       style={{
         padding: "6px 12px",
-        borderRadius: 99,
+        borderRadius: "var(--radius-pill)",
         border: isSelected ? "1px solid var(--indigo)" : "1px solid var(--border)",
         background: isSelected ? "var(--indigo-soft)" : "var(--panel-strong)",
         color: isSelected ? "var(--indigo)" : "var(--text)",

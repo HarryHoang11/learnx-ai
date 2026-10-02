@@ -13,6 +13,8 @@
 import { prisma } from "@/lib/db/prisma";
 import {
   buildLearningContext,
+  gradeLevelText,
+  readGradeLevel,
   suggestDiagnosticSubjects,
   type LearningContext,
   type SkillSignal,
@@ -22,6 +24,9 @@ import {
   type LearningGoalDraft,
   type LearningProfile,
 } from "@/lib/onboarding/profile";
+// Nguồn danh sách lớp theo cấp — dùng chung với onboarding để UI và
+// validate không lệch nhau (không hardcode "10/11/12" ở 2 nơi).
+import { gradeOptionsFor, isValidGradeForStage } from "@/lib/onboarding/options";
 import { getSkillProfile } from "@/services/assessment.service";
 
 /** Mục tiêu đang ACTIVE, sắp theo ưu tiên rồi mới tới mới nhất. */
@@ -189,4 +194,60 @@ export async function saveLearningProfile(
 export async function getSuggestedDiagnosticSubjects(userId: string): Promise<string[]> {
   const context = await getLearningContext(userId);
   return suggestDiagnosticSubjects(context.summary);
+}
+
+/** Cấp/lớp dùng cho 1 BÀI KIỂM TRA — tách biệt `currentGrade` của hồ sơ. */
+export interface DiagnosticLevel {
+  /** Cấp học trong hồ sơ (THCS/THPT/...), null nếu user chưa khai. */
+  educationStage: string | null;
+  /** Lớp SẼ kiểm tra (diagnosticGrade) — null nghĩa là chưa xác định. */
+  grade: string | null;
+  /** Câu mô tả trình độ để nhét vào prompt AI. */
+  gradeLevel: string | undefined;
+  /** Danh sách lớp hợp lệ theo cấp — UI render, KHÔNG hardcode ở frontend. */
+  availableGrades: string[];
+}
+
+/**
+ * Xác định lớp cho bài kiểm tra năng lực (yêu cầu §4 + §12).
+ *
+ * NGUYÊN TẮC:
+ *  1. Nguồn sự thật là `User.learningProfile` trong DB — KHÔNG tin giá trị
+ *     client gửi lên (client chỉ được "xin kiểm tra lớp khác").
+ *  2. Lớp xin kiểm tra PHẢI hợp lệ với cấp đã khai, mới được dùng; lớp
+ *     không hợp lệ rơi về lớp hiện tại của hồ sơ.
+ *  3. TUYỆT ĐỐI KHÔNG ghi lại vào hồ sơ — kiểm tra lớp 10 không được đổi
+ *     `currentGrade` của người đang học lớp 11 (giữ đúng yêu cầu §12).
+ */
+export async function resolveDiagnosticLevel(
+  userId: string,
+  requestedGrade?: string | null
+): Promise<DiagnosticLevel> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { learningProfile: true },
+  });
+  const profile = (user?.learningProfile as LearningProfile | null) ?? null;
+  const educationStage = profile?.educationStage ?? null;
+  const availableGrades = gradeOptionsFor(educationStage ?? undefined)
+    .map((option) => option.value)
+    .filter((value) => value !== "OTHER");
+
+  const requested = typeof requestedGrade === "string" ? requestedGrade.trim() : "";
+  const validRequested =
+    requested !== "" && isValidGradeForStage(educationStage ?? undefined, requested);
+  const currentGrade =
+    profile?.grade && isValidGradeForStage(educationStage ?? undefined, profile.grade)
+      ? profile.grade
+      : null;
+  const grade = validRequested ? requested : currentGrade;
+
+  return {
+    educationStage,
+    grade,
+    // Câu mô tả trình độ cho prompt, dùng CHUNG helper với profile
+    // ("học sinh lớp 10") — không mỗi nơi tự chế một cách nói.
+    gradeLevel: gradeLevelText(grade) ?? readGradeLevel(profile),
+    availableGrades,
+  };
 }

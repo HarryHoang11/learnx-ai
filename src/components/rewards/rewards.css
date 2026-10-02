@@ -1,0 +1,1273 @@
+/* ================================================================
+   REWARDS CSS — trang /rewards
+   ================================================================
+   Mạch tư duy: tách file riêng thay vì nhét vào globals.css (đang >4600 dòng).
+   Cùng pattern với welcome.css / onboarding.css / subject-switcher.css:
+   style theo MIỀN chức năng, import 1 lần ở page tương ứng.
+
+   Vì sao cần file riêng: trang này khôi phục UI cho backend Rewards đã có
+   sẵn (xem docs/architecture/CHANGELOG.md). Gộp vào globals sẽ làm file đó
+   vỡ thêm và khó tìm khi sửa.
+   ================================================================ */
+
+/* ---- Đầu trang ---- */
+.rewards-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5, 24px);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5, 24px);
+}
+
+.rewards-sub {
+  color: var(--text-dim);
+  font-size: 13.5px;
+  line-height: 1.6;
+  margin: 6px 0 0;
+  max-width: 62ch;
+}
+
+/* Số dư LXP: ô kính nhỏ nổi bật ở đầu trang. Đây là con số người dùng vào
+   trang này để nhìn đầu tiên nên được nhấn mạnh, không phải text thường. */
+.rewards-balance {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 12px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(119, 117, 255, 0.28);
+  background: linear-gradient(135deg, var(--indigo-soft), var(--cyan-soft));
+  box-shadow: var(--shadow-sm);
+}
+
+/* Số dư LXP: ô kính nhỏ nổi bật ở đầu trang. Đây là con số người dùng vào
+   trang này để nhìn đầu tiên nên được nhấn mạnh, không phải text thường.
+   `display:block` cho 2 khối để chúng không dính thành 1 chuỗi khi đọc bằng
+   screen reader / copy text (cùng nguyên nhân & cách sửa như `.dash-lxp`). */
+.rewards-balance__label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.rewards-balance__value {
+  display: block;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--indigo-strong);
+  line-height: 1.1;
+}
+
+/* ---- Tabs ---- */
+.rewards-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border-soft);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.rewards-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.rewards-tab {
+  position: relative;
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur-instant, 120ms) var(--ease-out, ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Vạch dưới ô đang chọn — nhận biết nhanh hơn chỉ đổi màu chữ. */
+.rewards-tab::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  transition: background var(--dur-fast, 200ms) var(--ease-out, ease);
+}
+
+.rewards-tab:hover {
+  color: var(--text);
+}
+
+.rewards-tab:active {
+  color: var(--text);
+}
+
+.rewards-tab.is-active {
+  color: var(--indigo-strong);
+}
+
+.rewards-tab.is-active::after {
+  background: linear-gradient(90deg, var(--indigo), var(--cyan));
+}
+
+.rewards-tab__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--indigo-soft);
+  color: var(--indigo-strong);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.rewards-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ---- Ô số liệu ---- */
+.rewards-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stat-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-soft);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+/* ---- Lưới phần thưởng ---- */
+.reward-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+  gap: 16px;
+}
+
+.reward-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-soft);
+  background: var(--panel);
+  overflow: hidden;
+  /* Transition chỉ transform/border/shadow — không động layout. */
+  transition: transform var(--dur-fast, 200ms) var(--ease-out, ease),
+    border-color var(--dur-fast, 200ms) var(--ease-out, ease),
+    box-shadow var(--dur-fast, 200ms) var(--ease-out, ease);
+}
+
+/* Desktop mới hover; mobile không có con trỏ chuột. */
+@media (hover: hover) {
+  .reward-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+/* Mobile: phản hồi khi CHẠM (nguyên tắc MOBILE.md — không dùng hover). */
+.reward-card:active {
+  transform: scale(0.985);
+}
+
+.reward-card.is-owned {
+  border-color: rgba(101, 214, 163, 0.28);
+}
+
+.reward-card__media {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 108px;
+  background: radial-gradient(circle at 50% 40%, var(--indigo-soft), transparent 70%);
+}
+
+.reward-card__icon {
+  font-size: 38px;
+  line-height: 1;
+}
+
+/* Khi không có icon lẫn imageUrl -> chữ cái đầu, tránh ảnh vỡ. */
+.reward-card__icon--fallback {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--indigo-strong);
+}
+
+.reward-card__img {
+  width: 68px;
+  height: 68px;
+  object-fit: contain;
+}
+
+.reward-card__body {
+  flex: 1;
+  padding: 0 16px 12px;
+}
+
+.reward-card__title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.reward-card__desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  /* Giới hạn 3 dòng: mô tả dài làm card lệch chiều cao giữa các hàng.
+     Khai báo CẢ bản chuẩn (`line-clamp`) lẫn bản `-webkit-`: Chromium mới
+     chỉ hỗ trợ bản chuẩn từ v133, còn Safari/Firefox vẫn hiểu bản `-webkit-`;
+     thiếu bên nào là mất clamp ở trình duyệt bên đó (mô tả tràn hết node).
+     Cùng convention với `.mm-node__description` ở globals.css. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.reward-card__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.reward-card__cost {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--amber);
+}
+
+.reward-card__cost-unit {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+
+.reward-card__stock {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* Chân thẻ phần thưởng: giá + nút Đổi. `display:block` cho 2 khối bên
+   trong để chúng không dính text node (spec §1, §2).
+
+   RULE NÀY PHẢI ĐÓNG NGAY TẠI ĐÂY. Trước đây nó mở nhưng không có `}` nên
+   nuốt 80 node / ~640 dòng phía sau (toàn bộ `.challenge-card*`, `.dash-lxp*`,
+   `.dash-motivation`) vào bên trong → trình duyệt biến chúng thành
+   `.reward-card__footer .dash-lxp` (vốn không tồn tại trong DOM) ⇒ mất sạch
+   style: thẻ LXP hiện `<button>` trắng + font mặc định của browser, và text
+   3 `<span>` inline dính liền thành "Số dư LXP:279LXPĐổi thưởng →".
+
+   Bản đầy đủ của rule này nằm ở cuối file (gần `.dash-lxp`) vì selector trùng
+   — chỉ giữ MỘT bản ở đây, xem cuối file. */
+.reward-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-soft);
+  min-height: 60px;
+}
+
+/* ---- Thử thách hôm nay ---- */
+.challenge-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(69, 217, 233, 0.24);
+  background: linear-gradient(135deg, var(--cyan-soft), transparent 60%), var(--panel);
+}
+
+.challenge-card.is-complete { border-color: rgba(101, 214, 163, 0.32); }
+.challenge-card.is-claimed { opacity: 0.75; }
+
+.challenge-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.challenge-card__eyebrow {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin-bottom: 3px;
+}
+
+.challenge-card__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.challenge-card__count {
+  flex-shrink: 0;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.challenge-card__track {
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.challenge-card__fill {
+  display: block;
+  /* width:100% + transform:scaleX() để animation chạy trên GPU (không
+     kích hoạt layout) — thay vì animate `width` làm reflow mỗi frame. */
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--cyan), var(--indigo));
+  transform-origin: left center;
+  transition: transform var(--dur-slow, 320ms) var(--ease-out, ease);
+}
+
+/* SỬA LỖI "Thưởng 40 XP · 20 LXPĐã hoàn thành!" (spec §2).
+   `gap: 12px` trong flex CHƯA ĐỦ: hai `<span>` con vẫn là flex item nên trực
+   quan cách xa, NHƯNG khi trình duyệt/screen reader nối text node (copy text,
+   `textContent`) chúng dính liền vì không có khoảng trắng trong DOM.
+   Cách sửa đúng: cho 2 khối `display:block` (thành block box, có ngắt dòng
+   thật trong flow) + `flex-shrink:0` để không bị bóp khi màn hình hẹp. */
+.challenge-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* Mobile: 2 khối xếp dọc khi hẹp — tránh "40 XP · 20 LXP" bị vỡ dòng
+     cắt chữ giữa chừng. */
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 2px;
+}
+
+.challenge-card__reward {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--amber);
+  white-space: nowrap;
+}
+
+.challenge-card__badge {
+  display: block;
+  font-size: 12px;
+  color: var(--green);
+  font-weight: 600;
+}
+
+.challenge-card__badge--muted { color: var(--text-faint); }
+
+/* Huy hiệu trạng thái ĐÃ XONG (spec §12). Dùng chung màu `--green` với
+   `.challenge-card__badge` mặc định; class riêng để sau này phân biệt "hoàn
+   thành" (xanh) với "đã nhận thưởng" mà không phải sửa rule chung. */
+.challenge-card__badge--done {
+  color: var(--green);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Nhóm badge + nút nhận thưởng (spec §12): "✓ Đã hoàn thành!" và CTA là 2
+   phần tử NGANG HÀNG trong 1 flex, nên không dính chuỗi (mỗi phần là block box
+   riêng) và ở màn hẹp vẫn vừa hàng. */
+.challenge-card__status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+/* Dấu ✓ trong huy hiệu trạng thái "Đã hoàn thành" (spec §12/§13).
+   Chạy 1 lần khi card chuyển sang trạng thái xong (không lặp vô hạn) — người
+   dùng nhận biết "vừa hoàn thành" mà không gây nhiễu.
+
+   LƯU Ý: `@keyframes` phải nằm ở `globals.css`, KHÔNG đặt trong file .css của
+   component. File component đi qua PostCSS transform của Next và báo
+   "Unknown at rule: @keyframes" → làm hỏng CSS (đã gặp ở `rewards.css`).
+   Tên animation khai báo ở `globals.css`. */
+.challenge-card__check {
+  display: inline-block;
+  margin-right: 5px;
+  font-weight: 800;
+  color: var(--green);
+  animation: challenge-check-in 320ms var(--ease-out, ease) both;
+}
+
+/* Tôn trọng thiết lập giảm chuyển động của hệ điều hành. */
+@media (prefers-reduced-motion: reduce) {
+  .challenge-card__check {
+    animation: none;
+  }
+  .challenge-card__fill {
+    transition: none;
+  }
+}
+
+.challenge-card__btn {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 8px 18px;
+  font-size: 13px;
+}
+
+/* Tiêu đề + đếm ở đầu card: cho khối chữ co lại được và luôn tách đếm ra
+   mép phải, không dính vào tiêu đề dài (spec §9: reward title dài ở 320px). */
+.challenge-card__head-text {
+  min-width: 0;
+  flex: 1;
+}
+
+/* ---- Bộ lọc + lịch sử giao dịch ---- */
+/* Segmented control: 1 vỏ kính chứa nhiều pill. Vỏ có nền + viền để nhóm
+   đọc được là MỘT control, không phải 3 nút rời rạc (spec §2). */
+.rewards-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  max-width: 100%;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--panel) 72%, transparent);
+  /* `-webkit-backdrop-filter` cần cho Safari/iOS (WebView Android cũ). */
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.rewards-filter {
+  /* Reset về 0: `<button>` mặc định có border/background riêng, nếu không
+     khai báo tường minh sẽ thừa 1 viền và nền xám. */
+  appearance: none;
+  min-height: 38px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur-instant, 120ms) var(--ease-out, ease),
+    background-color var(--dur-instant, 120ms) var(--ease-out, ease),
+    border-color var(--dur-instant, 120ms) var(--ease-out, ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .rewards-filter:hover:not(.is-active) {
+    background: var(--panel-hover);
+    color: var(--text);
+  }
+}
+
+.rewards-filter:active {
+  transform: scale(0.97);
+}
+
+/* Vòng focus rõ ràng cho bàn phím — KHÔNG dùng `outline: none`. */
+.rewards-filter:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.rewards-filter.is-active {
+  background: var(--indigo-soft);
+  border-color: rgba(119, 117, 255, 0.32);
+  color: var(--indigo-strong);
+}
+
+.txn-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.txn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: var(--panel);
+}
+
+.txn__icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--panel-hover);
+  font-size: 15px;
+}
+
+.txn__body {
+  flex: 1;
+  /* min-width:0 bắt buộc để nhãn dài co lại được thay vì đẩy số tiền ra
+     ngoài màn hình ở 320px. */
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.txn__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.txn__date {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.txn__amount {
+  flex-shrink: 0;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.txn__amount.is-earned { color: var(--green); }
+.txn__amount.is-spent { color: var(--rose); }
+
+.rewards-hint {
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+/* ================================================================
+   DASHBOARD — LXP + THỬ THÁCH NGÀY (động lực học tập)
+   --------------------------------------------------------------
+   SỬA LỖI LAYOUT "dính/đè" (spec §7, §8):
+     `.rewards-hint {` bị THIẾU `}` trước đây, khiến toàn bộ rule phía dưới
+     (kể cả `.dash-motivation`, `.dash-lxp`) bị nuốt vào khối đó và không
+     được áp dụng — đó là nguyên nhân gốc của việc 2 card dính vào nhau,
+     KHÔNG phải thiếu margin.
+   ================================================================ */
+
+/* Lưới: cột LXP cố định bề rộng, cột thử thách chiếm phần còn lại.
+   `align-items: start` để hai card KHÔNG bị kéo cao bằng nhau — card thấp
+   hơn sẽ hở phần dưới, trông có khoảng thở thay vì bị "ép" sát mép. */
+.dash-motivation {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  /* Khoảng cách giữa 2 section = 1 nhịp spacing của hệ thống (24px), không
+     phải margin rời rạc (spec §8: dùng spacing system). */
+  gap: var(--space-5, 24px);
+  align-items: start;
+  margin-bottom: var(--space-5, 24px);
+}
+
+.dash-lxp {
+  display: flex;
+  flex-direction: column;
+  /* SỬA LỖI "Số dư LXP279LXPĐổi thưởng →" (spec §1): 3 khối con là
+     `<span>` — không có `gap` nào bảo đảm được khoảng trắng trong DOM
+     (khi copy text hay đọc bằng screen reader, các text node dính liền).
+     Nay mỗi khối là block box (ngắt dòng thật trong flow) + gap rõ ràng. */
+  gap: 6px;
+  padding: 16px;
+  text-align: left;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(119, 117, 255, 0.28);
+  background: linear-gradient(135deg, var(--indigo-soft), var(--cyan-soft));
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  font-family: var(--font-inter), sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-fast, 200ms) var(--ease-out, ease),
+    border-color var(--dur-fast, 200ms) var(--ease-out, ease),
+    box-shadow var(--dur-fast, 200ms) var(--ease-out, ease);
+}
+
+@media (hover: hover) {
+  .dash-lxp:hover {
+    transform: translateY(-2px);
+    border-color: rgba(119, 117, 255, 0.45);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+/* Mobile: phản hồi khi CHẠM, không dùng hover (nguyên tắc MOBILE.md). */
+.dash-lxp:active {
+  transform: scale(0.985);
+}
+
+/* LABEL — dòng 1: "Số dư LXP:" */
+.dash-lxp__label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+/* VALUE — dòng 2: số + đơn vị nằm cùng dòng (flex ngang). */
+.dash-lxp__value {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--indigo-strong);
+  line-height: 1.1;
+  /* Số LXP rất lớn (7 chữ số + dấu phân cách) vẫn phải vừa cột: co lại
+     thay vì tràn (spec §9). */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Con số — tách khỏi đơn vị để "279" và "LXP" không dính nhau. */
+.dash-lxp__number {
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-lxp__unit {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+
+/* ACTION — dòng 3: "Đổi thưởng →", tách khối riêng, có khoảng cách trên. */
+.dash-lxp__cta {
+  display: block;
+  margin-top: 4px;
+  padding-top: 8px;
+  /* Đường kẻ mảnh ngăn cách: 3 tầng thị giác rõ ràng (label / value /
+     action) thay vì 3 dòng chữ chạy vào nhau. */
+  border-top: 1px solid var(--border-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--cyan);
+}
+
+/* ================================================================
+   ACHIEVEMENTS — trang /achievements + thẻ thành tựu
+   ================================================================ */
+
+/* Container trang. `.main-content` (globals.css) có `max-width: 1180px` nhưng
+   KHÔNG `margin-inline: auto` ⇒ nội dung dồn sang trái, bên phải trống.
+   Khai báo ở đây (scope `.rewards-page`) để không đụng layout của các trang
+   khác — `/rewards` cũng dùng class này và được lợi cùng. */
+.rewards-page {
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+/* Grid thẻ. `auto-fill` + `minmax(220px, 1fr)` tự tính số cột theo bề rộng
+   thực tế: 1 cột ở 320px · 2–3 cột ở tablet/desktop · 4–5 cột ở màn rộng.
+   Không hardcode số cột theo từng breakpoint nên không vỡ khi sidebar co lại. */
+.ach-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+  align-items: stretch;
+}
+
+.ach-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-soft);
+  background: var(--panel);
+  overflow: hidden;
+  transition: transform var(--dur-fast, 200ms) var(--ease-out, ease),
+    border-color var(--dur-fast, 200ms) var(--ease-out, ease),
+    box-shadow var(--dur-fast, 200ms) var(--ease-out, ease);
+}
+
+@media (hover: hover) {
+  .ach-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.ach-card:active {
+  transform: scale(0.985);
+}
+
+/* Đã mở khoá: viền xanh + nền ấm để lọc nhanh bằng mắt khi lướt danh sách. */
+.ach-card.is-unlocked {
+  border-color: rgba(101, 214, 163, 0.3);
+  background: linear-gradient(135deg, var(--green-soft), transparent 55%), var(--panel);
+}
+
+/* Chưa đạt: MỜ (giảm opacity) — nhìn thấy "còn ở xa" nhưng vẫn đọc được
+   tên + điều kiện để biết cần làm gì.
+   KHÔNG dùng `opacity` trên cả card: nó làm cả text mờ tới mức khó đọc và
+   mất contrast. Thay bằng màu chữ/viền nhạt hơn — vẫn phân biệt rõ mà
+   đọc được. */
+.ach-card.is-locked {
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  border-color: var(--border-soft);
+}
+
+.ach-card.is-locked .ach-card__glyph {
+  /* Giảm nhấn icon thay vì giảm cả card. */
+  filter: grayscale(0.85);
+  opacity: 0.6;
+}
+
+/* Hàng đầu: icon + tiêu đề CÙNG HÀNG (spec §4).
+   Bản cũ để `.ach-card__icon` là block cao 84px ở TRÊN ⇒ emoji rơi thành
+   dòng riêng, tách khỏi tên. Nay icon là huy hiệu nhỏ bám trái cùng hàng
+   tiêu đề; tiêu đề tự xuống dòng nếu dài mà icon không bị kéo theo. */
+.ach-card__top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 0;
+}
+
+/* Huy hiệu vuông bo tròn chứa emoji — nền glass nhẹ + viền mảnh. */
+.ach-card__emblem {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: radial-gradient(circle at 50% 40%, var(--indigo-soft), transparent 72%);
+}
+
+.ach-card__glyph {
+  font-size: 21px;
+  line-height: 1;
+  /* Emoji render theo font mặc định của hệ điều hành; canh giữa bằng grid
+     của `.ach-card__emblem` nên không cần hack offset theo font. */
+}
+
+.ach-card__title {
+  margin: 0;
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.35;
+  /* Tiêu đề dài cắt sau 2 dòng thay vì đẩy cao card không kiểm soát.
+     Xem `.reward-card__desc` để biết vì sao khai báo cả 2 bản của line-clamp. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Ô khoá nhỏ ở góc: nhận biết nhanh "chưa đạt" mà không cần đọc chữ.
+   Nằm TRONG hàng đầu (cột 3 của grid) nên không còn absolute tràn ra. */
+.ach-card__lock {
+  font-size: 12px;
+  opacity: 0.65;
+  line-height: 1;
+}
+
+.ach-card__body {
+  flex: 1;
+  padding: 10px 16px 12px;
+}
+
+.ach-card__desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Điều kiện mở khoá (dòng text) trên thẻ thành tựu. Rule này PHẢI đóng
+   tại đây — trước đây thiếu `}` nên toàn bộ mục REVIEW phía dưới bị nest vào
+   trong nó và không áp dụng. Chạy `npm run check:css` sau khi sửa CSS để bắt
+   loại lỗi này. */
+.ach-card__cond {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--cyan);
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+/* Chân thẻ: phần thưởng + badge là 2 khối riêng, `flex-wrap` để xuống dòng
+   gọn khi màn hình hẹp thay vì tràn ngang (spec §6, §9). */
+.ach-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 10px 16px 12px;
+  margin-top: auto;
+  border-top: 1px solid var(--border-soft);
+}
+
+/* Phần thưởng: flex + gap, MỖI phần là element riêng (spec §5).
+   Bản cũ nối chuỗi trong 1 text node nên dữ liệu rác (`null`) lọt ra thành
+   "+300 XP - - +null LXP" và 2 phần dính liền khi copy text. */
+.ach-card__reward {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--amber);
+  /* Số phần thưởng có thể rất lớn (5–6 chữ số) — không được tràn card. */
+  overflow-wrap: anywhere;
+}
+
+.ach-card__amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ach-card__sep {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+/* Dấu ✓ trong badge "Đã mở khoá" — chạy 1 lần, không lặp (spec §8).
+   `@keyframes ach-check-in` khai báo ở `globals.css` (xem note bên dưới). */
+.ach-card__check {
+  display: inline-block;
+  margin-right: 4px;
+  font-weight: 800;
+  animation: ach-check-in 320ms var(--ease-out, ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ach-card,
+  .ach-card__check {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* ================================================================
+   REVIEW — chọn môn + gợi ý thông minh (yêu cầu §14–§17)
+   ================================================================ */
+.review-subject-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  /* Cho phép cuộn ngang thay vì làm tràn trang ở 320px: SubjectSwitcher có
+     9 môn, cộng chip "Tất cả" nữa thì chắc chắn vượt bề ngang màn hình. */
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.review-subject-bar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Chip "Tất cả" nằm ngoài SubjectSwitcher nhưng phải TRÙNG kiểu với các
+   chip môn để trông là 1 danh sách liền mạch, không phải 1 control lạ. */
+.review-subject-chip {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur-instant, 120ms) var(--ease-out, ease),
+    background-color var(--dur-instant, 120ms) var(--ease-out, ease),
+    border-color var(--dur-instant, 120ms) var(--ease-out, ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.review-subject-chip.is-active {
+  background: var(--indigo-soft);
+  border-color: rgba(119, 117, 255, 0.32);
+  color: var(--indigo-strong);
+}
+
+/* ---- Khối gợi ý ---- */
+.review-insight {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(69, 217, 233, 0.24);
+  background: linear-gradient(135deg, var(--cyan-soft), transparent 60%), var(--panel);
+}
+
+.review-insight__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.review-insight__line {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+.review-insight__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review-insight__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: var(--panel-strong);
+  color: var(--text);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--dur-instant, 120ms) var(--ease-out, ease),
+    background-color var(--dur-instant, 120ms) var(--ease-out, ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.review-insight__chip:active {
+  background: var(--panel-hover);
+}
+
+.review-insight__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.review-insight__weak {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--rose);
+  line-height: 1.5;
+}
+
+.review-filter-note {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+@media (max-width: 880px) {
+  /* Vùng chạm 44px trên mobile cho cả 2 loại chip. */
+  .review-subject-chip,
+  .review-insight__chip {
+    min-height: 44px;
+  }
+}
+
+/* Dấu `}` từng nằm ở đây (đóng `.ach-card__cond`) nhưng rule đó đã được đóng
+   đúng chỗ ngay sau khai báo. Dấu `}` thừa này làm PostCSS báo lỗi
+   "Unexpected }" và làm hỏng toàn bộ stylesheet.
+
+   Tương tự, `.ach-card__foot` và `.ach-card__reward` từng có BẢN SAO ở đây.
+   Bản sao đứng SAU bản chính nên ghi đè `flex-wrap` / `margin-top` / `gap`
+   (đã xử lý ở mục ACHIEVEMENTS phía trên) ⇒ thẻ không xuống dòng được ở
+   màn hình hẹp. Đã xoá bản sao. Chỉ giữ MỘT khai báo cho mỗi selector. */
+
+/* Tablet (≤880px): hạ cột tối thiểu để vẫn 2 cột dễ đọc, KHÔNG ép 1 cột —
+   trên 768–820px 1 cột sẽ kéo dài trang rất dài. `auto-fill` tự quyết,
+   không cần đếm cột thủ công. */
+@media (max-width: 880px) {
+  .ach-grid {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 12px;
+  }
+}
+
+/* Mobile: 2 cột vẫn vừa ở 360px (mỗi cột ~160px), nên chỉ canh lại padding
+   + khoảng cách chứ không ép 1 cột. Ở 320px `auto-fill` tự rớt về 1 cột. */
+@media (max-width: 400px) {
+  .ach-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* Vỏ segmented control tràn 1 hàng ở 320px → bỏ bo tròn + cho phép cuộn
+     ngang thay vì khoảng trắng trên/dưới lệch. */
+  .rewards-filters {
+    display: flex;
+    border-radius: var(--radius-lg);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .rewards-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ach-card__top {
+    padding: 12px 14px 0;
+  }
+
+  .ach-card__body {
+    padding: 8px 14px 10px;
+  }
+
+  .ach-card__foot {
+    padding: 10px 14px 12px;
+  }
+}
+
+/* Dải dòng 942-945 từng là phần thân mồ côi của `.dash-lxp__cta` (khai báo
+   đầy đủ ở trên) cộng với dấu `}` đóng rule `.reward-card__footer` bị mất.
+   Rule thiếu `}` làm 640 dòng CSS bị nest nhầm — xem note ở
+   `.reward-card__footer`. */
+
+@media (max-width: 880px) {
+  .dash-motivation {
+    /* Mobile 1 cột: thẻ thử thách cần bề ngang, xếp dọc cho dễ đọc. */
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Achievement chips ---- */
+.rewards-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.rewards-preview-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.achievement-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.achievement-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: var(--panel-strong);
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* ---- Modal xác nhận ---- */
+.confirm-body p {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 880px) {
+  .rewards-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reward-grid {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 12px;
+  }
+
+  .reward-card__media { height: 88px; }
+  .reward-card__icon { font-size: 32px; }
+
+  /* Mobile: nút Đổi cần vùng chạm 44px; chân card xếp dọc cho thoáng. */
+  .reward-card__cta { min-height: 44px; }
+
+  .reward-card__footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .rewards-balance {
+    /* Trên mobile đưa số dư hết chiều ngang, căn trái cho đỡ lệch. */
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  /* Full-width trên mobile: nút chạm rộng, dễ bấm, tránh đặt cạnh nhau. */
+  .confirm-actions {
+    flex-direction: column-reverse;
+  }
+
+  .confirm-actions .btn-primary,
+  .confirm-actions .btn-secondary {
+    width: 100%;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 400px) {
+  /* 320px: 2 cột x 2 = 4 ô vẫn vừa nhưng số lớn bị bóp — 1 cột dễ đọc. */
+  .rewards-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Lưu ý: rule `.reward-card__footer` đã khai báo đầy đủ ở đầu file
+   (ngay trước mục "Thử thách hôm nay"). Không khai báo lặp ở đây. */
+
+.reward-card__hint {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  line-height: 1.4;
+}
+
+.reward-card__hint--ok { color: var(--green); }
+.reward-card__hint--warn { color: var(--amber); }
+
+.reward-card__cta {
+  flex-shrink: 0;
+  min-height: 38px;
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+
+/* Vệt màu 3px ở trên: nhận diện loại số liệu bằng màu thay vì icon — nhẹ
+   hơn và không cần thêm asset. */
+.stat-tile::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+}
+
+.stat-tile--indigo::before { background: linear-gradient(90deg, var(--indigo), transparent); }
+.stat-tile--cyan::before { background: linear-gradient(90deg, var(--cyan), transparent); }
+.stat-tile--amber::before { background: linear-gradient(90deg, var(--amber), transparent); }
+.stat-tile--rose::before { background: linear-gradient(90deg, var(--rose), transparent); }
+
+.stat-tile__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.stat-tile__value {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.15;
+}

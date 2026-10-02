@@ -196,7 +196,7 @@ export default function ResourcesPage() {
             <Panel key={r.id}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
                 <div style={{ fontWeight: 600, fontSize: 14.5 }}>{r.title}</div>
-                <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: "var(--indigo-soft)", color: "var(--indigo)", fontWeight: 600, whiteSpace: "nowrap" }}>
+                <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: "var(--radius-pill)", background: "var(--indigo-soft)", color: "var(--indigo)", fontWeight: 600, whiteSpace: "nowrap" }}>
                   {t(TYPE_KEYS[r.type] ?? "res.type.OTHER")}
                 </span>
               </div>

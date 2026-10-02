@@ -9,17 +9,21 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Panel from "@/components/ui/Panel";
 import StatCard from "@/components/ui/StatCard";
 import StateMessage from "@/components/ui/StateMessage";
+import { useToast } from "@/components/ui/Toast";
 import EmptyState from "@/components/ui/EmptyState";
 import GettingStarted from "@/components/dashboard/GettingStarted";
 import SubjectProgressPanel from "@/components/subject/SubjectProgressPanel";
 import OnboardingBanner from "@/components/onboarding/OnboardingBanner";
 import Skeleton from "@/components/ui/Skeleton";
 import LevelProgressBar from "@/components/ui/LevelProgressBar";
+import AnimatedNumber from "@/components/ui/AnimatedNumber";
+import DailyChallengeCard from "@/components/rewards/DailyChallengeCard";
+import "@/components/rewards/rewards.css";
 import TodaySchedule from "@/components/calendar/TodaySchedule";
 import NextActionModule from "@/components/dashboard/NextActionModule";
 import { getLevelProgressDetails } from "@/lib/constants/xp";
@@ -27,8 +31,17 @@ import { useCountUp } from "@/lib/hooks/useCountUp";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 import { hasKey, localeFor, type I18nKey } from "@/lib/i18n/dictionary";
 import { fetchOnboardingState } from "@/lib/onboarding/client";
+import { fetchDueReviews, type DueReviewsData } from "@/lib/api/reviewDue";
+// LXP / thử thách ngày — cùng nguồn với trang /rewards để số dư khớp 2 nơi.
+import { fetchDailyChallenge, claimDailyChallenge } from "@/lib/api/rewardsApi";
+import { describeError } from "@/lib/api/readApi";
 import type { OnboardingState } from "@/lib/onboarding/state";
-import type { ApiResponse, GoalWithRoadmap, SkillMasteryPoint } from "@/types";
+import type {
+  ApiResponse,
+  DailyChallengeData,
+  GoalWithRoadmap,
+  SkillMasteryPoint,
+} from "@/types";
 
 interface ProgressData {
   skillMap: SkillMasteryPoint[];
@@ -58,11 +71,6 @@ interface XPHistoryItem {
   createdAt: string;
 }
 
-interface ReviewDueResponse {
-  reviews: { id: string; topic: string; subject?: string | null }[];
-  stats: { due: number; overdue: number; upcoming: number; total: number };
-}
-
 // Nhãn XP reason theo ngôn ngữ UI — key `xp.reason.*` trong dictionary,
 // reason lạ fallback prettify (không crash khi backend thêm type mới).
 function reasonLabel(t: (key: I18nKey) => string, reason: string): string {
@@ -73,22 +81,32 @@ function reasonLabel(t: (key: I18nKey) => string, reason: string): string {
 export default function HomePage() {
   const router = useRouter();
   const { t, lang } = useLanguage();
+  // Toast cho phản hồi claim thử thách (nút nhận thưởng ở DailyChallengeCard).
+  const { push } = useToast();
   const [askValue, setAskValue] = useState("");
   const [progress, setProgress] = useState<ProgressData | null>(null);
   const [xpData, setXpData] = useState<StreakResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [reviewDue, setReviewDue] = useState<ReviewDueResponse | null>(null);
+  const [reviewDue, setReviewDue] = useState<DueReviewsData | null>(null);
   const [reviewLoading, setReviewLoading] = useState(true);
   const [recentXP, setRecentXP] = useState<XPHistoryItem[] | null>(null);
   const [goals, setGoals] = useState<GoalWithRoadmap[] | null>(null);
   const [streakError, setStreakError] = useState<string | null>(null);
+  // Thử thách hôm nay — /api/daily-challenge tự sinh challenge nếu hôm nay
+  // chưa có, nên gọi 1 lần lúc mount là đủ (không cần poll).
+  const [challenge, setChallenge] = useState<DailyChallengeData | null>(null);
+  const [claiming, setClaiming] = useState(false);
   // null = chưa biết; false = user mới (chưa có dữ liệu học); true = đã có.
   // Ba trạng thái thay vì boolean để không nháy layout: trong lúc fetch
   // chưa xong thì vẫn hiện skeleton chứ không đoán sai rồi đổi layout.
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
 
-  useEffect(() => {
+  // Tách thành hàm có tên (thay vì code nằm thẳng trong useEffect) để nút
+  // "Thử lại" ở trạng thái lỗi gọi lại được đúng những gì trang vừa tải.
+  // Trước đây không có đường thoát: gặp lỗi mạng chỉ còn cách bấm tải lại
+  // trang, tức mất hết trạng thái và phải chờ 5 request lần nữa.
+  const loadProgress = useCallback(() => {
     fetch("/api/progress")
       .then((res) => res.json())
       .then((json: ApiResponse<ProgressData>) => {
@@ -97,7 +115,10 @@ export default function HomePage() {
       })
       .catch(() => setError(t("common.connectionError")))
       .finally(() => setLoading(false));
+  }, [t]);
 
+  const loadStreak = useCallback(() => {
+    setStreakError(null);
     fetch("/api/streak")
       .then((res) => res.json())
       .then((json: ApiResponse<StreakResponse>) => {
@@ -105,10 +126,43 @@ export default function HomePage() {
         else setStreakError(json.error);
       })
       .catch(() => setStreakError(t("common.connectionError")));
+  }, [t]);
 
-    fetch("/api/review/due?limit=5")
-      .then((res) => res.json())
-      .then((json: ApiResponse<ReviewDueResponse>) => {
+  // Thử thách hôm nay: gọi RIÊNG khỏi loadStreak vì nó độc lập với streak —
+  // lỗi challenge không được làm hỏng hiển thị streak (và ngược lại).
+  const loadChallenge = useCallback(async () => {
+    try {
+      setChallenge(await fetchDailyChallenge());
+    } catch {
+      setChallenge(null);
+    }
+  }, []);
+
+  async function handleClaimChallenge() {
+    setClaiming(true);
+    try {
+      await claimDailyChallenge();
+      setChallenge((prev) => (prev ? { ...prev, claimed: true } : prev));
+      // Claim cộng XP/LXP vào tài khoản -> số dư đã đổi, phải nạp lại streak
+      // để ô LXP ở trên cùng cập nhật theo (không hiển thị số cũ).
+      await loadStreak();
+      push("success", t("challenge.claimSuccess"));
+    } catch (err) {
+      push("error", describeError(err, t("common.connectionError")));
+    } finally {
+      setClaiming(false);
+    }
+  }
+
+  useEffect(() => {
+    loadProgress();
+    loadStreak();
+    void loadChallenge();
+    // Dùng chung helper với trang Review: request đang bay của cùng URL
+    // được gộp làm một (StrictMode dev gọi effect 2 lần / remount nhanh
+    // không còn bắn trùng request + query Prisma).
+    fetchDueReviews(5)
+      .then((json) => {
         if (json.success) setReviewDue(json.data);
         else setReviewDue(null);
       })
@@ -134,7 +188,10 @@ export default function HomePage() {
     // Trạng thái onboarding quyết định hiện Getting Started hay Dashboard
     // đầy đủ. Gọi chung promise, không chặn các fetch khác.
     void fetchOnboardingState().then(setOnboarding);
-  }, []);
+    // `loadProgress`/`loadStreak`/`loadChallenge` được đưa vào deps (chúng đã bọc
+    // useCallback theo `t`) để effect chạy lại khi ngôn ngữ đổi — trước đây
+    // deps rỗng khiến các fetch này không bao giờ chạy lại.
+  }, [loadProgress, loadStreak, loadChallenge]);
 
   function goToTutor() {
     const q = askValue.trim();
@@ -160,6 +217,9 @@ export default function HomePage() {
 
   const xp = xpData?.progress;
   const streak = xpData?.streak;
+  // Số dư LXP để đổi thưởng — cùng nguồn với trang /rewards (đều đọc
+  // `progress` của GET /api/streak) nên số hiển thị ở 2 nơi luôn khớp.
+  const lxpBalance = xp?.lxpBalance ?? 0;
   // Single source: % hiển thị suy từ lifetimeXP, đồng nhất với
   // LevelProgressBar bên dưới (không dùng percent thô từ API).
   const levelDetails = xp ? getLevelProgressDetails(xp.lifetimeXP) : null;
@@ -188,7 +248,13 @@ export default function HomePage() {
           {t("dashboard.subtitle")}
         </p>
 
+        {/* Ô "hỏi AI ngay" trên Trang chủ — cùng bài toán ô nhập của Tutor:
+            minWidth: 0 để input co lại được trong flex (không có nó, input giữ
+            chiều rộng nội tại và đẩy nút "Hỏi" tràn ra ngoài ở 320px), và
+            fontSize để CSS quyết định (16px trên mobile) thay vì ghim 14.5px
+            inline — cùng lý do iOS zoom toàn trang. */}
         <div
+          className="dashboard-ask"
           style={{
             marginTop: 20,
             display: "flex",
@@ -207,16 +273,19 @@ export default function HomePage() {
             onKeyDown={(e) => e.key === "Enter" && goToTutor()}
             placeholder={t("dashboard.askPlaceholder")}
             aria-label={t("dashboard.askAria")}
+            // enterKeyHint: trên điện thoại bàn phím hiện nút "Gửi" thay vì
+            // "xuống dòng" — đúng thao tác gõ nhanh rồi Enter.
+            enterKeyHint="send"
             style={{
               flex: 1,
+              minWidth: 0,
               background: "transparent",
               border: "none",
               outline: "none",
               color: "var(--text)",
-              fontSize: 14.5,
             }}
           />
-          <button className="btn-primary" onClick={goToTutor}>
+          <button type="button" className="btn-primary dashboard-ask__btn" onClick={goToTutor}>
             {t("common.ask")}
           </button>
         </div>
@@ -228,7 +297,14 @@ export default function HomePage() {
           <Skeleton height={120} radius={16} />
         </div>
       )}
-      {error && <StateMessage kind="error" text={error} />}
+      {error && (
+        <StateMessage
+          kind="error"
+          text={error}
+          onRetry={loadProgress}
+          retryLabel={t("common.retry")}
+        />
+      )}
 
       {/* GETTING STARTED (Explore Mode) — thay thế Dashboard đầy đủ khi
           user chưa có dữ liệu học. Hiển thị TRƯỚC các panel số liệu vì với
@@ -292,7 +368,65 @@ export default function HomePage() {
           {xp !== null && (
             <LevelProgressBar lifetimeXP={xp?.lifetimeXP ?? 0} />
           )}
-          {streakError && <StateMessage kind="error" text={streakError} />}
+          {streakError && (
+            <StateMessage
+              kind="error"
+              text={streakError}
+              onRetry={loadStreak}
+              retryLabel={t("common.retry")}
+            />
+          )}
+
+          {/* LXP SỐ DƯ + THỬ THÁCH HÔM NAY — "mảnh ghép động lực" của
+              Dashboard. Trước đây XP/streak hiện nhưng LXP (tiền tệ để đổi
+              thưởng) và thử thách ngày KHÔNG hiện ở đâu, dù backend đã có
+              (`/api/streak` trả `progress.lxpBalance`, `/api/daily-challenge`
+              tự sinh challenge). Người học không biết mình kiếm được gì và
+              hôm nay cần làm gì => dùng thẻ này để trả lời cả 2.
+
+              Số LXP đọc từ `xp.lxpBalance` — CÙNG nguồn với trang /rewards
+              (đều gọi /api/streak), không phải nguồn riêng. */}
+          <div className="dash-motivation">
+            {/* Số dư LXP + lối vào cửa hàng.
+                *
+                * SỬA LỖI "Số dư LXP279LXPĐổi thưởng →" (spec §1):
+                * 3 khối label / value+currency / action TRƯỚC đây là 3 thẻ
+                * `<span>` inline liền nhau trong một `<button>` — không có
+                * khoảng trắng giữa các text node nên chúng dính thành 1 chuỗi.
+                * Nay mỗi khối là `<span class="...__label|__value|__cta">` với
+                * CSS `display:block` + `gap` → tách hẳn 3 dòng, và tiêu đề value
+                * có sẵn dấu hai chấm trong bản dịch ("Số dư LXP:").
+                *
+                * Dùng `router.push` (thay vì <Link>) để ĐỒNG NHẤT với các
+                * nút điều hướng còn lại của trang này. */}
+            <button
+              type="button"
+              className="dash-lxp"
+              onClick={() => router.push("/rewards")}
+              aria-label={`${t("rewards.balanceLabel")} ${lxpBalance ?? 0} LXP — ${t("rewards.title")}`}
+            >
+              <span className="dash-lxp__label">{t("rewards.balanceLabel")}</span>
+              <span className="dash-lxp__value">
+                {/* tabular-nums + 1 khối riêng cho số và đơn vị: số lớn
+                    (12.450) không làm "LXP" bị đẩy xuống dòng. */}
+                <AnimatedNumber
+                  className="dash-lxp__number animated-number"
+                  value={lxpBalance ?? 0}
+                  durationMs={600}
+                />
+                <span className="dash-lxp__unit">LXP</span>
+              </span>
+              <span className="dash-lxp__cta">{t("rewards.title")} →</span>
+            </button>
+
+            {/* Thử thách hôm nay — nhịp học ngày, có nút nhận thưởng ngay khi
+                hoàn thành. Cùng component với trang /rewards để không lệch. */}
+            <DailyChallengeCard
+              challenge={challenge}
+              claiming={claiming}
+              onClaim={() => void handleClaimChallenge()}
+            />
+          </div>
 
           {/* MÔN ĐANG HỌC (đa môn) — trả lời "hôm nay học gì / yếu môn nào".
               Dùng `progress.skillMap` ĐÃ fetch sẵn ở trên: không phát sinh

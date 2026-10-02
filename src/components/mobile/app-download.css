@@ -37,7 +37,7 @@
   border: 1px solid rgba(201, 211, 255, 0.1);
   background: rgba(18, 25, 43, 0.6);
   backdrop-filter: blur(14px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--shadow-md, 0 10px 30px rgba(0, 0, 0, 0.28));
   text-align: center;
 
   /* Chữ dài không được tràn ngang ra ngoài thẻ. */

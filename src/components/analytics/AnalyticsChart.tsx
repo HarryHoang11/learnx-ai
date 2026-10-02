@@ -157,8 +157,18 @@ export function BarChart({
       {/* role="img" + aria-label: đây là hình ảnh của dữ liệu; số thật nằm
           ngay cạnh mỗi thanh nên không mất khả năng đọc bằng AT. */}
       <ul className="analytics-bars" aria-label={label}>
-        {data.map((d) => (
-          <li key={d.label} className="analytics-bar">
+        {/*
+          Key = `label + index`, KHÔNG dùng `key={d.label}`: nhãn là TÊN MÔN
+          và 2 môn khác nhau vẫn có thể trùng chuỗi (vd "Kiến thức nền tảng"
+          lặp lại) → React cảnh báo "two children with the same key" và
+          identity của item có thể bị trộn khi re-render. Index ở đây là
+          identity của VỊ TRÍ trong danh sách dữ liệu tĩnh (không có
+          reorder/insert/delete), nên ổn định giữa các render — khác hẳn
+          key random/time-based vốn gãy remount mỗi lần render.
+          Giữ nguyên TOÀN BỘ item: KHÔNG dedupe dữ liệu.
+        */}
+        {data.map((d, index) => (
+          <li key={`${d.label}-${index}`} className="analytics-bar">
             <span className="analytics-bar__label" title={d.label}>
               {d.label}
             </span>

@@ -296,7 +296,7 @@ export default function FriendsPage() {
                 ) : (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
                     {profile.achievements.slice(0, 12).map((a) => (
-                      <span key={a.code} style={{ fontSize: 12, padding: "4px 10px", borderRadius: 99, background: "var(--panel-strong)", border: "1px solid var(--border)" }}>
+                      <span key={a.code} style={{ fontSize: 12, padding: "4px 10px", borderRadius: "var(--radius-pill)", background: "var(--panel-strong)", border: "1px solid var(--border)" }}>
                         {a.icon} {a.title}
                       </span>
                     ))}

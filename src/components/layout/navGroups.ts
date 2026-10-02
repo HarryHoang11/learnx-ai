@@ -17,6 +17,7 @@ import {
   Bot,
   CalendarDays,
   FlaskConical,
+  Gift,
   Heart,
   Home,
   Library,
@@ -35,6 +36,13 @@ export interface NavItem {
   href: string;
   labelKey: I18nKey;
   icon: LucideIcon;
+  /**
+   * Nhãn RIÊNG cho ô tab dưới cùng trên mobile, khi nhãn đầy đủ quá dài
+   * (vd "AI Gia sư" / "Trang cá nhân" bị bóp/cắt ở 320px). `undefined` =
+   * dùng `labelKey`. Tách riêng thay vì đổi luôn nhãn sidebar để desktop
+   * không bị mất tên đầy đủ.
+   */
+  shortLabelKey?: I18nKey;
 }
 
 export interface NavGroup {
@@ -47,8 +55,8 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     titleKey: "nav.groups.learn",
     items: [
-      { href: "/dashboard", labelKey: "nav.dashboard", icon: Home },
-      { href: "/workspace", labelKey: "nav.workspace", icon: Network },
+      { href: "/dashboard", labelKey: "nav.dashboard", shortLabelKey: "nav.tabHome", icon: Home },
+      { href: "/workspace", labelKey: "nav.workspace", shortLabelKey: "nav.tabLearn", icon: Network },
       { href: "/review", labelKey: "nav.review", icon: RotateCcw },
       { href: "/calendar", labelKey: "nav.calendar", icon: CalendarDays },
       { href: "/roadmap", labelKey: "nav.roadmap", icon: Route },
@@ -64,7 +72,17 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     titleKey: "nav.groups.progress",
-    items: [{ href: "/progress", labelKey: "nav.progress", icon: BarChart3 }],
+    items: [
+      { href: "/progress", labelKey: "nav.progress", icon: BarChart3 },
+      // Đổi thưởng — nằm cùng nhóm "Tiến độ" vì nó là nơi tiêu thụ những gì
+      // người học kiếm được ở /progress (XP/LXP/streak). Đây là route ĐÃ CÓ
+      // backend (Reward/UserReward/PointTransaction + /api/rewards/*) nhưng
+      // trước đợt này không có UI nào gọi tới (xem CHANGELOG 2026-10-03).
+      { href: "/rewards", labelKey: "nav.rewards", icon: Gift },
+      // Thành tựu — cùng nhóm vì achievement cũng là phần thưởng (XP+LXP),
+      // và backend đã có sẵn (`/api/achievements`).
+      { href: "/achievements", labelKey: "nav.achievements", icon: Trophy },
+    ],
   },
   {
     titleKey: "nav.groups.community",
@@ -97,15 +115,35 @@ export function findNavItem(href: string): NavItem | undefined {
 }
 
 /**
- * 4 đích chính ghim ở thanh nav dưới.
+ * 5 đích chính ghim ở thanh nav dưới (mobile).
  *
- * Chọn theo tiêu chí "học sinh mở app lên bấm ngay": Trang chủ (tổng quan),
- * Mind Map (tư duy), AI Gia sư (hỏi bài), Cá nhân (cài đặt/tài khoản). Phần còn
- * lại (Workspace, Lịch, Cộng đồng, Thư viện...) không nhét nổi vào 5 ô nên
- * nằm trong sheet "Thêm" — cùng bộ NAV_GROUPS với Sidebar, không phải bản
- * liệt kê riêng.
+ * Bộ này bám theo mô hình app native phổ biến và giữ đúng vai trò từng
+ * bước trong pipeline của LearnX:
+ *   Home     (/dashboard) — mở app là thấy ngay việc cần làm hôm nay
+ *   Learn    (/workspace) — tải tài liệu lên, xem tóm tắt, mind map
+ *   Practice (/practice)  — luyện tập / quiz đo năng lực
+ *   Progress (/progress)  — XP, streak, thống kê
+ *   Profile  (/profile)   — cài đặt, tài khoản
+ *
+ * Mind Map và AI Gia sư (2 tính năng dùng rất nhiều) nằm trong sheet "Thêm"
+ * cùng toàn bộ route còn lại — lấy từ NAV_GROUPS chung với Sidebar nên
+ * không bao giờ lệch với desktop.
+ *
+ * Lưu ý khi đổi: giữ đúng 5 ô. Thêm ô thứ 6 làm mỗi ô hẹp lại (~53px ở
+ * 320px) và nhãn tiếng Việt dài sẽ bị cắt — xem docs/architecture/MOBILE.md.
  */
-export const PRIMARY_TAB_HREFS = ["/dashboard", "/mindmap", "/tutor", "/profile"] as const;
+export const PRIMARY_TAB_HREFS = [
+  "/dashboard",
+  "/workspace",
+  "/practice",
+  "/progress",
+  "/profile",
+] as const;
+
+/** Nhãn hiển thị trên ô tab: ưu tiên nhãn ngắn nếu mục nav có định nghĩa. */
+export function tabLabelKey(item: NavItem): I18nKey {
+  return item.shortLabelKey ?? item.labelKey;
+}
 
 export const PRIMARY_TABS: NavItem[] = PRIMARY_TAB_HREFS.map((href) => findNavItem(href)).filter(
   (item): item is NavItem => item !== undefined

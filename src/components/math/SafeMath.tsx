@@ -22,24 +22,14 @@
 "use client";
 
 import { useMemo } from "react";
-import katex from "katex";
+import { renderMathHtml } from "../../lib/math/render";
 import { splitMathSegments } from "../../lib/math/segments";
 
 // Relative import keeps this pure helper compatible with Vitest; the
 // compatibility export preserves existing SafeMath imports used across the UI.
 export { splitMathSegments, type MathSegment } from "../../lib/math/segments";
 function MathNode({ latex, display }: { latex: string; display: boolean }) {
-  const html = useMemo(
-    () =>
-      katex.renderToString(latex, {
-        throwOnError: false,
-        displayMode: display,
-        output: "html",
-        strict: false,
-        trust: false,
-      }),
-    [latex, display]
-  );
+  const html = useMemo(() => renderMathHtml(latex, display), [latex, display]);
 
   if (display) {
     return (

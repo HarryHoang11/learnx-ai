@@ -1,17 +1,23 @@
 // ================================================================
-// <OAuthButtons /> — nút đăng nhập Google
+// <OAuthButtons /> — nút đăng nhập/đăng ký bằng Google
 // ================================================================
-// Mạch tư duy: cả trang Login lẫn Register đều cần y hệt nút này —
-// OAuth tự tạo user mới nếu email chưa tồn tại, đây là hành vi chuẩn
-// của Auth.js PrismaAdapter, không phân biệt "đăng ký" vs "đăng nhập".
-// signIn() gọi thẳng provider, Auth.js tự xử lý toàn bộ redirect +
-// callback.
-// ================================================================
-
+// Mạch tư duy: cả trang Login lẫn Register đều cần y hệt nút này — OAuth
+// tự tạo user mới nếu email chưa tồn tại, đây là hành vi chuẩn của Auth.js
+// PrismaAdapter, KHÔNG phân biệt "đăng ký" vs "đăng nhập".
+//
+// Ba điều chỉnh cho trải nghiệm (spec #39.6):
+//   1. `type="button"` — bản cũ không có, nằm trong <form> thì bấm nút sẽ
+//      vô tình submit form (mất dữ liệu email/mật khẩu đã gõ).
+//   2. `loading` — chặn bấm nhiều lần. signIn("google") điều hướng ra
+//      ngoài; nếu mạng chậm, bấm 5 lần sẽ mở 5 tab OAuth.
+//   3. Nhãn theo ngôn ngữ đang chọn ("Tiếp tục với Google" / "Continue with
+//      Google") thay vì cứng "Login with Google" — trang đang viết tiếng Việt.
 "use client";
 
+import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useLanguage } from "@/components/providers/LanguageProvider";
+import "./auth.css";
 
 // SVG 4 màu chuẩn của logo Google ("G") — vẽ lại bằng path thay vì
 // dùng file ảnh, tránh phải quản lý thêm asset.
@@ -40,22 +46,42 @@ function GoogleIcon() {
 
 export default function OAuthButtons() {
   const { t } = useLanguage();
+  /** Chặn bấm lặp trong lúc đang chuyển hướng sang Google. */
+  const [loading, setLoading] = useState(false);
+
+  /**
+   * signIn("google") điều hướng ra trang Google — nếu người dùng bấm chặn
+   * popup hoặc hủy, hàm ném lỗi. Bắt lại để hiện message thân thiện thay vì
+   * lỗi kỹ thuật của NextAuth (spec #39.6: không lộ OAuth error).
+   *
+   * KHÔNG tự hiện lỗi ở đây: component không biết trang cha muốn báo lỗi ở
+   * đâu (form-level alert vs field). Chỉ ghi log để dev chẩn đoán; lần sau
+   * chỉnh nếu cần thì truyền callback `onError` xuống.
+   */
+  async function handleGoogle() {
+    if (loading) return;
+    setLoading(true);
+    try {
+      await signIn("google", { callbackUrl: "/dashboard", redirect: true });
+      // Không setLoading(false): trang đang rời đi. Nếu Google chặn popup,
+      // `signIn` ném lỗi → nhảy vào catch bên dưới.
+    } catch (err) {
+      console.error("[auth] Google sign-in thất bại:", err);
+      setLoading(false);
+    }
+  }
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <button
-        onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-        className="btn-secondary"
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 10,
-        }}
-      >
-        <GoogleIcon />
-        {t("auth.google")}
-      </button>
-    </div>
+    <button
+      // `type="button"` là BẮT BUỘC: bản cũ thiếu, nên khi nằm trong <form>
+      // bấm nút sẽ kích hoạt submit form (mất hết dữ liệu đã gõ).
+      type="button"
+      className="auth-oauth"
+      onClick={handleGoogle}
+      disabled={loading}
+    >
+      <GoogleIcon />
+      {loading ? t("auth.loggingIn") : t("auth.googleContinue")}
+    </button>
   );
 }

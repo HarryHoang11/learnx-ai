@@ -108,7 +108,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 32px;
+  /* safe-top/top: app Android tràn nội dung qua status bar
+     (capacitor.config.ts đặt StatusBar.overlaysWebView = true), nên padding
+     cứng 24px đẩy logo và nút điều hướng nằm NGAY DƯỚI camera punch-hole /
+     vùng cảm biến. Cộng `env(safe-area-inset-top)` vào trên giống .topbar
+     và .onb-shell (các trang còn lại đã làm đúng). */
+  padding: calc(24px + var(--safe-top)) 32px 24px;
   width: 100%;
 }
 
@@ -320,9 +325,8 @@
   border-radius: 22px;
   background: linear-gradient(135deg, rgba(27, 34, 51, 0.95), rgba(18, 25, 43, 0.9));
   border: 1px solid rgba(201, 211, 255, 0.25);
-  box-shadow: 
-    0 12px 30px rgba(0, 0, 0, 0.5),
-    0 0 25px rgba(119, 117, 255, 0.3);
+  box-shadow: var(--shadow-lg, 0 12px 30px rgba(0, 0, 0, 0.5),
+    0 0 25px rgba(119, 117, 255, 0.3));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -380,7 +384,7 @@
   backdrop-filter: blur(14px);
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-md, 0 8px 24px rgba(0, 0, 0, 0.25));
 }
 
 .welcome-loop-card::before {
@@ -400,7 +404,7 @@
   background: rgba(27, 34, 51, 0.88);
   border-color: rgba(69, 217, 233, 0.35);
   transform: translateY(-2px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(69, 217, 233, 0.15);
+  box-shadow: var(--shadow-lg, 0 12px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(69, 217, 233, 0.15));
 }
 
 .welcome-loop-card:hover::before,
@@ -507,7 +511,7 @@
   border-radius: 18px;
   padding: 24px 28px;
   backdrop-filter: blur(16px);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-lg, 0 16px 40px rgba(0, 0, 0, 0.45));
   text-align: left;
   position: relative;
   overflow: hidden;
@@ -771,7 +775,9 @@
   z-index: 20;
   width: 100%;
   max-width: 680px;
-  margin: 0 auto 24px;
+  /* margin-bottom cộng safe-bottom: thanh gesture của Android đè lên
+     nút CTA ở đáy màn hình nếu không chừa vùng an toàn. */
+  margin: 0 auto calc(24px + var(--safe-bottom));
   padding: 0 20px;
 }
 
@@ -785,7 +791,7 @@
   border-radius: 9999px;
   padding: 10px 20px;
   backdrop-filter: blur(16px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-lg, 0 10px 30px rgba(0, 0, 0, 0.4));
 }
 
 .welcome-phase-dots {
@@ -910,7 +916,11 @@
    ---------------------------------------------------------------- */
 @media (max-width: 768px) {
   .welcome-topbar {
-    padding: 16px 20px;
+    /* Giữ `+ var(--safe-top)` ở đây — bản gốc ghi đè thành `padding: 16px 20px`
+       và XÓA mất khoảng chừa notch, khiến logo + nút điều hướng nằm dưới
+       camera punch-hole đúng lúc người dùng còn chưa vào được app (đây là
+       màn đầu tiên sau đăng ký, tức bị thấy nhiều nhất). */
+    padding: calc(16px + var(--safe-top)) 20px 16px;
   }
 
   .welcome-stage {

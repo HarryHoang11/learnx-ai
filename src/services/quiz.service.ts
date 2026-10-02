@@ -98,7 +98,11 @@ export async function generateQuizQuestion(
   subject: string,
   topic: string,
   difficulty: Difficulty,
-  sourceDocumentId?: string
+  sourceDocumentId?: string,
+  // Lớp ĐANG KIỂM TRA (diagnosticGrade). Không truyền thì lấy `currentGrade`
+  // trong hồ sơ như cũ — nhờ vậy các luồng khác (Workspace, quiz tự do)
+  // không bị đổi hành vi, còn bài kiểm tra lớp 10 vẫn sinh câu đúng lớp 10.
+  options?: { gradeLevelOverride?: string }
 ): Promise<GeneratedQuestion> {
   const normalizedSubject = requireNonEmptyText(subject, "môn học", 120);
   const normalizedTopic = requireNonEmptyText(topic, "chủ đề", 160);
@@ -133,7 +137,7 @@ export async function generateQuizQuestion(
     where: { id: userId },
     select: { learningProfile: true },
   });
-  const gradeLevel = readGradeLevel(profile?.learningProfile);
+  const gradeLevel = options?.gradeLevelOverride ?? readGradeLevel(profile?.learningProfile);
 
   const prompt = buildQuestionGenPrompt(
     normalizedSubject,

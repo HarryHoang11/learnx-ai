@@ -70,8 +70,8 @@ const MAX_EDGE_BEND = 120;
 // Màu node theo loại, lấy từ :root dark theme. SVG data URI không
 // tham chiếu được CSS variable khi rasterize bởi canvas.
 export const NODE_TYPE_COLORS: Record<string, string> = {
-  root: "#35d0d8",
-  concept: "#7c6cf0",
+  root: "#45d9e9",
+  concept: "#7775ff",
   detail: "#94a0b8",
   example: "#f5c76a",
   formula: "#7cf0e6",
@@ -79,7 +79,7 @@ export const NODE_TYPE_COLORS: Record<string, string> = {
 };
 
 // Màu nền và viền cho SVG/PDF — trùng với dark theme :root.
-export const EXPORT_BG = "#0a0e16";
+export const EXPORT_BG = "#070b16";
 export const EXPORT_PANEL = "#1b2233";
 export const EXPORT_BORDER = "rgba(201, 211, 255, 0.12)";
 export const EXPORT_TEXT = "#f5f7ff";

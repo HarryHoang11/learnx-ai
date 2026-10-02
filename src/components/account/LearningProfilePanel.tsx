@@ -102,6 +102,11 @@ export default function LearningProfilePanel() {
         </div>
 
         <div className="lp-row">
+          <dt>{t("profile.lp.school")}</dt>
+          <dd>{profile?.school || notSet}</dd>
+        </div>
+
+        <div className="lp-row">
           <dt>{t("profile.lp.intent")}</dt>
           <dd>{list(profile?.intents, INTENTS)}</dd>
         </div>

@@ -18,6 +18,8 @@ import { prisma } from "@/lib/db/prisma";
 import { pickNextDifficulty } from "@/services/assessment.service";
 import { generateQuizQuestion, QuizQuestionError, submitQuizAnswer, toPublicQuestion } from "@/services/quiz.service";
 import { getCurrentStreak, recordLearningActivity } from "@/services/learning-activity.service";
+// Câu mô tả trình độ lớp dùng CHUNG với profile (cùng cách nói trong prompt).
+import { gradeLevelText } from "@/lib/personalization/context";
 import type { ApiResponse, Difficulty, PublicQuestion } from "@/types";
 
 // Số câu tối đa cho 1 phiên kiểm tra — khớp với "15-20 câu" trong mô
@@ -115,9 +117,20 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Chưa đủ câu -> sinh câu tiếp theo với độ khó đã điều chỉnh
+    // Chưa đủ câu -> sinh câu tiếp theo với độ khó đã điều chỉnh.
+    // Lớp lấy từ CHÍNH bài kiểm tra đang làm (`Assessment.grade`), KHÔNG lấy
+    // lớp hiện tại trong hồ sơ: học sinh lớp 11 vẫn có thể đang làm bài kiểm
+    // tra lớp 10, và câu tiếp theo phải cùng chương trình với câu đầu tiên.
     const nextDifficulty = pickNextDifficulty(answered.difficulty as Difficulty, answered.isCorrect);
-    const nextQuestion = await generateQuizQuestion(userId, answered.subject, answered.topic, nextDifficulty);
+    const gradeLevel = gradeLevelText(assessment.grade);
+    const nextQuestion = await generateQuizQuestion(
+      userId,
+      answered.subject,
+      answered.topic,
+      nextDifficulty,
+      undefined,
+      { gradeLevelOverride: gradeLevel }
+    );
 
     return NextResponse.json<ApiResponse<{ done: false; isCorrect: boolean; nextQuestion: PublicQuestion }>>({
       success: true,

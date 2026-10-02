@@ -9,6 +9,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildLearningContext,
+  buildAdaptiveTeachingRules,
+  gradeLevelText,
   prefersNoDirectAnswer,
   suggestDiagnosticSubjects,
   PROMPT_BEHAVIOR,
@@ -152,4 +154,89 @@ describe("suggestDiagnosticSubjects", () => {
     });
     expect(suggestDiagnosticSubjects(summary)).toEqual(["Toán"]);
   });
+
+// --- LỚP ĐANG DÙNG TRONG PROMPT (currentGrade vs diagnosticGrade) ---
+
+describe("gradeLevelText", () => {
+  it("lớp đã lưu -> câu mô tả trình độ cho prompt", () => {
+    expect(gradeLevelText("11")).toBe("học sinh lớp 11");
+    expect(gradeLevelText(" 6 ")).toBe("học sinh lớp 6");
+  });
+
+  it("giá trị rỗng/không phải số -> undefined, KHÔNG bịa lớp", () => {
+    // "OTHER"/null/undefined là hồ sơ chưa biết lớp — prompt phải rỗng chỗ này,
+    // tuyệt đối không dựng "học sinh lớp OTHER".
+    expect(gradeLevelText(null)).toBeUndefined();
+    expect(gradeLevelText(undefined)).toBeUndefined();
+    expect(gradeLevelText("")).toBeUndefined();
+    expect(gradeLevelText("OTHER")).toBeUndefined();
+    expect(gradeLevelText("lớp 11")).toBeUndefined();
+  });
+});
+
+describe("buildAdaptiveTeachingRules", () => {
+  it("không có dữ liệu -> không sinh quy tắc nào (không thêm prompt rỗng)", () => {
+    expect(buildAdaptiveTeachingRules({ weakTopics: [], strongTopics: [] })).toEqual([]);
+  });
+
+  it("chủ đề yếu -> bắt AI dựng lại nền tảng, không nhảy vào công thức nâng cao", () => {
+    const rules = buildAdaptiveTeachingRules({
+      weakTopics: ["Toán/Tích phân"],
+      strongTopics: [],
+    });
+    expect(rules.join(" ")).toContain("Toán/Tích phân");
+    expect(rules.join(" ")).toMatch(/nền tảng/i);
+  });
+
+  it("chủ đề vững -> bỏ phần cơ bản, nâng bài tập", () => {
+    const rules = buildAdaptiveTeachingRules({
+      weakTopics: [],
+      strongTopics: ["Lý/Cơ điện"],
+    });
+    expect(rules.join(" ")).toContain("Lý/Cơ điện");
+    expect(rules.join(" ")).toMatch(/bỏ phần giải thích cơ bản/i);
+  });
+
+  it("có lớp -> nhắc bám đúng chương trình lớp đó", () => {
+    const rules = buildAdaptiveTeachingRules({ weakTopics: [], strongTopics: [], grade: "10" });
+    expect(rules.join(" ")).toContain("lớp 10");
+  });
+
+  it("chủ đề yếu và vững cùng lúc -> có cả 2 quy tắc, không lẫn lộn", () => {
+    const rules = buildAdaptiveTeachingRules({
+      weakTopics: ["Toán/Tích phân"],
+      strongTopics: ["Lý/Cơ điện"],
+    });
+    expect(rules).toHaveLength(2);
+    expect(rules[0]).toContain("Toán/Tích phân");
+    expect(rules[1]).toContain("Lý/Cơ điện");
+  });
+});
+
+describe("buildLearningContext — quy tắc dạy theo trình độ đi vào prompt", () => {
+  it("chủ đề yếu + vững từ dữ liệu thật -> prompt chứa cả hai quy tắc", () => {
+    const { prompt } = buildLearningContext({
+      profile: { version: 1, educationStage: "THPT", grade: "11" },
+      goals: [{ title: "Luyện thi THPT", target: "9 điểm" }],
+      skills: [
+        { subject: "Toán", topic: "Tích phân", masteryPercent: 20, isWeak: true },
+        { subject: "Lý", topic: "Cơ điện", masteryPercent: 90, isWeak: false },
+      ],
+    });
+    expect(prompt).toContain("Toán/Tích phân");
+    expect(prompt).toContain("Lý/Cơ điện");
+    // Ngưỡng "vững" 80% phải khớp Analytics, không phải con số bịa ở đây.
+    expect(prompt).toContain("lớp 11");
+  });
+
+  it("chủ đề ở mức trung bình (60%) -> KHÔNG bị coi là yếu lẫn là vững", () => {
+    const { prompt } = buildLearningContext({
+      profile: { version: 1, educationStage: "THPT", grade: "11" },
+      goals: [{ title: "Học đều", target: "" }],
+      skills: [{ subject: "Toán", topic: "Hàm bậc hai", masteryPercent: 60, isWeak: false }],
+    });
+    expect(prompt).not.toContain("Toán/Hàm bậc hai");
+  });
+});
+
 });

@@ -1,5 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
-    <cache-path name="my_cache_images" path="." />
+    <!--
+        Đường dẫn FileProvider cho WebView.
+
+        LearnX upload tài liệu bằng <input type="file">, nhờ đó hệ thống tự
+        mở file picker và cấp WebView một URI tạm qua FileProvider. Mỗi nơi
+        sinh URI cần có path tương ứng ở đây, nếu không app sẽ crash với
+        IllegalArgumentException "Failed to find configured root".
+
+        Các path này phải BAO RỘNG hơn vùng lưu trữ thực tế:
+          - external-path: bộ nhớ ngoài (SD card, thư mục Tài liệu) — nơi
+            người dùng hay lưu file tải về trên điện thoại.
+          - external-files-path / external-cache-path: thư mục riêng của app
+            trên bộ nhớ ngoài.
+          - cache-path / files-path: bộ nhớ trong.
+
+        `name` bên trong là nhãn nội bộ, không ảnh hưởng hành vi.
+    -->
+    <external-path name="external_files" path="." />
+    <external-files-path name="external_app_files" path="." />
+    <external-cache-path name="external_app_cache" path="." />
+    <cache-path name="cache" path="." />
+    <files-path name="files" path="." />
 </paths>

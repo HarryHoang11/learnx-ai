@@ -19,7 +19,9 @@
 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { Sparkles } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
+import { resolveAvatarUrl } from "@/lib/auth/avatarUrl";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 
 /**
@@ -36,7 +38,8 @@ export default function FloatingAIButton() {
   if (status === "loading") return null;
 
   const name = session?.user?.name ?? session?.user?.email ?? t("nav.tutor");
-  const image = session?.user?.image;
+  // Cùng nguồn chuẩn hoá với AccountMenu/Topbar — xem `resolveAvatarUrl`.
+  const image = resolveAvatarUrl(session?.user?.image);
 
   return (
     <Link
@@ -66,12 +69,15 @@ export default function FloatingAIButton() {
       }}
       className="floating-ai-button"
     >
+      {/* `resolveAvatarUrl` LUÔN trả về URL (xem lib/auth/avatarUrl.ts) —
+          nhánh else bên dưới là dead code từ trước đó, giữ lại chỉ để chắc
+          chắn nếu hàm đó đổi hành vi. Icon rơi về Lucide `Sparkles` — đồng bộ
+          phần còn lại của UI (AppDownloadBubble dùng Lucide `Smartphone`/
+          `Download`), thay vì glyph `✺` trông lạc lõng giữa các icon khác. */}
       {image ? (
         <Avatar src={image} name={name} size={SIZE} ringColor="var(--cyan)" />
       ) : (
-        <span style={{ fontSize: 24, lineHeight: 1 }} aria-hidden>
-          ✺
-        </span>
+        <Sparkles size={24} aria-hidden="true" style={{ color: "var(--cyan)" }} />
       )}
     </Link>
   );

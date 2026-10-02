@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserId, unauthorizedResponse } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { generateQuizQuestion, QuizQuestionError, toPublicQuestion } from "@/services/quiz.service";
+import { resolveDiagnosticLevel } from "@/services/personalization.service";
 import { AIOverloadedError } from "@/lib/ai/router";
 import type { ApiResponse, PublicQuestion } from "@/types";
 
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
   try {
     const userId = await getCurrentUserId();
     if (!userId) return unauthorizedResponse();
-    const body = await req.json() as { subject?: unknown };
+    const body = await req.json() as { subject?: unknown; grade?: unknown };
     const subject = typeof body.subject === "string" ? body.subject.trim() : "";
     if (!subject || subject.length > 120) {
       return NextResponse.json<ApiResponse<never>>(
@@ -54,10 +55,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Lớp đang kiểm tra (diagnosticGrade): người dùng CHỌN trên UI, nhưng
+    // nguồn sự thật vẫn là hồ sơ trong DB — server tự validate lớp hợp lệ theo
+    // cấp đã khai, KHÔNG tin giá trị client và KHÔNG ghi đè `currentGrade`
+    // (yêu cầu §12: lớp 11 vẫn kiểm tra được lớp 10).
+    const level = await resolveDiagnosticLevel(
+      userId,
+      typeof body.grade === "string" ? body.grade : undefined
+    );
+
     // Câu đầu tiên LUÔN ở độ khó "easy" và chủ đề tổng quát nhất của
     // môn học — mục đích là "khởi động" trước khi thích ứng dần theo
     // đúng/sai (xem services/assessment.service.ts -> pickNextDifficulty).
-    const firstQuestion = await generateQuizQuestion(userId, subject, "Kiến thức nền tảng", "easy");
+    // `gradeLevelOverride` đảm bảo câu hỏi ĐÚNG chương trình lớp đang kiểm tra.
+    const firstQuestion = await generateQuizQuestion(
+      userId,
+      subject,
+      "Kiến thức nền tảng",
+      "easy",
+      undefined,
+      { gradeLevelOverride: level.gradeLevel }
+    );
 
     const since = new Date(Date.now() - DEDUPE_WINDOW_MS);
     const recentOpen = await prisma.assessment.findFirst({
@@ -69,6 +87,9 @@ export async function POST(req: NextRequest) {
         // attempts: { none: {} } -> chỉ khử trùng phiên CHƯA dùng.
         // Đã làm vài câu rồi thì bấm lại = làm bài mới, không phải trùng.
         attempts: { none: {} },
+        // Chỉ tái dùng phiên đang mở CÙNG LỚP: kiểm tra lớp 10 là một bài
+        // kiểm tra KHÁC, không được trộn vào phiên lớp 11 đang dang dở.
+        ...(level.grade ? { grade: level.grade } : {}),
       },
       orderBy: { startedAt: "desc" },
       select: { id: true },
@@ -76,7 +97,15 @@ export async function POST(req: NextRequest) {
 
     const assessmentId = recentOpen?.id ?? (
       await prisma.assessment.create({
-        data: { userId, subject, status: "in_progress" },
+        // educationStage/grade = lớp ĐANG KIỂM TRA. Mỗi lần kiểm tra là một
+        // dòng riêng (null-safe cho dữ liệu cũ) — lịch sử không bị ghi đè.
+        data: {
+          userId,
+          subject,
+          status: "in_progress",
+          educationStage: level.educationStage,
+          grade: level.grade,
+        },
         select: { id: true },
       })
     ).id;

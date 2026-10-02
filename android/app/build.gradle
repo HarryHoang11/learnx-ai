@@ -24,11 +24,13 @@ android {
         applicationId "ai.learnx.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // Tăng versionCode MỘT LẦN mỗi lần phát hành lên Google Play
+        // Tăng versionCode MỖI LẦN phát hành lên Google Play
         // (Play từ chối bản có versionCode bằng hoặc thấp hơn bản trước).
-        // Hiện 1 = bản đầu tiên.
-        versionCode 1
-        versionName "1.0.0"
+        // Lịch sử: 1 = bản đầu. 2 = bản 1.1.0 (nâng cấp mobile: ô nhập 16px
+        // tránh zoom bàn phím, tutor không mất ô gõ khi mở bàn phím, vùng
+        // chạm 44px, bottom nav 5 tab, sheet menu cuộn tới mục đang mở).
+        versionCode 2
+        versionName "1.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

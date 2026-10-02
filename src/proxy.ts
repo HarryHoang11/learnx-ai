@@ -138,6 +138,18 @@ export default auth((req) => {
 // sẽ tải về một trang HTML đăng nhập thay vì file APK — lỗi rất dễ bị bỏ
 // qua vì nút trông như "chạy" nhưng kết quả sai hoàn toàn.
 // Người dùng tải app TRƯỚC khi có tài khoản, nên đường này phải công khai.
+//
+// `manifest.webmanifest` PHẢI được loại trừ cùng lý do: đây là FILE TĨNH
+// công khai do Next.js sinh từ src/app/manifest.ts (MetadataRoute).
+// Trước đây browser tải manifest (thường khi CHƯA đăng nhập, ngay từ trang
+// /login) bị proxy bắt -> 307 về /login -> nhận HTML thay vì JSON ->
+// console báo đúng lỗi: "Manifest: Line: 1, column: 1, Syntax error".
+// Manifest PWA không chứa dữ liệu user nên không được gate sau auth.
+//
+// `brand` là asset công khai (logo SVG) được metadata icons + manifest icons
+// + <LearnXLogo> trỏ tới — gặp ĐÚNG vấn đề như `downloads`: không loại trừ
+// thì request icon/logo khi chưa đăng nhập (trang /login!) cũng bị 307 và
+// trả về HTML, làm icon tab + logo vỡ.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon|downloads).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon|downloads|brand|manifest.webmanifest).*)"],
 };

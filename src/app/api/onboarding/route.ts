@@ -69,6 +69,7 @@ export async function PATCH(req: NextRequest) {
       educationStage?: unknown;
       grade?: unknown;
       track?: unknown;
+      school?: unknown;
       intents?: unknown;
       goalCategory?: unknown;
       goals?: unknown;
@@ -129,6 +130,7 @@ export async function PATCH(req: NextRequest) {
           educationStage: body.educationStage,
           grade: body.grade,
           track: body.track,
+          school: body.school,
           intents: body.intents,
           goalCategory: body.goalCategory,
           goals: body.goals,

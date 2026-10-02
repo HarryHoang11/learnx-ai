@@ -13,6 +13,12 @@ export interface BottomSheetProps {
   ariaLabel?: string;
   /** Cao tối đa; mặc định 88dvh (bám theo viewport động của mobile). */
   maxHeight?: string;
+  /**
+   * href của mục đang active trong nội dung sheet — sheet tự cuộn mục này vào
+   * tầm nhìn khi mở. Dùng cho menu "Thêm" (người dùng đang ở /mindmap thì
+   * mở menu phải thấy ngay Mind Map đang sáng, không phải cuộn tìm).
+   */
+  activeHref?: string | null;
 }
 
 /** Ngưỡng kéo xuống để đóng (px) — nhỏ hơn thì co lại, không mất sheet. */
@@ -43,6 +49,7 @@ export default function BottomSheet({
   children,
   ariaLabel,
   maxHeight,
+  activeHref,
 }: BottomSheetProps) {
   // offsetY: độ dịch xuống (px) đang kéo — dùng cho transform để ngón tay
   // "bám" sheet thay vì sheet tự nhảy về vị trí cũ.
@@ -50,6 +57,8 @@ export default function BottomSheet({
   const [dragging, setDragging] = useState(false);
   // Đọc trong handler sự kiện mà không cần đưa vào deps để tránh effect chạy lại.
   const dragRef = useRef<{ startY: number; lastY: number; lastAt: number } | null>(null);
+  // Thân sheet cuộn được — effect cuộn tới mục active cần tới chính nó.
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   // Khoá cuộn nền + đóng bằng ESC. Giữ đúng cơ chế của Modal/Drawer: nhớ
   // lại overflow cũ rồi khôi phục, để 2 lớp overlay mở chồng nhau không làm
@@ -83,6 +92,23 @@ export default function BottomSheet({
       dragRef.current = null;
     }
   }, [open]);
+
+  // Cuộn mục đang active vào tầm nhìn khi sheet mở.
+  //
+  // Vì sao cần: sheet "Thêm" liệt kê ~16 route; người dùng đang ở /mindmap
+  // (route thứ 14) mở menu sẽ phải cuộn tìm mà không biết mục nào đang sáng.
+  //
+  // Vì sao dùng `block: "nearest"` + `behavior: "auto"` (không phải "smooth"):
+  // sheet vừa mới trồi lên, cuộn mượt sẽ chạy đè lên animation mở và nhìn
+  // như giật. `nearest` cũng đảm bảo KHÔNG cuộn nếu mục đã hiện — tránh
+  // việc mọi lần mở sheet đều nhảy về giữa dù người dùng không cần.
+  useEffect(() => {
+    if (!open || !activeHref) return;
+    const body = bodyRef.current;
+    if (!body) return;
+    const target = body.querySelector<HTMLElement>(`[data-sheet-href="${CSS.escape(activeHref)}"]`);
+    target?.scrollIntoView({ block: "nearest" });
+  }, [open, activeHref]);
 
   function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
@@ -148,7 +174,9 @@ export default function BottomSheet({
           <span className="bottom-sheet-grip" aria-hidden="true" />
           {title ? <h3 className="bottom-sheet-title">{title}</h3> : null}
         </div>
-        <div className="bottom-sheet-body">{children}</div>
+        <div className="bottom-sheet-body" ref={bodyRef}>
+          {children}
+        </div>
       </div>
     </div>
   );

@@ -1,0 +1,652 @@
+/* ================================================================
+   AUTH — Login / Register (dùng chung cho 2 trang)
+   ================================================================
+   Tách file riêng thay vì nhét vào globals.css (đã >4600 dòng), cùng
+   pattern với welcome.css / onboarding.css / rewards.css.
+
+   NGUYÊN TẮC: KHÔNG tạo design system riêng cho auth. Mọi màu/radius/
+   shadow/motion đều lấy từ token chung đã khai ở globals.css — nếu sau
+   này đổi theme (light/dark) thì trang login đổi theo, không phải sửa 2
+   chỗ. Chỉ có BỐ CỤC + NHỊP CHUYỂN ĐỘNG là của riêng auth.
+   ================================================================ */
+
+.auth-shell {
+  min-height: 100vh;
+  /* 100dvh quan trọng hơn 100vh trên mobile: 100vh KHÔNG tính phần bị
+     thanh địa chỉ/thanh nav của trình duyệt che, nên bàn phím mở ra thì
+     form bị "nhảy". `dvh` theo viewport thực tế. Fallback 100vh ở dòng
+     trên cho trình duyệt cũ không hỗ trợ. */
+  min-height: 100dvh;
+  display: grid;
+  /* Desktop: brand chiếm 1fr, form 1fr — nhưng form cần chỗ hơn (form dài),
+     nên dùng 1.05fr / 1fr thay vì 50/50. */
+  grid-template-columns: 1.05fr 1fr;
+  background: var(--bg);
+}
+
+/* ================================================================
+   VÙNG BRAND (desktop)
+   ================================================================ */
+.auth-brand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 48px;
+  overflow: hidden;
+  /* Chừa safe-area: StatusBar.overlaysWebView=true nên nội dung bị đè
+     dưới notch trên Android. */
+  padding-top: calc(48px + var(--safe-top, 0px));
+  /* Cạnh phải mảnh để "cắt" sang vùng form — dấu hiệu 2 vùng là 1 sản
+     phẩm, không phải 2 trang dán nhau. */
+  border-right: 1px solid var(--border-soft);
+  background:
+    radial-gradient(120% 90% at 20% 15%, var(--indigo-soft), transparent 55%),
+    radial-gradient(100% 80% at 85% 85%, var(--cyan-soft), transparent 55%),
+    var(--panel);
+}
+
+.auth-brand__inner {
+  position: relative;
+  z-index: 2;
+  max-width: 460px;
+}
+
+.auth-brand__tagline {
+  margin: 24px 0 0;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: clamp(24px, 2.4vw, 34px);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.auth-brand__points {
+  list-style: none;
+  margin: 28px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-brand__points li {
+  position: relative;
+  padding-left: 26px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+/* Dấu tick vẽ bằng CSS (không dùng icon): nhẹ hơn, không cần asset, và
+   dùng token màu nên đổi theme theo. */
+.auth-brand__points li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 14px;
+  height: 8px;
+  border-left: 2px solid var(--green);
+  border-bottom: 2px solid var(--green);
+  transform: rotate(-45deg);
+}
+
+/* ---- Nền trang trí ----
+   `position:absolute` + không tính layout: thêm chiều sâu mà KHÔNG đẩy
+   form, không làm form bị lệch. */
+.auth-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.5;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.auth-orb--1 {
+  width: 340px;
+  height: 340px;
+  top: -90px;
+  right: -110px;
+  background: radial-gradient(circle, var(--indigo), transparent 68%);
+  animation: auth-drift 18s var(--ease-in-out, ease-in-out) infinite alternate;
+}
+
+.auth-orb--2 {
+  width: 280px;
+  height: 280px;
+  bottom: -80px;
+  left: -70px;
+  background: radial-gradient(circle, var(--cyan), transparent 68%);
+  animation: auth-drift 22s var(--ease-in-out, ease-in-out) infinite alternate-reverse;
+}
+
+/* Lưới mờ — gợi "nền tảng / dữ liệu" mà không cần vẽ node nối node
+
+/* ================================================================
+   VÙNG FORM
+   ================================================================ */
+.auth-form {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 32px;
+  padding-top: calc(40px + var(--safe-top, 0px));
+  padding-bottom: calc(40px + var(--safe-bottom, 0px));
+}
+
+.auth-form__inner {
+  width: 100%;
+  /* 400px: form đọc thoải mái mà không giãn hành quá. */
+  max-width: 400px;
+  animation: auth-rise var(--dur-slow, 320ms) var(--ease-out, ease) both;
+}
+
+.auth-form__logo {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+/* Card kính: dùng token sẵn có, không viết màu riêng. */
+.auth-panel {
+  padding: 32px 30px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-md, var(--shadow-md, 0 8px 24px rgba(0, 0, 0, 0.22)));
+}
+
+.auth-panel__head {
+  margin-bottom: 22px;
+  text-align: center;
+}
+
+.auth-panel__title {
+  margin: 0;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text);
+}
+
+.auth-panel__subtitle {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+.auth-form__footer {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--text-dim);
+}
+
+.auth-form__footer a {
+  color: var(--cyan);
+  font-weight: 600;
+  text-decoration: none;
+  /* Vùng chạm tối thiểu 44px quanh chữ (spec #39.17) — trước đây chỉ bằng
+     chiều cao chữ ~18px, rất khó bấm trên mobile. */
+  display: inline-block;
+  padding: 12px 4px;
+  min-height: 44px;
+  line-height: 20px;
+}
+
+.auth-form__footer a:hover {
+  text-decoration: underline;
+}
+
+/* Vào trang: nhoẹ, nhanh, chỉ transform/opacity. */
+@keyframes auth-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Lưới mờ — gợi "nền tảng / dữ liệu" mà không cần vẽ node nối node
+   (node nối node tốn nhiều element hơn, phải ẩn ở mobile). */
+.auth-grid-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--border-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-soft) 1px, transparent 1px);
+  background-size: 48px 48px;
+  /* Mờ dần xuống dưới: chỉ vùng trên cùng có lưới, phần form không bị rối. */
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 70%);
+  -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 70%);
+}
+
+/* Trôi rất nhẹ (18–22s, ~24px). Chỉ `transform` nên chạy trên GPU. */
+@keyframes auth-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(24px, 30px, 0) scale(1.08);
+  }
+}
+
+
+
+/* ================================================================
+   Ô NHẬP + NHÃN + LỖI
+   ================================================================
+   Dùng class thay vì inline style (trang login/register cũ ghim
+   `style={inputStyle}` — không theme hoá được, và đó là nguyên nhân
+   inline `fontSize: 14` từng đất thắng rule 16px trên mobile).
+   ================================================================ */
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Nhãn luôn hiện (không dùng placeholder làm nhãn): placeholder biến mất
+   khi gõ -> người dùng không còn biết ô này là gì, và mất target cho
+   screen reader nếu không có <label>. */
+.auth-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.auth-input {
+  width: 100%;
+  min-height: 46px;
+  padding: 12px 14px;
+  /* KHÔNG đặt font-size ở đây: khối "INPUT 16px TRÊN MOBILE" trong
+     globals.css lo (14px desktop / 16px mobile). Nếu đặt ở đây thì lại
+     tạo đúng lỗi cũ — inline/CSS đặc biệt thắng rule trong media query. */
+  color: var(--text);
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  outline: none;
+  /* Transition border + shadow (KHÔNG transition width/height) — focus ring
+     không gây layout shift. */
+  transition: border-color var(--dur-instant, 120ms) var(--ease-out, ease),
+    box-shadow var(--dur-instant, 120ms) var(--ease-out, ease);
+}
+
+.auth-input::placeholder {
+  color: var(--text-faint);
+}
+
+/* Focus: viền sáng + halo. */
+.auth-input:focus {
+  border-color: var(--indigo);
+}
+
+.auth-input:focus-visible {
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 3px var(--indigo-soft);
+}
+
+.auth-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Trạng thái lỗi: viền đỏ + halo nhẹ để nhìn là biết ngay, không cần
+   đọc lỗi (đọc lỗi vẫn có aria-describedby bên dưới). */
+.auth-input[aria-invalid="true"] {
+  border-color: var(--rose);
+}
+
+.auth-input[aria-invalid="true"]:focus-visible {
+  box-shadow: 0 0 0 3px rgba(240, 124, 145, 0.16);
+}
+/* Nút mắt ẩn/hiện nằm TRONG ô nhập: khối 44x44 (cao bằng chiều cao ô)
+   để đạt ngưỡng chạm tối thiểu — bản cũ là padding 6px + icon 18px = 30px,
+   dễ bấm trượt khi đang cố gõ mật khẩu bằng một tay. */
+.auth-eye {
+  position: absolute;
+  right: 1px;
+  top: 1px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm, 8px);
+  color: var(--text-dim);
+  cursor: pointer;
+  /* Bỏ highlight xanh mặc định của WebView khi chạm — dấu hiệu "link"
+     trông sai với một nút biểu tượng trong ô nhập. */
+  -webkit-tap-highlight-color: transparent;
+  transition: color var(--dur-instant, 120ms) var(--ease-out, ease);
+}
+
+.auth-eye:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.auth-eye:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+
+.auth-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--rose);
+}
+
+.auth-error__icon {
+  flex-shrink: 0;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+/* Box lỗi cấp form (sai email/mật khẩu, lỗi mạng): nền đỏ nhạt + viền
+   để khác với lỗi cục bộ ở từng ô. */
+.auth-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 11px 13px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(240, 124, 145, 0.32);
+  background: rgba(240, 124, 145, 0.1);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--rose);
+}
+
+
+/* ================================================================
+   THANH ĐO MẬT KHẨU
+   ================================================================ */
+.pw-strength {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.pw-strength__bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.pw-strength__seg {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--border-soft);
+  /* Transition background-color (không kích hoạt layout). */
+  transition: background-color var(--dur-fast, 200ms) var(--ease-out, ease);
+}
+
+.pw-strength__seg.is-on.is-lv1 { background: var(--rose); }
+.pw-strength__seg.is-on.is-lv2 { background: var(--amber); }
+.pw-strength__seg.is-on.is-lv3 { background: var(--cyan); }
+.pw-strength__seg.is-on.is-lv4 { background: var(--green); }
+
+.pw-strength__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.pw-strength__label {
+  font-weight: 700;
+}
+
+.pw-strength__label.is-lv0,
+.pw-strength__label.is-lv1 { color: var(--rose); }
+.pw-strength__label.is-lv2 { color: var(--amber); }
+.pw-strength__label.is-lv3 { color: var(--cyan); }
+.pw-strength__label.is-lv4 { color: var(--green); }
+
+.pw-strength__hint {
+  color: var(--text-faint);
+}
+
+/* ================================================================
+   DIVIDER + NÚT + FORM
+   ================================================================ */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.auth-divider__line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.auth-divider__label {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  /* Cho phép label dài hơn (đa ngôn ngữ) mà không phá layout. */
+  white-space: nowrap;
+}
+
+.auth-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Nút phụ (Google): cao như nút chính để trông cân, có press feedback. */
+.auth-oauth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--panel-strong);
+  color: var(--text);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--dur-instant, 120ms) var(--ease-out, ease),
+    background-color var(--dur-instant, 120ms) var(--ease-out, ease),
+    transform var(--dur-instant, 120ms) var(--ease-out, ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.auth-oauth:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  background: var(--panel-hover);
+}
+
+.auth-oauth:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.auth-oauth:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Nút chính: dùng gradient sẵn của .btn-primary nhưng thêm kích thước
+   mobile + trạng thái "đang xử lý". */
+.auth-submit {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 4px;
+  font-size: 14.5px;
+}
+
+/* Spinner nhỏ trong nút khi đang gửi. Dùng border animation (chạy trên
+   GPU, không cần SVG/asset) + trạng thái truy cập: ẩn hoàn toàn với
+   screen reader vì text kế bên đã nói "Đang đăng nhập..." rồi. */
+.auth-spinner {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: auth-spin 0.7s linear infinite;
+  margin-right: 8px;
+  vertical-align: -2px;
+}
+
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Trạng thái THÀNH CÔNG ngay trước khi chuyển trang (spec #39.8): nền
+   xanh. Giữ ~400ms rồi router.push — đủ để mắt bắt được nhưng không bắt
+   chờ. */
+.auth-submit--done {
+  background: linear-gradient(135deg, var(--green), var(--cyan));
+}
+
+
+/* ================================================================
+   RESPONSIVE
+   ================================================================
+   Breakpoint 900px: dưới ngưỡng này 2 cột sẽ bóp form còn ~300px, đọc rất
+   khó và nút bị chật. Nên chuyển 1 cột + ẨN hẳn vùng brand.
+   ================================================================ */
+@media (max-width: 900px) {
+  .auth-shell {
+    grid-template-columns: 1fr;
+  }
+
+  /* Ẩn vùng brand hoàn toàn ở mobile: nó không mang thông tin mới (logo
+     + tagline đã lặp ở vùng form) nhưng ăn ~300px chiều cao — trên 360px
+     bàn phím mở là CTA bị đẩy khỏi màn hình. */
+  .auth-brand {
+    display: none;
+  }
+
+  .auth-form {
+    padding: 28px 20px;
+    padding-top: calc(28px + var(--safe-top, 0px));
+    padding-bottom: calc(28px + var(--safe-bottom, 0px));
+    /* Cuộn được khi bàn phím mở (spec #39.12). `touch-action: manipulation`
+       tắt cử chờ 300ms của trình duyệt khi chạm nút (mobile). */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: manipulation;
+    /* Chừa chỗ cho bàn phím nếu trình duyệt hỗ trợ `keyboard-inset`
+       (Chrome Android/ChromeOS); fallback 0px ở trình duyệt khác. */
+    padding-bottom: calc(28px + var(--safe-bottom, 0px) + var(--keyboard-inset, 0px));
+    scroll-padding-bottom: 24px;
+  }
+
+  /* `align-items:flex-start` + `margin:auto 0` trên inner: khi form ngắn
+     hơn màn hình thì vẫn CĂN GIỮA, nhưng khi form dài hơn (Register có
+     4 field) thì bắt đầu từ trên xuống thay vì bị canh giữa rồi tràn 2
+     đầu. Đây là kỹ thuật "safe centering" — tránh được cả 2 lỗi. */
+  .auth-form {
+    align-items: flex-start;
+  }
+
+  .auth-form__inner {
+    margin: auto 0;
+  }
+
+  .auth-panel {
+    padding: 26px 22px;
+  }
+
+  .auth-panel__title {
+    font-size: 20px;
+  }
+
+  .auth-submit {
+    /* Trên mobile CTA cao hơn để bấm trúng khi đang cầm máy 1 tay. */
+    min-height: 50px;
+  }
+}
+
+@media (max-width: 400px) {
+  .auth-form {
+    padding: 20px 14px;
+    padding-top: calc(20px + var(--safe-top, 0px));
+  }
+
+  .auth-panel {
+    /* Bỏ vờ card trên màn rất hẹp: 1 lớp nền kính + viền chỉ tốn 2px mỗi
+       bên + padding dọc — ở 320px phần này chiếm ~1/3 chiều ngang. */
+    padding: 22px 16px;
+    border-radius: var(--radius-md);
+  }
+
+  .auth-input {
+    padding: 12px 13px;
+  }
+}
+
+/* Landscape phone: chiều cao rất thấp (~360px), form dài không vừa 1 màn
+   hình — buộc cuộn thay vì cố nhồi. */
+@media (max-height: 640px) and (orientation: landscape) {
+  .auth-form {
+    align-items: flex-start;
+    padding: 20px;
+    padding-top: calc(20px + var(--safe-top, 0px));
+  }
+
+  .auth-form__logo {
+    margin-bottom: 12px;
+  }
+
+  .auth-panel {
+    padding: 20px;
+  }
+}
+
+/* ================================================================
+   TÔN TRỌNG prefers-reduced-motion (spec #39.13: animation không được
+   làm chậm thao tác login)
+   - Tắt trôi của 2 quả cầu (nền động vô nghĩa khi người dùng nhạy cảm).
+   - Tắt nâng card khi vào trang.
+   - GIỮ LẠI spinner: đó là THÔNG TIN đang chờ, không phải trang trí.
+   ================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .auth-orb--1,
+  .auth-orb--2 {
+    animation: none;
+  }
+
+  .auth-form__inner {
+    animation: none;
+  }
+
+  .auth-input,
+  .auth-oauth,
+  .pw-strength__seg {
+    transition: none;
+  }
+}

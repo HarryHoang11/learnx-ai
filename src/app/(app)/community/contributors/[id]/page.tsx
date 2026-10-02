@@ -134,7 +134,7 @@ export default function ContributorProfilePage() {
             <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>Môn học mạnh</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {profile.topSubjects.map((s: any) => (
-                <span key={s.subject} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", background: "var(--panel-strong)", borderRadius: 99, fontSize: 13, fontWeight: 500, border: "1px solid var(--border-soft)" }}>
+                <span key={s.subject} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", background: "var(--panel-strong)", borderRadius: "var(--radius-pill)", fontSize: 13, fontWeight: 500, border: "1px solid var(--border-soft)" }}>
                   <span style={{ color: "var(--indigo)" }}>📚</span>
                   <span>{s.subject}</span>
                   <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>({s.count})</span>
@@ -157,7 +157,7 @@ export default function ContributorProfilePage() {
                   <div style={{ fontWeight: 600, marginBottom: 8, lineHeight: 1.4 }}>{doc.title}</div>
                   <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
                     {doc.subject && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginRight: 8 }}>{doc.subject.icon} {doc.subject.name}</span>}
-                    {doc.topic && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", background: "var(--indigo-soft)", borderRadius: 99, fontSize: 11, fontWeight: 600, color: "var(--indigo)" }}>{doc.topic.name}</span>}
+                    {doc.topic && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", background: "var(--indigo-soft)", borderRadius: "var(--radius-pill)", fontSize: 11, fontWeight: 600, color: "var(--indigo)" }}>{doc.topic.name}</span>}
                   </div>
                   <div style={{ display: "flex", gap: 16, fontSize: 11, color: "var(--text-faint)" }}>
                     <span>⭐ {doc.averageRating > 0 ? doc.averageRating.toFixed(1) : "—"}</span>

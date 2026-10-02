@@ -60,7 +60,7 @@
 .subject-switcher__item.is-active {
   color: var(--text);
   background: var(--indigo-soft);
-  border-color: rgba(124, 108, 240, 0.45);
+  border-color: rgba(119, 117, 255, 0.45);
   font-weight: 600;
 }
 

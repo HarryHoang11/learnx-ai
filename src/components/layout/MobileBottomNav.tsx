@@ -7,7 +7,7 @@ import { MoreHorizontal } from "lucide-react";
 import BottomSheet from "@/components/ui/BottomSheet";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 import { isActiveRoute } from "@/lib/nav/activeRoute";
-import { NAV_GROUPS, PRIMARY_TABS } from "./navGroups";
+import { NAV_GROUPS, PRIMARY_TABS, tabLabelKey } from "./navGroups";
 
 // ================================================================
 // <MobileBottomNav /> — thanh điều hướng dưới cùng, kiểu app native
@@ -51,7 +51,7 @@ export default function MobileBottomNav() {
               aria-current={active ? "page" : undefined}
             >
               <Icon size={21} strokeWidth={2} aria-hidden="true" />
-              <span>{t(tab.labelKey)}</span>
+              <span>{t(tabLabelKey(tab))}</span>
             </Link>
           );
         })}
@@ -70,8 +70,18 @@ export default function MobileBottomNav() {
 
       {/* Sheet "Thêm": liệt kê lại toàn bộ nhóm nav (không chỉ phần dư) để
           màn hình này là menu đầy đủ của app trên mobile — không bắt người
-          dùng phải nhớ mục nào đã ghim ở thanh dưới. */}
-      <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)} title={t("nav.allFeatures")}>
+          dùng phải nhớ mục nào đã ghim ở thanh dưới.
+
+          `activeHref` được truyền vào thay vì đọc `usePathname()` bên trong:
+          vì sheet chỉ render khi đang mở, đọc pathname trong chính nó sẽ trả
+          giá trị ĐÚNG khi mount — nhưng dùng chung nguồn với thanh tab ở trên
+          rõ ràng hơn và tránh 2 cách tính trạng thái active lệch nhau. */}
+      <BottomSheet
+        open={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        title={t("nav.allFeatures")}
+        activeHref={isSecondaryRoute ? pathname : null}
+      >
         {NAV_GROUPS.map((group) => (
           <div key={group.titleKey} className="bottom-sheet-group">
             <div className="bottom-sheet-group__title">{t(group.titleKey)}</div>
@@ -86,6 +96,10 @@ export default function MobileBottomNav() {
                     onClick={() => setMoreOpen(false)}
                     className={`bottom-sheet-link${active ? " bottom-sheet-link--active" : ""}`}
                     aria-current={active ? "page" : undefined}
+                    // data-sheet-href: BottomSheet dùng attribute này để cuộn
+                    // tới mục đang active khi mở (xem activeHref trong
+                    // BottomSheet.tsx).
+                    data-sheet-href={item.href}
                   >
                     <Icon size={18} strokeWidth={2} aria-hidden="true" />
                     {t(item.labelKey)}

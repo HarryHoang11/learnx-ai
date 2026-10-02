@@ -19,6 +19,12 @@ import { Sparkles } from "lucide-react";
 import "@/app/onboarding/onboarding.css";
 import { useLanguage } from "@/components/providers/LanguageProvider";
 import { SUBJECTS, CUSTOM_SUBJECT_VALUE } from "@/lib/constants/subjects";
+// Nhãn lớp dùng CHUNG key của onboarding (onboarding.grade.*) để cùng 1 cách
+// gọi cho cả 2 nơi — không tạo bảng nhãn lớp thứ hai trong app.
+import type { I18nKey } from "@/lib/i18n/dictionary";
+// `readApi` + `TransportError` dùng chung cho mọi trang (tách từ chính file
+// này) — xem lib/api/readApi.ts để biết vì sao không dùng res.json() thẳng.
+import { readApi, TransportError } from "@/lib/api/readApi";
 import type { ApiResponse, PublicQuestion, SkillMasteryPoint } from "@/types";
 
 type Phase = "subject_select" | "loading" | "in_progress" | "finished" | "error";
@@ -54,39 +60,6 @@ const START_TIMEOUT_MS = 75_000;
 const ANSWER_TIMEOUT_MS = 45_000;
 
 /**
- * Lỗi KHÔNG phải do server trả về (response không phải JSON — vd proxy
- * trả HTML 500, mất mạng, request bị abort). Tách riêng để caller KHÔNG
- * show message kỹ thuật cho người dùng, nhưng vẫn log đầy đủ cho dev.
- */
-class TransportError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "TransportError";
-  }
-}
-
-/**
- * Đọc ApiResponse mà không để lỗi JSON che mất nguyên nhân thật.
- *
- * `res.json()` ném SyntaxError nếu body là HTML/empty — khi đó catch block
- * cũ chỉ hiện "Unexpected token '<'" cho người dùng, dev cũng mất thông
- * tin. Ở đây log status + body cắt ngắn rồi ném TransportError để tầng
- * trên quyết định thông báo nào hiển thị.
- */
-async function readApi<T>(res: Response, label: string): Promise<ApiResponse<T>> {
-  const raw = await res.text();
-  try {
-    return JSON.parse(raw) as ApiResponse<T>;
-  } catch {
-    console.error(
-      `[diagnostic] ${label} trả về ${res.status} nhưng body không phải JSON:`,
-      raw.slice(0, 300)
-    );
-    throw new TransportError(`${label} -> HTTP ${res.status} (body không phải JSON)`);
-  }
-}
-
-/**
  * Bọc trong <Suspense>: `useSearchParams` bắt buộc phải nằm trong Suspense khi
  * render tĩnh (Next.js chặn build nếu thiếu). Cùng pattern với trang /setup.
  */
@@ -116,6 +89,13 @@ function DiagnosticPageInner() {
   // Môn được gợi ý theo hồ sơ học tập (§19). Rổng = user chưa có
   // hồ sơ đủ d῅ng, UI hiển thị đầy đệ môn như cũ.
   const [suggested, setSuggested] = useState<string[]>([]);
+  // LỚP ĐANG KIỂM TRA (§4 + §12): `availableGrades` lấy từ server theo cấp
+  // học trong hồ sơ (không hardcode ở frontend); `selectedGrade` mặc định
+  // bằng lớp hiện tại của học sinh. Gửi lên server để lưu vào bài kiểm
+  // tra — KHÔNG ghi đè currentGrade trong hồ sơ.
+  const [availableGrades, setAvailableGrades] = useState<string[]>([]);
+  const [currentGrade, setCurrentGrade] = useState<string | null>(null);
+  const [selectedGrade, setSelectedGrade] = useState<string>("");
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
   const [question, setQuestion] = useState<PublicQuestion | null>(null);
@@ -145,7 +125,13 @@ function DiagnosticPageInner() {
     // không được chặn việc làm bài. Nhưng nuốt im lặng thì khi hỏng ta mất
     // dấu vết, nên vẫn log ra console (chỉ 1 dòng, không spam).
     fetch("/api/diagnostic/status")
-      .then((res) => readApi<{ history: SubjectStatus[]; suggestedSubjects: string[] }>(res, "GET /api/diagnostic/status"))
+      .then((res) => readApi<{
+        history: SubjectStatus[];
+        suggestedSubjects: string[];
+        educationStage: string | null;
+        grade: string | null;
+        availableGrades: string[];
+      }>(res, "GET /api/diagnostic/status"))
       .then(
         (json) => {
           if (!json.success) {
@@ -157,6 +143,12 @@ function DiagnosticPageInner() {
           setSubjectStatus(map);
           const fromProfile = json.data.suggestedSubjects ?? [];
           setSuggested(fromProfile);
+          // Lớp kiểm tra mặc định = lớp hiện tại trong hồ sơ (server xác
+          // nhận). Danh sách lớp hợp lệ đến từ server theo cấp đã khai.
+          const grades = json.data.availableGrades ?? [];
+          setAvailableGrades(grades);
+          setCurrentGrade(json.data.grade ?? null);
+          setSelectedGrade((prev) => prev || json.data.grade || grades[0] || "");
           // Từ onboarding: TỰ CHỌN MÔN ĐẦU TIÊN theo hồ sơ. Đây là điểm nối
           // khảo sát -> kiểm tra: người dùng vừa nói "tôi học Toán và Vật lý"
           // thì không bắt họ chọn lại từ đầu.
@@ -206,7 +198,7 @@ function DiagnosticPageInner() {
       const res = await fetch("/api/assessment/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject }),
+        body: JSON.stringify({ subject, grade: selectedGrade || undefined }),
         signal: controller.signal,
       });
 
@@ -443,6 +435,45 @@ function DiagnosticPageInner() {
                 }}
               />
             )}
+            {/*
+              Bộ chọn LỚP KIỂM TRA (§4). Danh sách lớp do SERVER trả về theo
+              cấp học trong hồ sơ — frontend KHÔNG hardcode 10/11/12. Hồ sơ
+              chưa khai cấp thì `availableGrades` rỗng => ẩn khối này, hành vi
+              cũ giữ nguyên. Chọn lớp khác lớp hiện tại KHÔNG sửa lớp hiện tại
+              trong hồ sơ (server lưu riêng vào bài kiểm tra).
+            */}
+            {availableGrades.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+                  {t("diagnostic.chooseGrade")}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {availableGrades.map((grade) => (
+                    <button
+                      key={grade}
+                      type="button"
+                      className="onb-option"
+                      aria-pressed={selectedGrade === grade}
+                      style={{
+                        minHeight: 36,
+                        padding: "6px 14px",
+                        fontSize: 13,
+                        borderColor: selectedGrade === grade ? "var(--cyan)" : undefined,
+                        color: selectedGrade === grade ? "var(--cyan)" : undefined,
+                      }}
+                      onClick={() => setSelectedGrade(grade)}
+                    >
+                      {t(`onboarding.grade.${grade}` as I18nKey)}
+                    </button>
+                  ))}
+                </div>
+                {currentGrade && selectedGrade === currentGrade && (
+                  <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 6 }}>
+                    {t("diagnostic.gradeCurrentHint")}
+                  </div>
+                )}
+              </div>
+            )}
             {loadingStatus && (
               <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{t("diagnostic.loadingStatus")}</div>
             )}
@@ -522,7 +553,7 @@ function DiagnosticPageInner() {
               style={{
                 fontSize: 11.5,
                 padding: "3px 9px",
-                borderRadius: 99,
+                borderRadius: "var(--radius-pill)",
                 display: "inline-block",
                 marginBottom: 14,
                 background:
@@ -666,8 +697,8 @@ function ProgressDots({ done, total }: { done: number; total: number }) {
           style={{
             height: 5,
             flex: 1,
-            borderRadius: 99,
-            background: i < done ? "var(--cyan)" : i === done ? "var(--indigo)" : "rgba(255,255,255,0.09)",
+            borderRadius: "var(--radius-pill)",
+            background: i < done ? "var(--cyan)" : i === done ? "var(--indigo)" : "var(--track-bg)",
           }}
         />
       ))}

@@ -11,6 +11,7 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { Space_Grotesk, Inter } from "next/font/google";
+import { resolvePublicUrl } from "@/config/app";
 import SessionProviderWrapper from "@/components/providers/SessionProviderWrapper";
 import { LanguageProvider } from "@/components/providers/LanguageProvider";
 import { ThemeProvider, THEME_STORAGE_KEY } from "@/components/providers/ThemeProvider";
@@ -45,14 +46,50 @@ const inter = Inter({
 });
 
 /**
+ * Gốc URL tuyệt đối cho metadata (OpenGraph, Twitter, canonical).
+ *
+ * VÌ SAO CẦN: Next.js cảnh báo `metadataBase property is not set` và thay mọi
+ * URL tương đối (`/brand/...`) bằng `http://localhost:3000` — lên production thì
+ * ảnh OG/Twitter trong link chia sẻ hỏng hết (Zalo/Facebook không tải được).
+ *
+ * VÌ SAO KHÔNG hardcode domain production: domain LearnX đổi theo môi trường
+ * (staging, domain riêng, deploy thử). Nên đọc từ env và CHỈ chấp nhận khi
+ * parse được thành URL tuyệt đối — `.env` có thể để trống hoặc còn sót dấu
+ * nháy kép (`APP_URL=""`) mà `new URL()` sẽ throw ngay lúc build.
+ *
+ * Thứ tự: env hợp lệ → localhost ở dev → localhost cảnh báo ở prod (build vẫn
+ * chạy được thay vì sập).
+ */
+function resolveMetadataBase(): URL {
+  // Dùng CHUNG `resolvePublicUrl()` với auth.ts (tầng config) — trước đây 2
+  // chỗ tự liệt kê env khác nhau nên project đặt `APP_URL` thì metadataBase
+  // chạy được còn `trustHost` thì không ⇒ toàn bộ /api/auth/* trả 503.
+  const found = resolvePublicUrl();
+  if (found) {
+    try {
+      return new URL(found);
+    } catch {
+      // resolvePublicUrl chỉ trả về URL đã parse được — nhánh này chỉ để
+      // TypeScript thỏa mãn kiểu trả về, không xảy ra thực tế.
+    }
+  }
+  return new URL("http://localhost:3000");
+}
+
+
+/**
  * Metadata toàn site — nơi DUY NHẤT khai báo tên + icon + link chia sẻ.
  *
- * Icon trỏ thẳng về `/brand/learnx-mark.svg` (cùng asset với logo trong UI)
- * thay vì tạo thêm `app/icon.svg` hay `favicon.ico`: một file logo duy nhất
- * nghĩa là đổi logo một lần là cả tab browser, PWA và màn hình trong app
- * cùng đổi — không bao giờ có tình trạng tab trình duyệt khác logo trong app.
+ * Icon trỏ về `/brand/learnx-mark.svg` — cùng asset với logo trong UI, nên đổi
+ * logo một lần là tab browser + PWA + app cùng đổi, không bao giờ lệch.
+ *
+ * `app/favicon.ico` (sinh bởi `npm run favicon` từ icon launcher Android) là
+ * file convention của Next: phục vụ `/favicon.ico` mà browser LUÔN gọi khi mở
+ * tab. Thiếu nó thì mọi trang đều 404 đỏ ở dòng favicon dù đã có `<link rel=icon>`.
+ * Nội dung .ico vẫn là logo LearnX — không phải icon riêng.
  */
 export const metadata: Metadata = {
+  metadataBase: resolveMetadataBase(),
   title: "LearnX AI",
   description: "Trợ lý học tập cá nhân hoá bằng AI",
   applicationName: "LearnX AI",
